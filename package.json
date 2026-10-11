@@ -1,0 +1,7 @@
+{
+  "name": "weekly-planner",
+  "private": true,
+  "description": "מנוע תכנון — מזכירה אישית לניהול זמן (קובץ HTML יחיד)",
+  "scripts": { "test": "node tests/run.js" },
+  "devDependencies": { "jsdom": "^26.0.0" }
+}
