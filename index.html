@@ -6482,7 +6482,7 @@ function _checkOnboarding(){
    public by design; row-level security (cloud/setup.sql) protects the data.
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
-const CLOUD_CONFIG={url:'',anonKey:''};
+const CLOUD_CONFIG={url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
 const CLOUD_SESSION_KEY='maya_cloud_session';
 const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
@@ -6513,7 +6513,9 @@ function _cloudErrText(d,status){
 }
 async function _cloudFetch(path,opts={}){
   const h={apikey:CLOUD_CONFIG.anonKey,'Content-Type':'application/json',...(opts.headers||{})};
-  h.Authorization='Bearer '+((opts.auth!==false&&CLOUD_SESSION&&CLOUD_SESSION.access_token)||CLOUD_CONFIG.anonKey);
+  const _tok=(opts.auth!==false&&CLOUD_SESSION&&CLOUD_SESSION.access_token)||'';
+  if(_tok)h.Authorization='Bearer '+_tok;
+  else if(!/^sb_/.test(CLOUD_CONFIG.anonKey))h.Authorization='Bearer '+CLOUD_CONFIG.anonKey; // new-style publishable keys (sb_…) are not JWTs: apikey header only
   let r;
   try{ r=await fetch(CLOUD_CONFIG.url.replace(/\/$/,'')+path,{method:opts.method||'GET',headers:h,body:opts.body===undefined?undefined:JSON.stringify(opts.body)}); }
   catch(_e){ return{ok:false,status:0,data:null,network:true}; }
