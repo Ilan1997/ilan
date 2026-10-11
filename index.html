@@ -4823,6 +4823,7 @@ let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting exp
 // capability (no API key in the page). Anywhere else (tests, local file) → the
 // original direct fetch. The system prompt is sent as an <instructions> prefix
 // of the first user message because `sample` is memoryless and has no system slot.
+const AI_GEMINI_DEFAULT_MODEL='gemini-3.8-flash'; // free-tier model per Google's pricing page; override via storage key ai:geminiModel
 async function _aiCallModel(sys,msgs){
   try{
     if(typeof window!=='undefined'&&window.claude&&typeof window.claude.use==='function'){
@@ -4834,8 +4835,27 @@ async function _aiCallModel(sys,msgs){
       }
     }
   }catch(e){ console.warn('sample capability failed, falling back to fetch',e&&e.code||e); }
-  // Outside claude.ai: optional personal API key, kept ONLY in this browser (never in the repo).
-  let key='';try{key=((await window.storage.get('ai:apikey')).value||'').trim();}catch(_k){}
+  // Outside claude.ai: a personal API key kept ONLY in this browser (never in the repo).
+  // Provider = 'gemini' (free tier, Google) or 'anthropic'; defaults to whichever key exists.
+  const _st=async k=>{try{return((await window.storage.get(k)).value||'').trim();}catch(_e){return'';}};
+  const gKey=await _st('ai:geminikey'),aKey=await _st('ai:apikey');
+  let provider=await _st('ai:provider');
+  if(provider!=='gemini'&&provider!=='anthropic')provider=gKey&&!aKey?'gemini':'anthropic';
+  if(provider==='gemini'&&gKey){
+    const model=(await _st('ai:geminiModel'))||AI_GEMINI_DEFAULT_MODEL;
+    const resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-goog-api-key':gKey},
+      body:JSON.stringify({
+        systemInstruction:{parts:[{text:sys}]},
+        contents:msgs.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}))
+      })
+    });
+    const data=await resp.json();
+    if(resp.ok===false||data?.error){const e=new Error(data?.error?.message||('HTTP '+resp.status));e.noKey=false;throw e;}
+    return(data.candidates?.[0]?.content?.parts||[]).filter(x=>!x.thought&&typeof x.text==='string').map(x=>x.text).join('');
+  }
+  const key=aKey;
   const headers={'Content-Type':'application/json'};
   if(key){headers['x-api-key']=key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';}
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
@@ -4846,13 +4866,18 @@ async function _aiCallModel(sys,msgs){
   if(resp.ok===false||data?.error){const e=new Error(data?.error?.message||('HTTP '+resp.status));e.noKey=!key;throw e;}
   return(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
 }
-// Prompt for / clear the personal API key (stored only in this browser's storage).
+// Choose provider + save/clear the personal key (browser storage only).
 async function setupAIKey(){
-  const cur=await window.storage.get('ai:apikey').then(r=>r.value).catch(()=>'');
-  const v=window.prompt('מפתח API של Anthropic (נשמר רק בדפדפן הזה, לא נשלח לשום מקום חוץ מ-Anthropic). השאר ריק כדי למחוק.',cur||'');
+  const get=k=>window.storage.get(k).then(r=>r.value).catch(()=>'');
+  const choice=window.prompt('איזה ספק AI? כתוב 1 ל-Gemini של גוגל (יש שכבה חינמית; בשכבה החינמית גוגל עשויה להשתמש בתוכן לשיפור המוצרים שלה) או 2 ל-Anthropic (בתשלום). השאר ריק לביטול.','1');
+  if(choice===null||!choice.trim())return false;
+  const isG=choice.trim()!=='2';
+  const keyName=isG?'ai:geminikey':'ai:apikey';
+  const v=window.prompt((isG?'מפתח Gemini (מ-aistudio.google.com/apikey)':'מפתח Anthropic')+' — נשמר רק בדפדפן הזה. השאר ריק כדי למחוק.',await get(keyName));
   if(v===null)return false;
   const t=v.trim();
-  if(t)await window.storage.set('ai:apikey',t);else await window.storage.delete('ai:apikey').catch(()=>{});
+  if(t){await window.storage.set(keyName,t);await window.storage.set('ai:provider',isG?'gemini':'anthropic');}
+  else await window.storage.delete(keyName).catch(()=>{});
   showToast(t?'המפתח נשמר ✓':'המפתח נמחק');
   return !!t;
 }
@@ -4962,7 +4987,7 @@ async function sendAIMessage(){
     console.error('AI chat error',err);
     typingEl?.remove();
     if(err&&err.noKey){
-      _aiAppendActionBubble('כדי לדבר איתי מחוץ ל-claude.ai צריך מפתח API אישי של Anthropic. הוא נשמר רק בדפדפן שלך.',
+      _aiAppendActionBubble('כדי לדבר איתי מחוץ ל-claude.ai צריך מפתח API אישי — Gemini של גוגל (יש שכבה חינמית) או Anthropic. הוא נשמר רק בדפדפן שלך.',
         [{label:'🔑 הגדר מפתח',onclick:()=>{setupAIKey();}}]);
     } else {
       _aiAppendBubble('משהו השתבש בחיבור ל-AI. נסה שוב בעוד רגע.','bot');
@@ -5521,7 +5546,12 @@ function findCandidatePlacements(state,calendarId,taskId,N=3,opts={}){
     if(!a||a.taskId===taskId)free.set(sl.sid,sl);
   });
   const sid=(d,h)=>d+'T'+h;
-  const dates=[...new Set([...free.keys()].map(k=>k.split('T')[0]))].sort();
+  // Bound the search: next 14 days from the planning anchor, never past the task's deadline —
+  // each candidate costs one full buildEngine simulation, so an unbounded plan range is far too slow.
+  const _t0=state.meta.today,_lim=new Date(_t0+'T12:00:00Z');_lim.setUTCDate(_lim.getUTCDate()+13);
+  const _maxDate=_lim.toISOString().split('T')[0];
+  const _dl=(task.deadline&&task.deadline<_maxDate)?task.deadline:_maxDate;
+  const dates=[...new Set([...free.keys()].map(k=>k.split('T')[0]))].filter(d=>d>=_t0&&d<=_dl).sort();
   const label=(slots)=>{
     const d=slots[0].split('T')[0],h0=+slots[0].split('T')[1],h1=+slots[slots.length-1].split('T')[1]+1;
     const dd=new Date(d+'T12:00:00Z');
@@ -9028,6 +9058,8 @@ function runPlacementOptionsTests(){
     const o3=findCandidatePlacements(s,'personal','po_t',3,{peak:{start:14,end:17}});
     const firstAlt=o3.find(x=>!x.isCurrent);
     ok('8. שעות שיא: אלטרנטיבה בשעות השיא קודמת לשאר (כשקיימת)',!firstAlt||o3.filter(x=>!x.isCurrent).some(x=>x.inPeak)===false||firstAlt.inPeak===true,JSON.stringify(o3.map(x=>x.label+(x.inPeak?'*':''))));
+    ok('9a. חיפוש מוגבל ל-14 הימים הקרובים ולא אחרי הדדליין',o.filter(x=>!x.isCurrent).every(x=>x.slots[0].split('T')[0]<='2026-02-26'&&x.slots[0].split('T')[0]<='2026-03-01'));
+    ok('9b. ביצועים: חיפוש אפשרויות מסתיים בפחות מ-5 שניות',(()=>{const t=Date.now();findCandidatePlacements(s,'personal','po_t',3);return Date.now()-t<5000;})());
     // tasks with locked assignments / too big get no options
     const lk=structuredClone(s);lk.calendars.personal.lockedAssignments['2026-02-17T9']={taskId:'po_t',nth:1,hardLock:false};
     ok('9. משימה עם נעילות קיימות — אין אפשרויות',findCandidatePlacements(lk,'personal','po_t',3).length===0);
@@ -9341,7 +9373,21 @@ async function runAIBootTests(){
         window.fetch=async(u,o)=>{seen=o.headers;return{json:async()=>({content:[{type:'text',text:'x'}]})};};
         await _aiCallModel('s',[{role:'user',content:'h'}]);
         ok('בלי מפתח: לא נשלחת כותרת x-api-key (תאימות לאחור)',!('x-api-key' in seen));
-      }finally{ window.fetch=_origFetch; try{await window.storage.delete('ai:apikey');}catch(_d){} }
+        // Gemini provider
+        await window.storage.set('ai:geminikey','AIza-TEST');await window.storage.set('ai:provider','gemini');
+        let gUrl=null,gHeaders=null,gBody=null;
+        window.fetch=async(u,o)=>{gUrl=u;gHeaders=o.headers;gBody=JSON.parse(o.body);return{ok:true,json:async()=>({candidates:[{content:{parts:[{text:'שלום '},{text:'עולם'},{thought:true,text:'HIDDEN'}]}}]})};};
+        const gt=await _aiCallModel('SYS',[{role:'user',content:'a'},{role:'assistant',content:'b'},{role:'user',content:'c'}]);
+        ok('Gemini: כתובת, כותרת מפתח, system ו-roles (assistant→model)',gUrl.includes('generativelanguage.googleapis.com')&&gUrl.includes(':generateContent')&&gHeaders['x-goog-api-key']==='AIza-TEST'&&gBody.systemInstruction.parts[0].text==='SYS'&&gBody.contents.map(c=>c.role).join()==='user,model,user');
+        ok('Gemini: טקסט התשובה מחובר, חלקי thought מוסתרים',gt==='שלום עולם',gt);
+        window.fetch=async()=>({ok:false,status:429,json:async()=>({error:{message:'quota'}})});
+        let gerr=null;try{await _aiCallModel('s',[{role:'user',content:'x'}]);}catch(e){gerr=e;}
+        ok('Gemini: שגיאת מכסה נזרקת (noKey=false — יש מפתח)',!!gerr&&gerr.noKey===false&&gerr.message==='quota');
+        await window.storage.set('ai:geminiModel','gemini-test-model');
+        window.fetch=async(u)=>{gUrl=u;return{ok:true,json:async()=>({candidates:[{content:{parts:[{text:'x'}]}}]})};};
+        await _aiCallModel('s',[{role:'user',content:'x'}]);
+        ok('Gemini: ניתן לשנות מודל דרך ai:geminiModel',gUrl.includes('gemini-test-model'));
+      }finally{ window.fetch=_origFetch; for(const k of ['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']){try{await window.storage.delete(k);}catch(_d){}} }
     }
   }catch(e){
     ok('runAIBootTests threw unexpectedly',false,e.message);
