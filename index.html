@@ -6414,13 +6414,16 @@ function _wShow(i){
   const nx=document.getElementById('wNext'),lb=document.getElementById('wLbl');
   if(nav)nav.style.display=(i===4||i===5)?'none':'flex';
   if(bk)bk.style.visibility=i>0?'visible':'hidden';
-  if(nx)nx.textContent=i>=_WN-2?'כניסה ›':'הבא ›';
+  if(nx)nx.textContent=i>=_wLastStep()?'כניסה ›':'הבא ›';
   if(lb)lb.textContent=(i+1)+' / '+_WN;
   if(i===3){const wb=document.getElementById('wWorkBlock');if(wb)wb.style.display=(_wm==='work'||_wm==='both')?'block':'none';}
 }
-function wNext(){if(_ws>=_WN-1)return;let n=_ws+1;if(n===3&&!_wUsesWorkStep())n=4;_wShow(n);}
+// Last question step: 3 (work days) for work/both, 2 (mode) otherwise. The old "what's on your mind?" task step
+// and the "all set" screen are gone — finishing the last step goes straight to Maya.
+function _wLastStep(){return _wUsesWorkStep()?3:2;}
+function wNext(){if(_ws>=_wLastStep()){wFinish();return;}let n=_ws+1;if(n===3&&!_wUsesWorkStep())n=2;_wShow(n);}
 function wPrev(){if(_ws<=0)return;let n=_ws-1;if(n===3&&!_wUsesWorkStep())n=2;_wShow(n);}
-function wMode(btn){_wm=btn.dataset.m;document.querySelectorAll('.ws-mode').forEach(b=>b.classList.toggle('sel',b===btn));}
+function wMode(btn){_wm=btn.dataset.m;const _nx=document.getElementById('wNext');if(_nx&&_ws>=_wLastStep())_nx.textContent='כניסה ›';else if(_nx)_nx.textContent='הבא ›';document.querySelectorAll('.ws-mode').forEach(b=>b.classList.toggle('sel',b===btn));}
 function wUrg(btn){_wu=parseInt(btn.dataset.u);document.querySelectorAll('.ws-ub').forEach(b=>b.classList.toggle('sel',b===btn));}
 function wAddTask(){
   const n=(document.getElementById('wTName').value||'').trim();
@@ -6441,6 +6444,16 @@ function wRotatePlaceholder(el){
   _wPhIdx=(_wPhIdx+1)%_wPlaceholders.length;
   el.placeholder=_wPlaceholders[_wPhIdx];
 }
+// PURE: removes the demo/seed content from a state (keeps structure, holidays, Shabbat, settings)
+function _stripSeedData(st){
+  const ns=structuredClone(st);
+  ['personal','work'].forEach(c=>{const cal=ns.calendars[c];if(!cal)return;cal.tasks=[];cal.reserves=[];cal.lockedAssignments={};if(cal.constraints){cal.constraints.onceBlocked=[];cal.constraints.workBlocks=[];}});
+  ns.weeklyWorkPlan={...(ns.weeklyWorkPlan||{}),defaultWorkWindows:[],weeks:{}};
+  ns.examDays={};
+  if(ns.constraintsGlobal)ns.constraintsGlobal={...ns.constraintsGlobal,events:[],rangesClosed:[]};
+  if(ns.microTasks)ns.microTasks={...ns.microTasks,tasks:[]};
+  return ns;
+}
 function wFinish(){
   const name=(document.getElementById('wName').value||'').trim();
   const role=(document.getElementById('wRole').value||'').trim();
@@ -6451,6 +6464,10 @@ function wFinish(){
   // Build the whole onboarding result as ONE chain of pure state transforms,
   // then commit exactly once — not a direct write per step.
   let working={...STATE_ACTIVE,meta:{...STATE_ACTIVE.meta,startDate:start,endDate:end,...(name?{userName:name}:{}),...(role?{userRole:role}:{}),onboarded:true}};
+  // A brand-new (or reset) user must start EMPTY: the built-in seed (demo exams, someone's work
+  // hours, a one-off block) is only fixture data. Not applied when the guided tour is re-opened
+  // by an already-onboarded user — that must never wipe their data.
+  if(!STATE_ACTIVE.meta.onboarded)working=_stripSeedData(working);
   if(_wm==='work'||_wm==='both'){
     const sh=(document.getElementById('wSH').value||'09:00').split(':');
     const eh=(document.getElementById('wEH').value||'18:00').split(':');
@@ -6468,10 +6485,10 @@ function wFinish(){
   STATE_ACTIVE=commitState(working,'onboarding-finish',{render:false});
   document.body.classList.remove('app-locked');
   const ov=document.getElementById('welcomeScreen');if(ov)ov.style.display='none';
-  ACTIVE_CALENDAR=calId;_cwManuallySet=false;recalcAndRender();switchTab('home');
+  ACTIVE_CALENDAR=calId;_cwManuallySet=false;recalcAndRender();switchTab('ai'); // straight to Maya (she opens with the intake question)
   // Welcome toast — warm if no tasks yet, confirming if tasks added
   if(_wt.length===0){
-    setTimeout(()=>showToast('👋 ברוך הבא — הלוח ריק, בוא נתחיל ממשימה אחת', 3500, true), 400);
+    // no toast: Maya's opening message is the welcome
   } else {
     setTimeout(()=>showToast('✅ הלוח מוכן — '+_wt.length+' משימות שובצו', 2500, true), 400);
   }
@@ -9711,8 +9728,10 @@ function runDayOverrideTests(){
     ok('2. מוצגים כפתורי ימים א׳–ו׳ וברירת המחדל א׳–ה׳',document.querySelectorAll('#wDays button').length===6&&JSON.stringify(_wDays)==='[0,1,2,3,4]'&&document.querySelectorAll('#wDays button.sel').length===5);
     _wDays=[0,1,2,3,4];const b5=document.querySelector('#wDays button[data-d="5"]');wDay(b5);const added=_wDays.includes(5)&&b5.classList.contains('sel');wDay(b5);
     ok('3. לחיצה על יום מוסיפה/מסירה אותו',added&&!_wDays.includes(5)&&!b5.classList.contains('sel'));
-    _wm='personal';_ws=2;wNext();const skipped=_ws===4;wPrev();const backSkipped=_ws===2;_wm='work';_ws=2;wNext();const noSkip=_ws===3;
-    ok('4. מצב "אישי" מדלג על שלב ימי העבודה; מצב "עבודה" לא',skipped&&backSkipped&&noSkip);
+    _wm='personal';const lastPersonal=_wLastStep();_wm='work';const lastWork=_wLastStep();_ws=2;wNext();const noSkip=_ws===3;_wm='personal';_ws=3;wPrev();const backSkipped=_ws===2;
+    ok('4. מצב "אישי": השלב האחרון הוא 2 (ימי עבודה מדולגים); מצב "עבודה": השלב האחרון 3 ואין דילוג',lastPersonal===2&&lastWork===3&&noSkip&&backSkipped);
+    _wm='personal';_wShow(2);const lbl=document.getElementById('wNext').textContent;_wm='work';_wShow(2);const lbl2=document.getElementById('wNext').textContent;_wShow(3);const lbl3=document.getElementById('wNext').textContent;
+    ok('4b. כפתור ההמשך בשלב האחרון הוא "כניסה" (ישר למאיה), ובשלב ביניים "הבא"',lbl.includes('כניסה')&&lbl2.includes('הבא')&&lbl3.includes('כניסה'),[lbl,lbl2,lbl3].join('|'));
     // 5 wFinish
     STATE_ACTIVE=mk();STATE_ACTIVE.meta.onboarded=false;_wm='work';_wDays=[0,1,2];_wt=[];
     const _n=document.getElementById('wName');if(_n)_n.value='בדיקה';
@@ -9723,6 +9742,21 @@ function runDayOverrideTests(){
     // 7 horizon
     ok('7. extendPlanningHorizon: סוף רחוק → null; קרוב (<120 יום) או חסר → שנה מהיום',extendPlanningHorizon({endDate:'2027-12-31'},'2026-10-11')===null&&extendPlanningHorizon({endDate:'2026-11-01'},'2026-10-11')==='2027-10-11'&&extendPlanningHorizon({},'2026-10-11')==='2027-10-11'&&extendPlanningHorizon({endDate:'2027-02-08'},'2026-10-11')===null);
     ok('8. _isoPlusDays נכון גם מעל גבולות חודש/שנה/מעבר שעון',_isoPlusDays('2026-12-31',1)==='2027-01-01'&&_isoPlusDays('2026-03-27',2)==='2026-03-29'&&_isoPlusDays('2026-10-25',1)==='2026-10-26');
+    // 8b-8d new user starts empty
+    {
+      const seedTasks=(STATE.calendars.personal.tasks||[]).length; // the fixture really is non-empty
+      const fresh=structuredClone(STATE);fresh.meta.onboarded=false;fresh.meta.today=fresh.meta.startDate;
+      STATE_ACTIVE=fresh;_wm='personal';_wt=[];wFinish();
+      const A=STATE_ACTIVE;
+      ok('8b. משתמש חדש/מאופס מסיים את האשף → לוח ריק: אין משימות הדגמה, אין חסימות הדגמה ואין שעות עבודה של מישהו אחר',seedTasks>0&&A.calendars.personal.tasks.length===0&&A.calendars.work.tasks.length===0&&(A.calendars.personal.reserves||[]).length===0&&(A.calendars.personal.constraints.onceBlocked||[]).length===0&&(A.weeklyWorkPlan.defaultWorkWindows||[]).length===0&&Object.keys(A.examDays||{}).length===0,'seed='+seedTasks+' now='+A.calendars.personal.tasks.length);
+      ok('8c. ההגדרות הכלליות נשמרות (שבת וחגים עדיין חסומים)',(A.constraintsGlobal.weeklyClosed||[]).some(w=>w.dow===6)&&(A.constraintsGlobal.onceClosed||[]).length>0);
+      const tour=structuredClone(STATE);tour.meta.onboarded=true;tour.meta.today=tour.meta.startDate;
+      STATE_ACTIVE=tour;_wm='personal';_wt=[];wFinish();
+      ok('8d. פתיחה מחדש של הסיור על ידי משתמש קיים (onboarded=true) לא מוחקת לו נתונים',STATE_ACTIVE.calendars.personal.tasks.length===seedTasks&&seedTasks>0);
+      const nw=structuredClone(STATE);nw.meta.onboarded=false;nw.meta.today=nw.meta.startDate;STATE_ACTIVE=nw;_wm='work';_wDays=[0,1];_wt=[];wFinish();
+      ok('8e. משתמש חדש במצב עבודה: רק הימים שבחר מקבלים חלון עבודה (בלי שאריות מההדגמה)',JSON.stringify(STATE_ACTIVE.weeklyWorkPlan.defaultWorkWindows.map(w=>w.dow))==='[0,1]');
+      _wDays=[0,1,2,3,4];
+    }
     // 9-14 computeDayOverride (pure)
     const wed='2026-02-18';// Wednesday dow 3
     const sj=JSON.stringify(base);
@@ -12505,13 +12539,13 @@ function runCoreTests(){
     wFinish();
     const onboardedNow=STATE_ACTIVE.meta.onboarded===true;
     const taskExists=STATE_ACTIVE.calendars.personal.tasks.some(t=>t.title==='Onboard Verify Task');
-    const finalScreenIsHome=ACTIVE_TAB==='home'&&document.getElementById('paneHome').classList.contains('active');
+    const finalScreenIsHome=ACTIVE_TAB==='ai'&&document.getElementById('paneAI').classList.contains('active'); // finishing onboarding lands on Maya
     _wt=_savedWt;_wm=_savedWm;
     STATE_ACTIVE=_saved;
     switchTab(_savedTab||'study');
-    ok('wFinish(): onboarded=true, משימות onboarding קיימות, מסך סופי הוא Home',
+    ok('wFinish(): onboarded=true, משימות onboarding קיימות, מסך סופי הוא מאיה (לא Home)',
       onboardedNow&&taskExists&&finalScreenIsHome,
-      'onboarded='+onboardedNow+' task='+taskExists+' home='+finalScreenIsHome);
+      'onboarded='+onboardedNow+' task='+taskExists+' maya='+finalScreenIsHome);
   }catch(e){ok('wFinish reaches Home with onboarding data intact',false,e.message);}
 
   // 124. REGRESSION (Stage 4): Home is an entry point, not a redirect — normal
