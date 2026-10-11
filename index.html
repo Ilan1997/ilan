@@ -870,7 +870,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
       <textarea id="aiChatInput" placeholder="כתוב כאן איך אתה רוצה שהשבוע ייראה…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
       <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">➤</button>
     </div>
-    <div class="ai-hint" id="aiHint">Enter לשליחה · Shift+Enter לשורה חדשה · <a href="#" onclick="event.preventDefault();if(confirm('לאפס את כל מה שמאיה למדה עליך (פרופיל והעדפות)?'))resetAILearned().then(()=>showToast('האיפוס בוצע'));" style="color:inherit;text-decoration:underline;">אפס מה שנלמד</a></div>
+    <div class="ai-hint" id="aiHint">Enter לשליחה · Shift+Enter לשורה חדשה · <a href="#" onclick="event.preventDefault();if(confirm('לאפס את כל מה שמאיה למדה עליך (פרופיל והעדפות)?'))resetAILearned().then(()=>showToast('האיפוס בוצע'));" style="color:inherit;text-decoration:underline;">אפס מה שנלמד</a> · <a href="#" onclick="event.preventDefault();setupAIKey();" style="color:inherit;text-decoration:underline;">מפתח AI</a></div>
   </div>
 </div>
 <div class="tab-pane" id="paneSettings">
@@ -4834,13 +4834,27 @@ async function _aiCallModel(sys,msgs){
       }
     }
   }catch(e){ console.warn('sample capability failed, falling back to fetch',e&&e.code||e); }
+  // Outside claude.ai: optional personal API key, kept ONLY in this browser (never in the repo).
+  let key='';try{key=((await window.storage.get('ai:apikey')).value||'').trim();}catch(_k){}
+  const headers={'Content-Type':'application/json'};
+  if(key){headers['x-api-key']=key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';}
   const resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
+    method:'POST',headers,
     body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,system:sys,messages:msgs})
   });
   const data=await resp.json();
+  if(resp.ok===false||data?.error){const e=new Error(data?.error?.message||('HTTP '+resp.status));e.noKey=!key;throw e;}
   return(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+}
+// Prompt for / clear the personal API key (stored only in this browser's storage).
+async function setupAIKey(){
+  const cur=await window.storage.get('ai:apikey').then(r=>r.value).catch(()=>'');
+  const v=window.prompt('מפתח API של Anthropic (נשמר רק בדפדפן הזה, לא נשלח לשום מקום חוץ מ-Anthropic). השאר ריק כדי למחוק.',cur||'');
+  if(v===null)return false;
+  const t=v.trim();
+  if(t)await window.storage.set('ai:apikey',t);else await window.storage.delete('ai:apikey').catch(()=>{});
+  showToast(t?'המפתח נשמר ✓':'המפתח נמחק');
+  return !!t;
 }
 
 async function sendAIMessage(){
@@ -4947,7 +4961,12 @@ async function sendAIMessage(){
   }catch(err){
     console.error('AI chat error',err);
     typingEl?.remove();
-    _aiAppendBubble('משהו השתבש בחיבור ל-AI. נסה שוב בעוד רגע.','bot');
+    if(err&&err.noKey){
+      _aiAppendActionBubble('כדי לדבר איתי מחוץ ל-claude.ai צריך מפתח API אישי של Anthropic. הוא נשמר רק בדפדפן שלך.',
+        [{label:'🔑 הגדר מפתח',onclick:()=>{setupAIKey();}}]);
+    } else {
+      _aiAppendBubble('משהו השתבש בחיבור ל-AI. נסה שוב בעוד רגע.','bot');
+    }
   }finally{
     AI_BUSY=false;
     if(sendBtn)sendBtn.disabled=false;
@@ -9305,6 +9324,24 @@ async function runAIBootTests(){
         window.fetch=_origFetch;
         await window.storage.delete('ai:prefs').catch(()=>{});
       }
+    }
+    // BYOK + no-key UX
+    {
+      const _origFetch=window.fetch;
+      let seen=null;
+      try{
+        await window.storage.set('ai:apikey','sk-ant-TEST');
+        window.fetch=async(u,o)=>{seen=o.headers;return{ok:true,json:async()=>({content:[{type:'text',text:'ok'}]})};};
+        const t=await _aiCallModel('sys',[{role:'user',content:'hi'}]);
+        ok('BYOK: עם מפתח נשלחים x-api-key וכותרת דפדפן',t==='ok'&&seen['x-api-key']==='sk-ant-TEST'&&seen['anthropic-dangerous-direct-browser-access']==='true');
+        await window.storage.delete('ai:apikey');
+        window.fetch=async()=>({ok:false,status:401,json:async()=>({error:{message:'invalid x-api-key'}})});
+        let err=null;try{await _aiCallModel('sys',[{role:'user',content:'hi'}]);}catch(e){err=e;}
+        ok('בלי מפתח ושגיאת אימות: נזרקת שגיאה עם noKey=true',!!err&&err.noKey===true);
+        window.fetch=async(u,o)=>{seen=o.headers;return{json:async()=>({content:[{type:'text',text:'x'}]})};};
+        await _aiCallModel('s',[{role:'user',content:'h'}]);
+        ok('בלי מפתח: לא נשלחת כותרת x-api-key (תאימות לאחור)',!('x-api-key' in seen));
+      }finally{ window.fetch=_origFetch; try{await window.storage.delete('ai:apikey');}catch(_d){} }
     }
   }catch(e){
     ok('runAIBootTests threw unexpectedly',false,e.message);
