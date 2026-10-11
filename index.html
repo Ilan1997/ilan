@@ -6537,7 +6537,8 @@ async function cloudSignUp(email,password){
   email=String(email||'').trim();
   if(!email||!password)return{ok:false,error:'צריך אימייל וסיסמה'};
   if(String(password).length<8)return{ok:false,error:'הסיסמה צריכה להיות לפחות 8 תווים'};
-  const r=await _cloudFetch('/auth/v1/signup',{method:'POST',auth:false,body:{email,password}});
+  let _back='';try{_back=location.origin+location.pathname;}catch(_e){}
+  const r=await _cloudFetch('/auth/v1/signup'+(_back?'?redirect_to='+encodeURIComponent(_back):''),{method:'POST',auth:false,body:{email,password}}); // confirmation link returns to THIS page (must be in Supabase Redirect URLs)
   if(r.network)return{ok:false,error:'אין חיבור לשרת — בדוק אינטרנט'};
   if(!r.ok)return{ok:false,error:_cloudErrText(r.data,r.status)};
   const s=_cloudSessionFrom(r.data);
@@ -6602,7 +6603,9 @@ async function _cloudHandleOAuthHash(){
   const p=new URLSearchParams(h.replace(/^#/,''));
   const clean=()=>{try{history.replaceState(null,'',location.pathname+location.search);}catch(_e){}};
   if(p.get('error')||p.get('error_description')){
-    clean();_cloudOAuthError='ההתחברות עם גוגל לא הושלמה'+(p.get('error_description')?': '+p.get('error_description').replace(/\+/g,' '):'');
+    clean();
+    if(p.get('error_code')==='otp_expired')_cloudOAuthError='קישור האימות פג או כבר נוצל. נסה להתחבר עם האימייל והסיסמה — ייתכן שהחשבון כבר אומת. אם לא, הירשם שוב או לחץ "שכחתי סיסמה".';
+    else _cloudOAuthError='ההתחברות לא הושלמה'+(p.get('error_description')?': '+p.get('error_description').replace(/\+/g,' '):'');
     return{handled:true,ok:false,error:_cloudOAuthError};
   }
   if(!p.get('access_token')||!p.get('refresh_token'))return{handled:false};
@@ -9657,6 +9660,7 @@ async function runAccountTests(){
     reset();
     const r3=await cloudSignUp('new@user.co','secret123');
     ok('3. הרשמה שדורשת אישור אימייל: needsConfirm, אין סשן, נשלחו apikey ו-Content-Type',r3.ok&&r3.needsConfirm&&!cloudSignedIn()&&calls[0].h.apikey==='anon-key'&&calls[0].body.email==='new@user.co');
+    ok('3b. הרשמה שולחת redirect_to לדף הנוכחי (קישור האימות חוזר לאפליקציה ולא לשורש האתר)',calls[0].u.includes('/auth/v1/signup?redirect_to='),calls[0].u);
     // 4. already registered
     reset();srv.signup=()=>J(422,{msg:'User already registered'});
     const r4=await cloudSignUp('dana@example.com','secret123');
@@ -9789,6 +9793,10 @@ async function runAccountTests(){
     ok('41. טוקן מזויף ב-hash (השרת דוחה) → לא נכנסים, אין סשן, אין סנכרון',gf.handled&&!gf.ok&&!cloudSignedIn()&&!calls.some(c=>c.u.includes('user_state')));
     history.replaceState(null,'',location.pathname+location.search);
     ok('42. hash של שחזור סיסמה לא נבלע על ידי מסלול גוגל',await(async()=>{history.replaceState(null,'','#access_token=a&refresh_token=b&type=recovery');const r=await _cloudHandleOAuthHash();history.replaceState(null,'',location.pathname+location.search);return r.handled===false;})());
+    reset();history.replaceState(null,'','#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired&sb=');
+    const gx=await _cloudHandleOAuthHash();
+    ok('43. קישור אימות שפג/נוצל → הודעה ברורה בעברית שמכוונת להתחבר או לשחזר סיסמה',gx.handled&&!gx.ok&&gx.error.includes('פג או כבר נוצל')&&gx.error.includes('להתחבר')&&location.hash==='');
+    history.replaceState(null,'',location.pathname+location.search);
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}
