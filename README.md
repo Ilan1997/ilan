@@ -24,3 +24,5 @@ Works without any setup (local only). To enable sign-up / sign-in / sync between
 2. SQL Editor → run `cloud/setup.sql`.
 3. Project Settings → API: copy the *Project URL* and the *anon public* key into `CLOUD_CONFIG` in `index.html`.
 4. Authentication → URL Configuration: set Site URL (and Redirect URLs) to the address the app is served from, so password-reset links return to it. Optionally turn off "Confirm email" for instant sign-up.
+
+Security: the page ships a Content-Security-Policy (meta tag) that only lets it talk to `*.supabase.co`, Gemini and Anthropic. If you use a custom Supabase domain, add it to `connect-src`. Minimum password length is 8; also set it to 8+ in Supabase → Authentication → Providers → Email.
