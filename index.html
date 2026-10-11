@@ -4778,19 +4778,39 @@ function renderMayaScreen(){
   const nPrefs=I.learned.length,nRules=AI_RULES.length;
   if(nPrefs+nRules>0)line(`למדתי ${nPrefs+nRules} העדפות עליך${nPrefs?` (${nPrefs} מהגרירות שלך)`:''} — אני מתחשבת בהן בכל תכנון.`);
 }
-function _aiInsightsContext(state,rules){
+// ── Hidden channel helpers ──
+// Blocks the user must NEVER see. Pure. Removes closed fenced blocks of the given names
+// (case-insensitive, all occurrences) and any trailing UNCLOSED block of those names
+// (e.g. a reply cut off mid-block). Ordinary code fences are left alone.
+const AI_HIDDEN_BLOCKS=['SEMANTIC_PLAN','PLAN_JSON','PROFILE_UPDATE','LEARN_RULE'];
+function _aiStripHidden(text,names){
+  const alt=(names||AI_HIDDEN_BLOCKS).join('|');
+  return String(text||'')
+    .replace(new RegExp('```(?:'+alt+')[\\s\\S]*?```','gi'),'')
+    .replace(new RegExp('```(?:'+alt+')[\\s\\S]*$','i'),'')
+    .replace(/\n{3,}/g,'\n\n').trim();
+}
+// The user's recent REACTIONS to Maya's proposals — a hidden signal she can infer rules from.
+let AI_SIGNALS=[];
+function _aiNoteSignal(t){
+  const x=String(t||'').trim().slice(0,160);
+  if(!x||AI_SIGNALS[AI_SIGNALS.length-1]===x)return;
+  AI_SIGNALS.push(x);if(AI_SIGNALS.length>10)AI_SIGNALS=AI_SIGNALS.slice(-10);
+}
+function _aiInsightsContext(state,rules,signals){
   const I=computeMayaInsights(state),L=[];
   L.push(I.atRisk.length>0
     ?`נתוני לוח עדכניים: יש ${I.atRisk.length===1?'משימה אחת':I.atRisk.length+' משימות'} בסיכון השבוע (${I.atRisk.map(x=>`"${x.title}"${x.level==='critical'?' — קריטי':''}`).join(', ')}) — כדאי להתחיל מהדחופות ולפנות זמן.`
     :'נתוני לוח עדכניים: אין משימות בסיכון השבוע.');
   L.push(`שעות פנויות השבוע אחרי קיבולת יומית: כ-${I.freeHours.personal} בעולם הלימודים/חיים, כ-${I.freeHours.work} בעולם העבודה.`);
   if(I.learned.length>0)L.push('העדפות תזמון שנלמדו מהגרירות של המשתמש/ת (שמור/י עליהן): '+I.learned.join(' '));
+  if(Array.isArray(signals)&&signals.length>0)L.push('תגובות אחרונות של המשתמש/ת להצעות שלך (הסק/י מהן כללים אם יש מה ללמוד): '+signals.map((x,i)=>`${i+1}) ${x}`).join(' '));
   const rs=normalizeAIRules(rules);
   if(rs.length>0)L.push('כל הכללים שלמדת על המשתמש/ת (עבור/י עליהם לפני כל תשובה): '+rs.map((r,i)=>`${i+1}) ${r}`).join(' '));
   return'\n'+L.join('\n');
 }
 async function resetAILearned(){
-  AI_PROFILE=emptyAIProfile();AI_PREFS='';AI_RULES=[];
+  AI_PROFILE=emptyAIProfile();AI_PREFS='';AI_RULES=[];AI_SIGNALS=[];
   if((STATE_ACTIVE?.constraintsGlobal?.weeklyClosed||[]).some(w=>w.sacred))dispatchEvent('personal',{type:'SET_SACRED_HOURS',items:[]});
   await _aiSaveProfile();await _aiSavePrefs();await _aiSaveRules();
 }
@@ -4815,7 +4835,9 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
    ה. הפרדת תכנון-ארוך-טווח מביצוע שוטף — עדיף לא לערבב משימות של החלטות/תכנון קדימה עם משימות ביצוע רגילות באותו בלוק.
    ו. עוגני יום קבועים ומקטעי למידה — כשרלוונטי, שים/י לב לחשיבות של זמן קבוע לפעילות גופנית/עוגן אישי יומי, ולפיצול בלוקי למידה ארוכים למקטעים של כ-45–50 דקות (durationHours קטן יותר, schedulingPreference=flexible) במקום בלוק ענק אחד. חוק זה תמיד כפוף לכלל ה-schedulingPreference הקריטי שבסעיף 2 — פעילות חד-פעמית לא מתפצלת, גם אם היא קצרה.
 4. היכרות (פרופיל): כשהמשתמש/ת מוסר/ת מידע אישי קבוע, צרף/י בסוף בלוק \`\`\`PROFILE_UPDATE עם JSON בלבד של הנושאים שנאמרו, למשל {"work":{"days":[1,2,3],"start":9,"end":13},"peak":{"start":9,"end":12},"freeDays":{"days":[0]},"routines":{"notes":"..."},"sacred":{"items":[{"days":[5],"start":17,"end":23,"quote":"ציטוט מדויק מהודעת המשתמש/ת שמזכיר את היום"}]},"routines":"none"}. ימים: 0=ראשון…6=שבת, שעות 0–24. שעות קדושות (שהמנוע יחסום באמת) רק אם המשתמש/ת אמר/ה במפורש יום ושעות, וה-quote חייב להיות העתקה מילה במילה מההודעה שלו/ה שמכילה את שם היום — אחרת אל תכלול/י. אם נאמר שאין כזה לנושא — "none". אל תמציא/י מידע שלא נאמר. תשובות קצרות: 2-3 משפטים.
-5. למידה מתמשכת: בכל הודעה את/ה מקבל/ת מחדש את כל מה שלמדת — נתוני הלוח העדכניים, הפרופיל, כל הכללים וההעדפות מהגרירות — ותשובתך צריכה להתבסס על כולם יחד, לא רק על ההודעה האחרונה. כשהמשתמש/ת מגלה העדפה או הרגל חדשים (למשל "אני לא יכול ללמוד בערב"), צרף/י בסוף בלוק \`\`\`LEARN_RULE עם JSON: {"add":["כלל קצר וברור, עד 140 תווים"],"remove":["קטע מדויק מכלל ישן שהכלל החדש מחליף או סותר"]}. אל תוסיף/י כלל שכבר קיים, אל תנסח/י כללים על דברים חד-פעמיים, ושפר/י כללים קיימים (החלף/י ניסוח לא מדויק) במקום לצבור כפילויות. כשתשובה נוגעת למשימות בסיכון או לשעות פנויות — השתמש/י במספרים מנתוני הלוח העדכניים בלבד, אל תמציא/י.`;
+5. למידה מתמשכת: בכל הודעה את/ה מקבל/ת מחדש את כל מה שלמדת — נתוני הלוח העדכניים, הפרופיל, כל הכללים וההעדפות מהגרירות — ותשובתך צריכה להתבסס על כולם יחד, לא רק על ההודעה האחרונה. כשהמשתמש/ת מגלה העדפה או הרגל חדשים (למשל "אני לא יכול ללמוד בערב"), צרף/י בסוף בלוק \`\`\`LEARN_RULE עם JSON: {"add":["כלל קצר וברור, עד 140 תווים"],"remove":["קטע מדויק מכלל ישן שהכלל החדש מחליף או סותר"]}. אל תוסיף/י כלל שכבר קיים, אל תנסח/י כללים על דברים חד-פעמיים, ושפר/י כללים קיימים (החלף/י ניסוח לא מדויק) במקום לצבור כפילויות. כשתשובה נוגעת למשימות בסיכון או לשעות פנויות — השתמש/י במספרים מנתוני הלוח העדכניים בלבד, אל תמציא/י.
+6. תהליך נסתר בכל הודעה (המשתמש/ת לא רואה אותו): לפני שאת/ה כותב/ת תשובה — (א) עבור/י על כל הכללים שקיבלת, (ב) הסק/י מההודעה, מהתגובות האחרונות של המשתמש/ת להצעות שלך ומנתוני הלוח מה חדש, מה השתנה ומה כבר לא נכון, (ג) עדכן/י את הכללים בבלוק LEARN_RULE — הוסף/י כלל חדש, החלף/י כלל שהתברר כלא מדויק, הסר/י כלל שנסתר. אם לא נלמד דבר חדש — אל תצרף/י בלוק. הבלוקים הנסתרים (LEARN_RULE, PROFILE_UPDATE) נמחקים אוטומטית לפני שהמשתמש/ת רואה את התשובה.
+7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
 let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting explicit user approval
 
@@ -4908,7 +4930,7 @@ async function sendAIMessage(){
   const todayStr=STATE_ACTIVE?.meta?.today||getTodayISO();
   const sys=AI_SYSTEM_PROMPT_BASE+`\nהיום בתאריך (עוגן תכנון): ${todayStr}.`+
     `\n${_aiCurrentItemsSummary()}`+
-    _aiInsightsContext(STATE_ACTIVE,AI_RULES)+_aiProfileContext(AI_PROFILE||emptyAIProfile())+
+    _aiInsightsContext(STATE_ACTIVE,AI_RULES,AI_SIGNALS)+_aiProfileContext(AI_PROFILE||emptyAIProfile())+
     (AI_PREFS?`\nהעדפות שנלמדו על המשתמש/ת מתיקונים קודמים (קח/י בחשבון בעדינות, אל תזכיר/י את זה במפורש): ${AI_PREFS}`:'');
 
   try{
@@ -4921,10 +4943,11 @@ async function sendAIMessage(){
     const semMatch=fullText.match(/```SEMANTIC_PLAN\s*([\s\S]*?)```/);
     const planMatch=fullText.match(/```PLAN_JSON\s*([\s\S]*?)```/);
     const anyMatch=semMatch||planMatch;
-    const strippedText=fullText.replace(/```SEMANTIC_PLAN[\s\S]*?```/,'').replace(/```PLAN_JSON[\s\S]*?```/,'').replace(/```PROFILE_UPDATE[\s\S]*?```/,'').replace(/```LEARN_RULE[\s\S]*?```/,'').trim();
+    const strippedText=_aiStripHidden(fullText); // user sees ONLY the practical answer
     const displayText=strippedText||(anyMatch?'הבנתי — הכנתי הצעה, אשר/י למטה כדי לבצע 👇':'קיבלתי.');
     _aiAppendBubble(displayText,'bot');
-    AI_CHAT_HISTORY.push({role:'assistant',content:fullText,displayText});
+    // History keeps what was proposed (SEMANTIC_PLAN) but not the learning blocks — rules are re-sent fresh every turn.
+    AI_CHAT_HISTORY.push({role:'assistant',content:_aiStripHidden(fullText,['PROFILE_UPDATE','LEARN_RULE']),displayText});
     {
       const ru=_aiExtractRuleUpdate(fullText);
       if(ru){
@@ -5043,6 +5066,7 @@ function _aiApproveProposal(bubbleEl){
   const result=approveAIPlanProposal(AI_PENDING_PROPOSAL);
   if(bubbleEl){const btnRow=bubbleEl.querySelector('div:last-child');if(btnRow)btnRow.remove();}
   if(result.valid){
+    try{_aiNoteSignal('אישר/ה הצעה: '+(AI_PENDING_PROPOSAL?.compiledPlan?.tasks||[]).map(t=>'"'+t.title+'"').join(', '));}catch(_s){}
     showToast(`✅ בוצע: ${result.addedTasks} משימות, ${result.addedEvents} אירועים`);
     // Success = clean "done" + (only if a newly added task is truly critical per
     // the existing Risk Engine) one short warning + one "show on board" button.
@@ -5067,6 +5091,7 @@ function _aiApproveProposal(bubbleEl){
           alts.forEach(o=>buttons.push({label:`${o.icon&&o.riskLevel!=='safe'?o.icon+' ':''}${o.label}`,
             onclick:(div)=>{
               const r=applyPlacementOption(ref.calendar,o);
+              if(r.valid){try{_aiNoteSignal('העביר/ה את השיבוץ שהצעתי אל '+o.label);}catch(_s){}}
               if(div){const row=[...div.querySelectorAll('button')];row.forEach(b=>{if(b.textContent!=='📅 הצג בלוח')b.remove();});}
               _aiAppendBubble(r.valid?`עודכן ✅ — ${o.label}.`:'⚠️ לא הצלחתי להעביר — הלוח השתנה. אפשר לגרור ידנית.','bot');
             }}));
@@ -5083,6 +5108,7 @@ function _aiApproveProposal(bubbleEl){
   AI_PENDING_PROPOSAL=null;
 }
 function _aiRejectProposal(bubbleEl){
+  try{_aiNoteSignal('דחה/תה הצעה: '+(AI_PENDING_PROPOSAL?.compiledPlan?.tasks||[]).map(t=>'"'+t.title+'"').join(', '));}catch(_s){}
   if(bubbleEl){const btnRow=bubbleEl.querySelector('div:last-child');if(btnRow)btnRow.remove();}
   AI_PENDING_PROPOSAL=null;
   _aiAppendBubble('בסדר, לא ביצעתי כלום.','bot');
@@ -8945,6 +8971,15 @@ function runMayaInsightsTests(){
     ok('12. ללא סיכון: ההקשר אומר במפורש שאין',_aiInsightsContext(base&&(()=>{const z=structuredClone(s);z.calendars.personal.tasks=[];return z;})(),[]).includes('אין משימות בסיכון'));
     // learned prefs from drags
     const s2=structuredClone(s);s2.schedulePrefs={hourStats:{'9':{sampleCount:4,pushedAwayWeighted:4,movedToWeighted:0},'10':{sampleCount:3,pushedAwayWeighted:3,movedToWeighted:0},'11':{sampleCount:3,pushedAwayWeighted:2,movedToWeighted:0}},taskStats:{}};
+    // hidden channel
+    ok('15. _aiStripHidden: מסיר כל בלוקי הלמידה/תוכנית (כמה בלוקים, אותיות מעורבות)',_aiStripHidden('תשובה.\n```learn_rule\n{"add":["x"]}\n```\nעוד.\n```PROFILE_UPDATE\n{}\n```')==='תשובה.\n\nעוד.');
+    ok('16. _aiStripHidden: בלוק נסתר לא סגור (תשובה שנקטעה) נמחק עד הסוף',_aiStripHidden('שלום\n```LEARN_RULE\n{"add":["חצי')==='שלום');
+    ok('17. _aiStripHidden: גדרות קוד רגילות נשארות',_aiStripHidden('ראה:\n```json\n{"a":1}\n```').includes('```json'));
+    ok('18. _aiStripHidden: names מצומצם משאיר SEMANTIC_PLAN (להיסטוריה)',_aiStripHidden('a\n```SEMANTIC_PLAN\n{}\n```\n```LEARN_RULE\n{}\n```',['PROFILE_UPDATE','LEARN_RULE']).includes('SEMANTIC_PLAN')&&!_aiStripHidden('a\n```LEARN_RULE\n{}\n```',['PROFILE_UPDATE','LEARN_RULE']).includes('LEARN_RULE'));
+    {const sv=[...AI_SIGNALS];AI_SIGNALS=[];_aiNoteSignal('דחה/תה הצעה: "א"');_aiNoteSignal('דחה/תה הצעה: "א"');for(let i=0;i<15;i++)_aiNoteSignal('אות '+i);
+      ok('19. אותות תגובה: בלי כפילות רצופה, תקרת 10 אחרונים',AI_SIGNALS.length===10&&AI_SIGNALS[9]==='אות 14');
+      ok('20. אותות התגובה נכנסים להקשר של ה-AI',_aiInsightsContext(s,[],['דחה/תה הצעה: "ב"']).includes('דחה/תה הצעה: "ב"')&&!_aiInsightsContext(s,[],[]).includes('תגובות אחרונות'));
+      AI_SIGNALS=sv;}
     ok('14. שעות פנויות מוגבלות לשבוע הנוכחי בלבד (≤ 7 × רוחב הרשת)',base.freeHours.personal<=7*15&&base.freeHours.personal>0&&base.freeHours.work<=7*15,JSON.stringify(base.freeHours));
     ok('13. העדפות מהגרירות נכנסות להקשר',_aiInsightsContext(s2,[]).includes('9:00'));
   }catch(e){ok('runMayaInsightsTests threw',false,e.message);}
