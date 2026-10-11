@@ -3274,7 +3274,7 @@ function importState(evt){
   evt.target.value='';
 }
 
-let STATE_ACTIVE=loadState()||STATE;
+let STATE_ACTIVE=loadState()||_stripSeedData(structuredClone(STATE)); // a brand-new user never holds the demo fixture
 
 // ── appState alias — single source of truth for the calendar ──
 // Structure mirrors STATE_ACTIVE:
@@ -6744,6 +6744,13 @@ async function resetUserData(){
   const keepSession=cloudSignedIn()?CLOUD_SESSION:null;
   await _cloudWipeLocal();
   if(keepSession)_cloudStoreSession(keepSession); // reset data, stay signed in
+  // Do NOT rely on a page reload (sandboxed hosts may ignore it): swap the live state for an empty
+  // one right now and show the welcome flow; the reload below is only belt-and-braces.
+  const fresh=_stripSeedData(structuredClone(STATE));
+  fresh.meta={...fresh.meta,onboarded:false,today:getTodayISO(),todayIsManual:false};
+  STATE_ACTIVE=commitState(fresh,'reset-user-data',{save:false,render:false});
+  _cloudResetting=false;
+  try{_wt=[];_wDays=[0,1,2,3,4];_wm='both';_aiRenderHistory();const _bar=document.getElementById('deadlineBar');if(_bar){_bar.innerHTML='';_bar.style.display='none';}_checkOnboarding();recalcAndRender();}catch(_e){console.warn('reset UI refresh:',_e);}
   _reloadApp();
   return{ok:true};
 }
@@ -9042,7 +9049,7 @@ function auditStateMutationPaths(){
   // function (tracking function boundaries via regex alone is unreliable for
   // attribution, but the RHS pattern match itself is exact and reliable).
   const ALLOWED_RHS=/=\s*(commitState\(|loadState\(\)|freshState\(\)|freshRealState\(\)|_savedActive\s*;|STATE\s*;|v\s*;)/;
-  const ALLOWED_CONTAINING_FUNCS=['commitState','migrateState','_deepDefaults','runCoreTests','runUserScenarios','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests'];
+  const ALLOWED_CONTAINING_FUNCS=['commitState','migrateState','_deepDefaults','runCoreTests','runUserScenarios','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests','resetUserData'];
   lines.forEach((line,i)=>{
     const fm=line.match(funcDeclPattern);
     if(fm)currentFunc=fm[1];
@@ -9072,7 +9079,7 @@ function auditStateMutationPaths(){
 function auditAssignmentMutationPaths(){
   const src=Array.from(document.getElementsByTagName('script')).map(s=>s.textContent||'').join('\n');
   const lines=src.split('\n');
-  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests'];
+  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests','resetUserData'];
   const writePattern=/\.lockedAssignments\[[^\]]+\]\s*=(?!=)/;
   const deletePattern=/delete\s+\w+\.lockedAssignments\[/;
   const validatedPlanPaths=[];
@@ -9825,6 +9832,7 @@ async function runAccountTests(){
   const _ai={prefs:AI_PREFS,rules:AI_RULES,profile:AI_PROFILE,ids:AI_ADDED_TASK_IDS,sig:AI_SIGNALS,hist:AI_CHAT_HISTORY};
   const _st={};for(const k of AI_DATA_KEYS.concat(AI_KEY_KEYS)){try{_st[k]=(await window.storage.get(k)).value;}catch(_e){_st[k]=undefined;}}
   const _hash=location.hash;
+  const _wOv=document.getElementById('welcomeScreen'),_wOvD=_wOv?_wOv.style.display:'',_wLock=document.body.classList.contains('app-locked');
   let calls=[],srv={};let reloads=0;
   const J=(status,data)=>({ok:status>=200&&status<300,status,json:async()=>data});
   const U={id:'u-1',email:'dana@example.com'};
@@ -9962,6 +9970,15 @@ async function runAccountTests(){
     const rl=await resetUserData();
     let rg=false,kk='';try{await window.storage.get('ai:rules');}catch(_e){rg=true;}try{kk=(await window.storage.get('ai:geminikey')).value;}catch(_e){}
     ok('31. איפוס בלי חשבון: משימות וכללים נמחקים, מפתח ה-API של המכשיר נשמר, בלי רשת, ואפליקציה נטענת מחדש לפתיחה נקייה',rl.ok&&localStorage.getItem(LS_KEY)===null&&rg&&kk==='KEEPME'&&calls.length===0&&reloads===1&&AI_RULES.length===0);
+    // 31b. the live app must be empty right away (no reload needed)
+    {
+      reset();_cloudAsk=()=>true;STATE_ACTIVE=structuredClone(STATE);STATE_ACTIVE.meta.onboarded=true; // fixture has demo tasks
+      const hadTasks=STATE_ACTIVE.calendars.personal.tasks.length>0;
+      await resetUserData();
+      const A=STATE_ACTIVE;
+      ok('31b. אחרי איפוס הלוח בזיכרון ריק מיד (בלי תלות בטעינה מחדש): אין משימות הדגמה, onboarded=false, מסך הפתיחה מוצג',hadTasks&&A.calendars.personal.tasks.length===0&&A.calendars.work.tasks.length===0&&A.meta.onboarded===false&&document.getElementById('welcomeScreen').style.display==='flex'&&document.body.classList.contains('app-locked')&&_cloudResetting===false,'tasks='+A.calendars.personal.tasks.length);
+      ok('31c. אחרי האיפוס שמירה חוזרת לעבוד ולא מחזירה נתונים ישנים',(()=>{saveState();const saved=JSON.parse(localStorage.getItem(LS_KEY)||'null');return !saved||saved.state.calendars.personal.tasks.length===0;})());
+    }
     // 32. reset signed-in → remote row deleted, stays signed in
     reset();STATE_ACTIVE=baseState([task('t1','x')]);_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:U});
     const rsi=await resetUserData();
@@ -10014,6 +10031,7 @@ async function runAccountTests(){
     try{ if(_lsSess===null)localStorage.removeItem(CLOUD_SESSION_KEY);else localStorage.setItem(CLOUD_SESSION_KEY,_lsSess);}catch(_e){}
     AI_PREFS=_ai.prefs;AI_RULES=_ai.rules;AI_PROFILE=_ai.profile;AI_ADDED_TASK_IDS=_ai.ids;AI_SIGNALS=_ai.sig;AI_CHAT_HISTORY=_ai.hist;
     for(const k of Object.keys(_st)){try{ if(_st[k]===undefined)await window.storage.delete(k);else await window.storage.set(k,_st[k]); }catch(_e){}}
+    if(_wOv)_wOv.style.display=_wOvD;document.body.classList.toggle('app-locked',_wLock);
     try{history.replaceState(null,'',location.pathname+location.search+_hash);}catch(_e){}
     try{recalcAndRender();}catch(_e){}
   }
