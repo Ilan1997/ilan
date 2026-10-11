@@ -15,3 +15,12 @@ npm test          # או: TZ=Asia/Jerusalem node tests/run.js
 
 ## תיעוד
 ראה [ARCHITECTURE.md](ARCHITECTURE.md) — עקרונות המנוע, חוזים, ושכבת מאיה (§16–19).
+
+
+## Accounts & sync (optional)
+
+Works without any setup (local only). To enable sign-up / sign-in / sync between devices:
+1. Create a free project at supabase.com.
+2. SQL Editor → run `cloud/setup.sql`.
+3. Project Settings → API: copy the *Project URL* and the *anon public* key into `CLOUD_CONFIG` in `index.html`.
+4. Authentication → URL Configuration: set Site URL (and Redirect URLs) to the address the app is served from, so password-reset links return to it. Optionally turn off "Confirm email" for instant sign-up.

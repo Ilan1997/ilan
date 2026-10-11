@@ -572,7 +572,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
     <div class="ws-seg" id="wSeg2"></div><div class="ws-seg" id="wSeg3"></div>
     <div class="ws-seg" id="wSeg4"></div><div class="ws-seg" id="wSeg5"></div>
   </div>
-  <div class="ws-step on" id="wS0"><span class="ws-icon">🧠</span><div class="ws-h1">ברוך הבא למערכת ניהול<br>החיים והעבודה שלך</div><div class="ws-p">מנוע חכם שמתזמן משימות, לימודים ועבודה.<br>נגדיר יחד — פחות מדקה.</div></div>
+  <div class="ws-step on" id="wS0"><span class="ws-icon">🧠</span><div class="ws-h1">ברוך הבא למערכת ניהול<br>החיים והעבודה שלך</div><div class="ws-p">מנוע חכם שמתזמן משימות, לימודים ועבודה.<br>נגדיר יחד — פחות מדקה.</div><button id="wHaveAccount" onclick="openAccount()" style="margin-top:14px;background:none;border:none;color:#a5a5c8;font-size:.85em;text-decoration:underline;cursor:pointer;font-family:inherit;">כבר יש לי חשבון — התחבר</button></div>
   <div class="ws-step" id="wS1"><span class="ws-icon">👤</span><div class="ws-h1">מי אתה?</div><label class="ws-lbl">שם</label><input class="ws-inp" id="wName" placeholder="השם שלך" type="text"/><label class="ws-lbl">תפקיד / תחום</label><input class="ws-inp" id="wRole" placeholder="סטודנט, מנהל פרויקטים, יזם..." type="text"/></div>
   <div class="ws-step" id="wS2"><span class="ws-icon">🎯</span><div class="ws-h1">איך אתה רוצה לעבוד?</div><div class="ws-modes"><button class="ws-mode" data-m="personal" onclick="wMode(this)"><span class="ws-mode-ico">🎓</span><div><div class="ws-mode-name">ניהול חיים ולימודים</div><div class="ws-mode-desc">מטלות, מבחנים, יעדים אישיים</div></div></button><button class="ws-mode" data-m="work" onclick="wMode(this)"><span class="ws-mode-ico">💼</span><div><div class="ws-mode-name">ניהול עבודה</div><div class="ws-mode-desc">פרויקטים, דדליינים, שעות עבודה</div></div></button><button class="ws-mode" data-m="both" onclick="wMode(this)"><span class="ws-mode-ico">⚡</span><div><div class="ws-mode-name">גם וגם</div><div class="ws-mode-desc">שני המנועים — לחיים מלאים</div></div></button></div></div>
   <div class="ws-step" id="wS3"><span class="ws-icon">📅</span><div class="ws-h1">מסגרת הזמן שלך</div><label class="ws-lbl">תאריך התחלה</label><input class="ws-inp" id="wStart" type="date"/><label class="ws-lbl">תאריך סיום</label><input class="ws-inp" id="wEnd" type="date"/><div id="wWorkBlock" style="display:none;"><label class="ws-lbl" style="margin-top:2px;">שעות עבודה</label><div style="font-size:.76em;color:var(--muted);margin-bottom:6px;line-height:1.4;">כל זמן שלא מוגדר כעבודה נשמר לחיים</div><div class="ws-pair"><div><label class="ws-lbl">מ-</label><input class="ws-inp" id="wSH" type="time" value="09:00"/></div><div><label class="ws-lbl">עד-</label><input class="ws-inp" id="wEH" type="time" value="18:00"/></div></div></div></div>
@@ -777,6 +777,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
       <button onclick="homeGoAddSomething()" style="padding:18px;border-radius:14px;border:1.5px solid var(--border);background:var(--card);color:var(--text);font-size:1.02em;font-weight:700;cursor:pointer;font-family:inherit;">➕ הוסף משהו</button>
     </div>
     <button onclick="homeGoToBoard()" style="margin-top:22px;background:none;border:none;color:var(--muted);font-size:.85em;text-decoration:underline;cursor:pointer;font-family:inherit;">פתח את התכנון שלי</button>
+    <div><button onclick="openAccount()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.8em;cursor:pointer;font-family:inherit;">👤 החשבון שלי</button></div>
   </div>
 </div>
 
@@ -876,6 +877,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
 <div class="tab-pane" id="paneSettings">
 <div class="year-pane" style="max-width:520px;margin:0 auto;">
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;"><h2 style="font-size:.97em;margin:0;">⚙ הגדרות קיבולת ועבודה</h2><button onclick="reopenOnboarding()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:.78em;cursor:pointer;color:var(--muted);font-family:inherit;">🧭 סיור מודרך</button></div>
+<div class="set-section"><div class="set-sec-title">👤 החשבון שלי</div><div style="font-size:.85em;color:var(--text2);margin-bottom:10px;">התחברות, סנכרון בין מכשירים ואיפוס הנתונים.</div><button onclick="openAccount()" style="background:var(--card);border:1.5px solid var(--border);border-radius:8px;padding:7px 14px;font-size:.85em;cursor:pointer;font-family:inherit;color:var(--text);">פתח</button></div>
 <div class="set-section" id="learnedInsightsSection" style="display:none;">
   <div class="set-sec-title">🧠 מה שלמדתי עליך</div>
   <div id="learnedInsightsBody" style="font-size:.85em;color:var(--text2);line-height:1.7;"></div>
@@ -1167,6 +1169,13 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
 <!-- MODAL: Settings -->
 
 <!-- MODAL: weekly work-hours editor -->
+<div class="modal-overlay" id="accountModal" style="z-index:10000;" onclick="if(event.target===this)closeAccount()">
+<div class="modal-box" style="max-width:380px;">
+<button class="modal-close" onclick="closeAccount()">✕</button>
+<div class="modal-title">👤 החשבון שלי</div>
+<div id="accountBody" style="margin-top:14px;"></div>
+</div>
+</div>
 <div class="modal-overlay" id="weekModal">
 <div class="modal-box">
 <button class="modal-close" onclick="closeWeekEditor()">✕</button>
@@ -3074,8 +3083,10 @@ const LS_KEY='planner_state_v1';
 
 // ── Persistence: load / save / export / import ──
 function saveState(){
+  if(typeof _cloudResetting!=='undefined'&&_cloudResetting)return; // reset / sign-out in progress — never re-persist wiped data
   try{
     localStorage.setItem(LS_KEY,JSON.stringify({schemaVersion:SCHEMA_VERSION,state:STATE_ACTIVE}));
+    if(typeof _cloudSchedulePush==='function')_cloudSchedulePush();
   }catch(e){
     console.warn('saveState failed:',e);
     // Minimal, non-blocking feedback: user should know the change wasn't persisted locally
@@ -4482,9 +4493,9 @@ async function _aiLoadState(){
 }
 async function _aiSaveHistory(){ /* no-op — conversation history is session-only now, never persisted (see goal 2/3) */ }
 async function _aiSaveAddedIds(){ try{ await window.storage.set('ai:addedTaskIds', JSON.stringify(AI_ADDED_TASK_IDS.slice(-200))); }catch(_e){} }
-async function _aiSaveRules(){ try{ await window.storage.set('ai:rules', JSON.stringify(AI_RULES)); }catch(_e){} }
-async function _aiSaveProfile(){ try{ await window.storage.set('ai:profile', JSON.stringify(AI_PROFILE)); }catch(_e){} }
-async function _aiSavePrefs(){ try{ await window.storage.set('ai:prefs', AI_PREFS); }catch(_e){} }
+async function _aiSaveRules(){ try{ await window.storage.set('ai:rules', JSON.stringify(AI_RULES)); _cloudSchedulePush(); }catch(_e){} }
+async function _aiSaveProfile(){ try{ await window.storage.set('ai:profile', JSON.stringify(AI_PROFILE)); _cloudSchedulePush(); }catch(_e){} }
+async function _aiSavePrefs(){ try{ await window.storage.set('ai:prefs', AI_PREFS); _cloudSchedulePush(); }catch(_e){} }
 
 function _aiRenderHistory(){
   const log=document.getElementById('aiChatLog');
@@ -6461,6 +6472,239 @@ function _checkOnboarding(){
     // straight drop into the board. Pure UI navigation; touches nothing else.
     switchTab('home');
   }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACCOUNTS — sign-up / sign-in / cross-device sync / reset
+   Thin fetch-based client for Supabase (Auth + one table). With an empty
+   CLOUD_CONFIG the app works exactly as before (local only). The anon key is
+   public by design; row-level security (cloud/setup.sql) protects the data.
+   Sync NEVER touches the engine: remote state enters only through commitState.
+   ═══════════════════════════════════════════════════════ */
+const CLOUD_CONFIG={url:'',anonKey:''};
+const CLOUD_SESSION_KEY='maya_cloud_session';
+const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
+const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
+let CLOUD_SESSION=null;
+let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
+let _reloadApp=()=>{try{location.reload();}catch(_e){}};
+let _cloudAsk=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
+
+function cloudConfigured(){return !!(CLOUD_CONFIG.url&&CLOUD_CONFIG.anonKey);}
+function cloudSignedIn(){return !!(CLOUD_SESSION&&CLOUD_SESSION.access_token&&CLOUD_SESSION.user&&CLOUD_SESSION.user.id);}
+function _cloudLoadSession(){try{CLOUD_SESSION=JSON.parse(localStorage.getItem(CLOUD_SESSION_KEY)||'null');}catch(_e){CLOUD_SESSION=null;}}
+function _cloudStoreSession(s){CLOUD_SESSION=s||null;try{if(s)localStorage.setItem(CLOUD_SESSION_KEY,JSON.stringify(s));else localStorage.removeItem(CLOUD_SESSION_KEY);}catch(_e){}}
+function _cloudSessionFrom(d){
+  if(!d||!d.access_token)return null;
+  const exp=d.expires_at||(Math.floor(Date.now()/1000)+(d.expires_in||3600));
+  return{access_token:d.access_token,refresh_token:d.refresh_token||'',expires_at:exp,user:{id:d.user&&d.user.id,email:d.user&&d.user.email}};
+}
+function _cloudErrText(d,status){
+  const raw=String((d&&(d.msg||d.error_description||d.message||d.error))||'');
+  const l=raw.toLowerCase();
+  if(l.includes('already registered')||l.includes('already been registered'))return'האימייל הזה כבר רשום — נסה להתחבר';
+  if(l.includes('invalid login'))return'אימייל או סיסמה שגויים';
+  if(l.includes('not confirmed'))return'צריך לאשר את האימייל — בדוק את תיבת הדואר';
+  if(l.includes('password')&&(l.includes('least')||l.includes('short')||l.includes('weak')))return'הסיסמה קצרה או חלשה מדי (לפחות 6 תווים)';
+  if(l.includes('valid email')||l.includes('invalid email'))return'כתובת האימייל לא תקינה';
+  if(l.includes('rate limit')||status===429)return'יותר מדי ניסיונות — נסה שוב בעוד כמה דקות';
+  return raw?('שגיאה: '+raw):'משהו השתבש — נסה שוב';
+}
+async function _cloudFetch(path,opts={}){
+  const h={apikey:CLOUD_CONFIG.anonKey,'Content-Type':'application/json',...(opts.headers||{})};
+  h.Authorization='Bearer '+((opts.auth!==false&&CLOUD_SESSION&&CLOUD_SESSION.access_token)||CLOUD_CONFIG.anonKey);
+  let r;
+  try{ r=await fetch(CLOUD_CONFIG.url.replace(/\/$/,'')+path,{method:opts.method||'GET',headers:h,body:opts.body===undefined?undefined:JSON.stringify(opts.body)}); }
+  catch(_e){ return{ok:false,status:0,data:null,network:true}; }
+  let data=null; try{ data=await r.json(); }catch(_e){}
+  return{ok:r.ok,status:r.status,data};
+}
+async function _cloudEnsureFresh(){
+  if(!cloudSignedIn())return false;
+  if(CLOUD_SESSION.expires_at-Math.floor(Date.now()/1000)>60)return true;
+  const r=await _cloudFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:CLOUD_SESSION.refresh_token}});
+  const s=r.ok?_cloudSessionFrom(r.data):null;
+  if(s){_cloudStoreSession(s);return true;}
+  if(!r.network&&(r.status===400||r.status===401||r.status===403))_cloudStoreSession(null); // refresh token dead → signed out
+  return false;
+}
+
+async function cloudSignUp(email,password){
+  if(!cloudConfigured())return{ok:false,error:'חשבונות בענן עוד לא הופעלו באתר הזה'};
+  email=String(email||'').trim();
+  if(!email||!password)return{ok:false,error:'צריך אימייל וסיסמה'};
+  if(String(password).length<6)return{ok:false,error:'הסיסמה צריכה להיות לפחות 6 תווים'};
+  const r=await _cloudFetch('/auth/v1/signup',{method:'POST',auth:false,body:{email,password}});
+  if(r.network)return{ok:false,error:'אין חיבור לשרת — בדוק אינטרנט'};
+  if(!r.ok)return{ok:false,error:_cloudErrText(r.data,r.status)};
+  const s=_cloudSessionFrom(r.data);
+  if(s){_cloudStoreSession(s);await cloudSyncOnLogin();return{ok:true,signedIn:true};}
+  return{ok:true,needsConfirm:true}; // project requires e-mail confirmation first
+}
+async function cloudSignIn(email,password){
+  if(!cloudConfigured())return{ok:false,error:'חשבונות בענן עוד לא הופעלו באתר הזה'};
+  email=String(email||'').trim();
+  if(!email||!password)return{ok:false,error:'צריך אימייל וסיסמה'};
+  const r=await _cloudFetch('/auth/v1/token?grant_type=password',{method:'POST',auth:false,body:{email,password}});
+  if(r.network)return{ok:false,error:'אין חיבור לשרת — בדוק אינטרנט'};
+  const s=r.ok?_cloudSessionFrom(r.data):null;
+  if(!s)return{ok:false,error:_cloudErrText(r.data,r.status)};
+  _cloudStoreSession(s);
+  await cloudSyncOnLogin();
+  return{ok:true};
+}
+async function cloudRecover(email){
+  if(!cloudConfigured())return{ok:false,error:'חשבונות בענן עוד לא הופעלו באתר הזה'};
+  email=String(email||'').trim();
+  if(!email)return{ok:false,error:'כתוב את האימייל שלך למעלה'};
+  let back='';try{back=location.origin+location.pathname;}catch(_e){}
+  const r=await _cloudFetch('/auth/v1/recover'+(back?'?redirect_to='+encodeURIComponent(back):''),{method:'POST',auth:false,body:{email}});
+  if(r.network)return{ok:false,error:'אין חיבור לשרת — בדוק אינטרנט'};
+  if(!r.ok)return{ok:false,error:_cloudErrText(r.data,r.status)};
+  return{ok:true};
+}
+async function cloudSetNewPassword(password){
+  if(String(password||'').length<6)return{ok:false,error:'הסיסמה צריכה להיות לפחות 6 תווים'};
+  const r=await _cloudFetch('/auth/v1/user',{method:'PUT',body:{password}});
+  if(!r.ok)return{ok:false,error:_cloudErrText(r.data,r.status)};
+  _cloudRecovery=false;
+  await cloudSyncOnLogin();
+  return{ok:true};
+}
+// Password-reset e-mail link lands on the app with #access_token=…&type=recovery
+function _cloudHandleRecoveryHash(){
+  let h='';try{h=location.hash||'';}catch(_e){}
+  if(!h||!h.includes('type=recovery'))return false;
+  const p=new URLSearchParams(h.replace(/^#/,''));
+  const s=_cloudSessionFrom({access_token:p.get('access_token'),refresh_token:p.get('refresh_token'),expires_in:parseInt(p.get('expires_in')||'3600',10),user:{}});
+  if(!s)return false;
+  _cloudStoreSession({...s,user:{id:'pending',email:''}});
+  _cloudRecovery=true;
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(_e){}
+  return true;
+}
+async function cloudSignOut(){
+  _cloudResetting=true; // freeze saveState so nothing re-persists the old account's data
+  clearTimeout(_cloudPushTimer);
+  if(cloudSignedIn()){ try{ await _cloudFetch('/auth/v1/logout',{method:'POST'}); }catch(_e){} }
+  await _cloudWipeLocal(true);
+  _reloadApp();
+}
+async function _cloudWipeLocal(alsoKeys){
+  try{localStorage.removeItem(LS_KEY);}catch(_e){}
+  try{localStorage.removeItem(CLOUD_SESSION_KEY);}catch(_e){}
+  CLOUD_SESSION=null;
+  for(const k of (alsoKeys?AI_DATA_KEYS.concat(AI_KEY_KEYS):AI_DATA_KEYS)){ try{ await window.storage.delete(k); }catch(_e){} }
+  AI_PREFS='';AI_RULES=[];AI_PROFILE=emptyAIProfile();AI_ADDED_TASK_IDS=[];AI_CHAT_HISTORY=[];AI_SIGNALS=[];
+}
+
+/* ── sync ── */
+function _cloudAIBlob(){return{prefs:AI_PREFS||'',rules:Array.isArray(AI_RULES)?AI_RULES:[],profile:AI_PROFILE||null};}
+function _cloudSchedulePush(){
+  if(_cloudApplying||_cloudResetting||!cloudConfigured()||!cloudSignedIn()||_cloudRecovery)return;
+  clearTimeout(_cloudPushTimer);
+  _cloudPushTimer=setTimeout(()=>{cloudPush();},1500);
+}
+async function cloudPush(){
+  if(_cloudApplying||_cloudResetting||!cloudConfigured()||!cloudSignedIn()||_cloudRecovery)return{ok:false};
+  clearTimeout(_cloudPushTimer);
+  if(!(await _cloudEnsureFresh()))return{ok:false,error:'לא מחובר'};
+  const body={user_id:CLOUD_SESSION.user.id,state:{schemaVersion:SCHEMA_VERSION,state:STATE_ACTIVE},ai:_cloudAIBlob(),updated_at:new Date().toISOString()};
+  const r=await _cloudFetch('/rest/v1/user_state?on_conflict=user_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body});
+  if(r.ok){_cloudLastSync=new Date();_cloudRefreshStatus();return{ok:true};}
+  return{ok:false,error:r.network?'אין חיבור':'שמירה בענן נכשלה'};
+}
+async function cloudPull(){
+  if(!(await _cloudEnsureFresh()))return{ok:false,error:'לא מחובר'};
+  const r=await _cloudFetch('/rest/v1/user_state?user_id=eq.'+encodeURIComponent(CLOUD_SESSION.user.id)+'&select=state,ai,updated_at');
+  if(!r.ok)return{ok:false,error:r.network?'אין חיבור':'קריאה מהענן נכשלה'};
+  return{ok:true,row:(Array.isArray(r.data)&&r.data[0])||null};
+}
+async function _cloudApplyRemote(row){
+  _cloudApplying=true;
+  try{
+    const raw=row.state&&row.state.state?row.state.state:row.state;
+    const next=migrateState(raw,row.state&&row.state.schemaVersion);
+    // keep the planning anchor sane: a state saved on another day must not freeze "today" in the past
+    if(!next.meta.todayIsManual)next.meta.today=getTodayISO();
+    STATE_ACTIVE=commitState(next,'cloud-pull');
+    const ai=row.ai||{};
+    if(typeof ai.prefs==='string')await window.storage.set('ai:prefs',ai.prefs);
+    if(Array.isArray(ai.rules))await window.storage.set('ai:rules',JSON.stringify(ai.rules));
+    if(ai.profile)await window.storage.set('ai:profile',JSON.stringify(ai.profile));
+    await _aiLoadState();
+    const ov=document.getElementById('welcomeScreen');
+    if(STATE_ACTIVE.meta.onboarded){ if(ov)ov.style.display='none'; document.body.classList.remove('app-locked'); switchTab('home'); }
+    try{_aiRefreshGreeting();}catch(_e){}
+  }finally{ _cloudApplying=false; }
+}
+async function cloudSyncOnLogin(){
+  const pulled=await cloudPull();
+  if(!pulled.ok)return{ok:false,error:pulled.error};
+  const row=pulled.row;
+  if(!row||!row.state){ await cloudPush(); return{ok:true,direction:'pushed'}; }
+  const localHasData=STATE_ACTIVE.meta.onboarded&&!!((STATE_ACTIVE.calendars.personal.tasks||[]).length||(STATE_ACTIVE.calendars.work.tasks||[]).length);
+  const same=JSON.stringify(row.state.state||row.state)===JSON.stringify(STATE_ACTIVE);
+  if(localHasData&&!same&&!_cloudAsk('יש נתונים גם בחשבון וגם במכשיר הזה.\nאישור = להשתמש בנתוני החשבון (הנתונים שבמכשיר יוחלפו).\nביטול = להעלות את מה שיש במכשיר ולדרוס את החשבון.')){
+    await cloudPush(); return{ok:true,direction:'pushed'};
+  }
+  await _cloudApplyRemote(row);
+  _cloudLastSync=new Date();
+  return{ok:true,direction:'pulled'};
+}
+
+/* ── reset my data ── */
+async function resetUserData(){
+  if(!_cloudAsk('לאפס את כל הנתונים שלך?\nמשימות, פרופיל וכללים ש-מאיה למדה יימחקו, ותתחיל מחדש. אי אפשר לבטל.'))return{ok:false,cancelled:true};
+  _cloudResetting=true;
+  clearTimeout(_cloudPushTimer);
+  if(cloudConfigured()&&cloudSignedIn()){
+    let okDel=false;
+    if(await _cloudEnsureFresh()){
+      const r=await _cloudFetch('/rest/v1/user_state?user_id=eq.'+encodeURIComponent(CLOUD_SESSION.user.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});
+      okDel=r.ok;
+    }
+    if(!okDel){ _cloudResetting=false; showToast('לא הצלחתי לאפס בענן — בדוק חיבור ונסה שוב',3500,true); return{ok:false,error:'cloud'}; }
+  }
+  const keepSession=cloudSignedIn()?CLOUD_SESSION:null;
+  await _cloudWipeLocal();
+  if(keepSession)_cloudStoreSession(keepSession); // reset data, stay signed in
+  _reloadApp();
+  return{ok:true};
+}
+
+/* ── account modal ── */
+function openAccount(){ const m=document.getElementById('accountModal'); if(!m)return; renderAccountModal(); m.classList.add('open'); }
+function closeAccount(){ const m=document.getElementById('accountModal'); if(m)m.classList.remove('open'); }
+function _cloudMsg(text,bad){ const el=document.getElementById('accMsg'); if(!el)return; el.textContent=text||''; el.style.color=bad?'var(--red,#dc2626)':'var(--text2)'; }
+function _cloudRefreshStatus(){ const el=document.getElementById('accSyncStatus'); if(el&&_cloudLastSync)el.textContent='סונכרן לאחרונה: '+_cloudLastSync.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}); }
+function renderAccountModal(){
+  const body=document.getElementById('accountBody'); if(!body)return;
+  const inp='width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:.95em;font-family:inherit;margin-bottom:10px;direction:ltr;text-align:left;';
+  const btn='padding:11px;border-radius:10px;border:none;font-weight:700;font-size:.92em;cursor:pointer;font-family:inherit;';
+  const resetBlock='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><button id="accReset" onclick="resetUserData()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:.8em;cursor:pointer;color:var(--muted);font-family:inherit;">🗑 איפוס הנתונים שלי</button></div>';
+  let h='';
+  if(!cloudConfigured()){
+    h='<div style="font-size:.9em;line-height:1.7;color:var(--text2);">חשבונות וסנכרון בין מכשירים עוד לא הופעלו באתר הזה.<br>בינתיים הנתונים שלך נשמרים במכשיר הזה בלבד.</div>'+resetBlock;
+  }else if(_cloudRecovery){
+    h='<div style="font-weight:700;margin-bottom:10px;">בחר סיסמה חדשה</div><input id="accNewPass" type="password" autocomplete="new-password" placeholder="סיסמה חדשה (6 תווים לפחות)" style="'+inp+'"/><button id="accSetPass" onclick="_accSetPass()" style="'+btn+'width:100%;background:var(--blue);color:#fff;">שמור סיסמה</button>';
+  }else if(cloudSignedIn()){
+    h='<div style="font-size:.92em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
+  }else{
+    h='<input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+resetBlock;
+  }
+  body.innerHTML=h+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+}
+async function _accSignIn(){ _cloudMsg('מתחבר…'); const r=await cloudSignIn(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} renderAccountModal(); _cloudMsg('מחובר ✓'); }
+async function _accSignUp(){ _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
+async function _accForgot(){ const r=await cloudRecover(document.getElementById('accEmail').value); _cloudMsg(r.ok?'שלחנו קישור לאיפוס סיסמה לאימייל שלך.':r.error,!r.ok); }
+async function _accSetPass(){ const r=await cloudSetNewPassword(document.getElementById('accNewPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} renderAccountModal(); _cloudMsg('הסיסמה עודכנה ✓'); }
+async function _accSyncNow(){ _cloudMsg('מסנכרן…'); const r=await cloudPush(); _cloudMsg(r.ok?'סונכרן ✓':(r.error||'הסנכרון נכשל'),!r.ok); }
+
+function _cloudBoot(){
+  _cloudLoadSession();
+  if(cloudConfigured()&&_cloudHandleRecoveryHash()){ setTimeout(openAccount,300); return; }
+  if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -8657,7 +8901,7 @@ function auditStateMutationPaths(){
   // function (tracking function boundaries via regex alone is unreliable for
   // attribution, but the RHS pattern match itself is exact and reliable).
   const ALLOWED_RHS=/=\s*(commitState\(|loadState\(\)|freshState\(\)|freshRealState\(\)|_savedActive\s*;|STATE\s*;|v\s*;)/;
-  const ALLOWED_CONTAINING_FUNCS=['commitState','migrateState','_deepDefaults','runCoreTests','runUserScenarios','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests'];
+  const ALLOWED_CONTAINING_FUNCS=['commitState','migrateState','_deepDefaults','runCoreTests','runUserScenarios','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests'];
   lines.forEach((line,i)=>{
     const fm=line.match(funcDeclPattern);
     if(fm)currentFunc=fm[1];
@@ -8687,7 +8931,7 @@ function auditStateMutationPaths(){
 function auditAssignmentMutationPaths(){
   const src=Array.from(document.getElementsByTagName('script')).map(s=>s.textContent||'').join('\n');
   const lines=src.split('\n');
-  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests'];
+  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests'];
   const writePattern=/\.lockedAssignments\[[^\]]+\]\s*=(?!=)/;
   const deletePattern=/delete\s+\w+\.lockedAssignments\[/;
   const validatedPlanPaths=[];
@@ -9324,6 +9568,186 @@ function runBlockRenderTests(){
   console.log(`%cBLOCK RENDER TESTS: ${passed}/${results.length} PASSED`,'font-weight:bold;font-size:1.1em;');
   results.forEach(r=>console.log(`${r.passed?'✅':'❌'} ${r.name}${r.details?' — '+r.details:''}`));
   return{passed,failed,results};
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACCOUNT TESTS — mocked Supabase (no network). Async; run via tests/run.js.
+   ═══════════════════════════════════════════════════════ */
+async function runAccountTests(){
+  const results=[];
+  const ok=(name,passed,details)=>results.push({name,passed:!!passed,details:details||''});
+  const _f=window.fetch,_cfg={...CLOUD_CONFIG},_sess=CLOUD_SESSION,_sS=STATE_ACTIVE,_reload=_reloadApp,_ask=_cloudAsk;
+  const _flags={a:_cloudApplying,r:_cloudResetting,rec:_cloudRecovery};
+  const _ls=localStorage.getItem(LS_KEY),_lsSess=localStorage.getItem(CLOUD_SESSION_KEY);
+  const _ai={prefs:AI_PREFS,rules:AI_RULES,profile:AI_PROFILE,ids:AI_ADDED_TASK_IDS,sig:AI_SIGNALS,hist:AI_CHAT_HISTORY};
+  const _st={};for(const k of AI_DATA_KEYS.concat(AI_KEY_KEYS)){try{_st[k]=(await window.storage.get(k)).value;}catch(_e){_st[k]=undefined;}}
+  const _hash=location.hash;
+  let calls=[],srv={};let reloads=0;
+  const J=(status,data)=>({ok:status>=200&&status<300,status,json:async()=>data});
+  const U={id:'u-1',email:'dana@example.com'};
+  const tokenOk=(over)=>({access_token:'at1',refresh_token:'rt1',expires_in:3600,user:U,...(over||{})});
+  const install=()=>{window.fetch=async(url,init)=>{
+    const u=String(url),m=(init&&init.method)||'GET',body=init&&init.body?JSON.parse(init.body):undefined;
+    calls.push({u,m,body,h:(init&&init.headers)||{}});
+    if(srv.offline)throw new Error('offline');
+    if(u.includes('/auth/v1/signup'))return srv.signup?srv.signup(body):J(200,{id:'u-1',email:body.email});
+    if(u.includes('grant_type=password'))return srv.signin?srv.signin(body):J(200,tokenOk());
+    if(u.includes('grant_type=refresh_token'))return srv.refresh?srv.refresh(body):J(200,tokenOk({access_token:'at2'}));
+    if(u.includes('/auth/v1/recover'))return J(200,{});
+    if(u.includes('/auth/v1/user')&&m==='PUT')return J(200,{id:'u-1'});
+    if(u.includes('/auth/v1/logout'))return J(204,null);
+    if(u.includes('/rest/v1/user_state')){
+      if(m==='GET')return J(200,srv.row?[srv.row]:[]);
+      if(m==='POST')return J(srv.pushStatus||201,null);
+      if(m==='DELETE')return J(srv.delStatus||204,null);
+    }
+    return J(404,{});
+  };};
+  const reset=()=>{calls=[];srv={};reloads=0;_cloudApplying=false;_cloudResetting=false;_cloudRecovery=false;clearTimeout(_cloudPushTimer);_cloudStoreSession(null);};
+  const baseState=(tasks)=>{const s=structuredClone(STATE);s.meta.onboarded=true;s.calendars.personal.tasks=tasks||[];return s;};
+  const task=(id,title)=>({id,title,requiredUnits:2,deadline:'2026-02-20',deadlineTimeStart:'00:00',deadlineTimeEnd:'23:59',planningDeadlineOffset:0,priorityWeight:2,splitMode:'allowed',location:'',type:'generic',policy:{enforceFinishBeforeDeadline:false,blockOnDeadlineDay:false}});
+  try{
+    install();_reloadApp=()=>{reloads++;};_cloudAsk=()=>true;
+    // 1. cloud not configured → local-only, honest message
+    reset();CLOUD_CONFIG.url='';CLOUD_CONFIG.anonKey='';
+    const r0=await cloudSignIn('a@b.co','secret1');
+    renderAccountModal();
+    ok('1. ענן לא מוגדר: התחברות נכשלת בלי קריאת רשת, והחלון אומר שזה עוד לא הופעל ועדיין מציע איפוס',!r0.ok&&calls.length===0&&document.getElementById('accountBody').textContent.includes('עוד לא הופעלו')&&!!document.getElementById('accReset'));
+    CLOUD_CONFIG.url='https://x.supabase.co';CLOUD_CONFIG.anonKey='anon-key';
+    // 2. validation before network
+    reset();
+    const rs=await cloudSignUp('a@b.co','123');
+    ok('2. סיסמה קצרה נדחית לפני כל קריאת רשת',!rs.ok&&rs.error.includes('6')&&calls.length===0);
+    // 3. signup requires e-mail confirmation → no session
+    reset();
+    const r3=await cloudSignUp('new@user.co','secret1');
+    ok('3. הרשמה שדורשת אישור אימייל: needsConfirm, אין סשן, נשלחו apikey ו-Content-Type',r3.ok&&r3.needsConfirm&&!cloudSignedIn()&&calls[0].h.apikey==='anon-key'&&calls[0].body.email==='new@user.co');
+    // 4. already registered
+    reset();srv.signup=()=>J(422,{msg:'User already registered'});
+    const r4=await cloudSignUp('dana@example.com','secret1');
+    ok('4. אימייל קיים → הודעה בעברית',!r4.ok&&r4.error.includes('כבר רשום'),r4.error);
+    // 5. bad credentials
+    reset();srv.signin=()=>J(400,{error_description:'Invalid login credentials'});
+    const r5=await cloudSignIn('dana@example.com','wrong');
+    ok('5. סיסמה שגויה → הודעה בעברית ואין סשן',!r5.ok&&r5.error.includes('שגויים')&&!cloudSignedIn()&&localStorage.getItem(CLOUD_SESSION_KEY)===null);
+    // 6. sign-in, remote empty → local pushed (with user_id, merge-duplicates, no API keys)
+    reset();STATE_ACTIVE=baseState([task('t1','מבחן')]);AI_RULES=['כלל א'];AI_PREFS='x';
+    await window.storage.set('ai:apikey','SECRET-KEY');
+    const r6=await cloudSignIn('dana@example.com','secret1');
+    const push=calls.find(c=>c.m==='POST'&&c.u.includes('/rest/v1/user_state'));
+    ok('6. התחברות כשאין נתונים בענן → מועלה מה שיש במכשיר, מקושר ל-user_id, עם merge-duplicates',r6.ok&&cloudSignedIn()&&!!push&&push.body.user_id==='u-1'&&push.h.Prefer.includes('merge-duplicates')&&push.body.state.state.calendars.personal.tasks.length===1&&push.h.Authorization==='Bearer at1');
+    ok('7. מפתחות API לא מסונכרנים לענן; כללי מאיה כן',!!push&&!JSON.stringify(push.body).includes('SECRET-KEY')&&push.body.ai.rules[0]==='כלל א');
+    // 8. sign-in on a clean device, remote has data → applied via commitState
+    reset();STATE_ACTIVE=baseState([]);const rev0=STATE_ACTIVE.meta.revision;
+    srv.row={state:{schemaVersion:SCHEMA_VERSION,state:baseState([task('r1','משימה מהענן'),task('r2','עוד אחת')])},ai:{prefs:'p',rules:['אל תשבץ בשישי'],profile:null},updated_at:'2026-01-01'};
+    const r8=await cloudSignIn('dana@example.com','secret1');
+    ok('8. מכשיר נקי + נתונים בענן → הנתונים נטענים (2 משימות), revision עלה, לא הועלה כלום',r8.ok&&STATE_ACTIVE.calendars.personal.tasks.length===2&&STATE_ACTIVE.meta.revision>rev0&&!calls.some(c=>c.m==='POST'&&c.u.includes('user_state')));
+    ok('9. כללי מאיה מהענן נטענו לזיכרון ולאחסון',AI_RULES.includes('אל תשבץ בשישי')&&(await window.storage.get('ai:rules')).value.includes('אל תשבץ בשישי'));
+    ok('10. state שנטען מהענן עבר migrate ומנוע שורד (buildEngine לא זורק)',(()=>{try{buildEngine(STATE_ACTIVE,'personal');return true;}catch(e){return false;}})());
+    // 11/12. conflict
+    reset();STATE_ACTIVE=baseState([task('l1','מקומי')]);
+    srv.row={state:{schemaVersion:SCHEMA_VERSION,state:baseState([task('r1','ענן')])},ai:{},updated_at:'2026-01-01'};
+    _cloudAsk=()=>false;await cloudSignIn('dana@example.com','secret1');
+    ok('11. התנגשות + המשתמש בוחר "העלה מהמכשיר" → הענן נדרס, המכשיר נשאר',STATE_ACTIVE.calendars.personal.tasks[0].id==='l1'&&calls.some(c=>c.m==='POST'&&c.u.includes('user_state')));
+    reset();STATE_ACTIVE=baseState([task('l1','מקומי')]);srv.row={state:{schemaVersion:SCHEMA_VERSION,state:baseState([task('r1','ענן')])},ai:{},updated_at:'2026-01-01'};
+    _cloudAsk=()=>true;await cloudSignIn('dana@example.com','secret1');
+    ok('12. התנגשות + המשתמש בוחר "נתוני החשבון" → המכשיר מוחלף ולא מועלה כלום',STATE_ACTIVE.calendars.personal.tasks[0].id==='r1'&&!calls.some(c=>c.m==='POST'&&c.u.includes('user_state')),JSON.stringify(STATE_ACTIVE.calendars.personal.tasks.map(t=>t.id))+' '+calls.map(c=>c.m+c.u.slice(-30)).join(','));
+    // 13. push scheduling
+    reset();STATE_ACTIVE=baseState([]);saveState();
+    ok('13. לא מחובר → saveState לא מתזמן העלאה',_cloudPushTimer===null||calls.length===0);
+    _cloudStoreSession({access_token:'at1',refresh_token:'rt1',expires_at:Math.floor(Date.now()/1000)+3600,user:U});
+    clearTimeout(_cloudPushTimer);_cloudPushTimer=null;saveState();
+    ok('14. מחובר → saveState מתזמן העלאה מושהית (debounce)',_cloudPushTimer!==null);
+    clearTimeout(_cloudPushTimer);_cloudPushTimer=null;_cloudApplying=true;saveState();_cloudApplying=false;
+    ok('15. בזמן החלת נתונים מהענן אין העלאה חוזרת (אין לולאה)',_cloudPushTimer===null);
+    // 16. refresh expired token
+    reset();_cloudStoreSession({access_token:'old',refresh_token:'rt1',expires_at:Math.floor(Date.now()/1000)-10,user:U});
+    const rp=await cloudPush();
+    ok('16. טוקן שפג → מתחדש (refresh) ואז ההעלאה נשלחת עם הטוקן החדש',rp.ok&&calls[0].u.includes('refresh_token')&&calls.find(c=>c.m==='POST'&&c.u.includes('user_state')).h.Authorization==='Bearer at2');
+    reset();_cloudStoreSession({access_token:'old',refresh_token:'dead',expires_at:Math.floor(Date.now()/1000)-10,user:U});srv.refresh=()=>J(400,{error:'invalid_grant'});
+    await cloudPush();
+    ok('17. refresh נדחה → מנותק (הסשן נמחק), בלי להפיל את האפליקציה',!cloudSignedIn());
+    // 18. offline
+    reset();srv.offline=true;
+    const ro=await cloudSignIn('dana@example.com','secret1');
+    ok('18. אין רשת → הודעה בעברית ולא חריגה',!ro.ok&&ro.error.includes('חיבור'));
+    // 19. recover
+    reset();
+    const rr=await cloudRecover('dana@example.com');
+    const rc=calls.find(c=>c.u.includes('/auth/v1/recover'));
+    ok('19. שכחתי סיסמה → נשלחת בקשת recover עם redirect_to',rr.ok&&!!rc&&rc.body.email==='dana@example.com'&&rc.u.includes('redirect_to='));
+    const rr2=await cloudRecover('');
+    ok('20. שכחתי סיסמה בלי אימייל → הודעה, בלי רשת',!rr2.ok);
+    // 21. recovery link
+    reset();history.replaceState(null,'','#access_token=rec-at&refresh_token=rec-rt&expires_in=3600&type=recovery');
+    const hr=_cloudHandleRecoveryHash();
+    const wasRec=_cloudRecovery;STATE_ACTIVE=baseState([]);saveState();
+    ok('21. קישור איפוס סיסמה: מזוהה, ה-hash נמחק מהכתובת, ואין העלאת נתונים בזמן שהמשתמש עוד לא בחר סיסמה',hr&&wasRec&&location.hash===''&&_cloudPushTimer===null&&CLOUD_SESSION.access_token==='rec-at');
+    renderAccountModal();
+    ok('22. במצב איפוס סיסמה החלון מציג שדה סיסמה חדשה',!!document.getElementById('accNewPass'));
+    srv.row=null;
+    const sp=await cloudSetNewPassword('12');
+    ok('23. סיסמה חדשה קצרה נדחית',!sp.ok);
+    CLOUD_SESSION.user={id:'u-1',email:'dana@example.com'};
+    const sp2=await cloudSetNewPassword('newsecret');
+    const put=calls.find(c=>c.m==='PUT');
+    ok('24. סיסמה חדשה תקינה → PUT /auth/v1/user ויציאה ממצב איפוס',sp2.ok&&!!put&&put.body.password==='newsecret'&&!_cloudRecovery);
+    // 25. modal states
+    reset();renderAccountModal();
+    ok('25. מנותק: שדות אימייל וסיסמה וכפתורי התחבר / הרשמה / שכחתי',!!document.getElementById('accEmail')&&!!document.getElementById('accPass')&&!!document.getElementById('accIn')&&!!document.getElementById('accUp')&&!!document.getElementById('accForgot'));
+    _cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'u-1',email:'<b>x</b>@e.co'}});renderAccountModal();
+    const bd=document.getElementById('accountBody');
+    ok('26. מחובר: מוצג האימייל (בלי HTML אמיתי), התנתק, סנכרן, איפוס',bd.querySelector('b[dir]')&&bd.querySelector('b[dir]').querySelector('b')===null&&bd.textContent.includes('<b>x</b>')&&!!document.getElementById('accOut')&&!!document.getElementById('accSync')&&!!document.getElementById('accReset'));
+    openAccount();const opened=document.getElementById('accountModal').classList.contains('open');closeAccount();
+    ok('27. openAccount/closeAccount פותחים וסוגרים את החלון',opened&&!document.getElementById('accountModal').classList.contains('open'));
+    // 28. sign out wipes everything on the device
+    reset();STATE_ACTIVE=baseState([task('t1','פרטי')]);saveState();AI_RULES=['סוד'];await _aiSaveRules();await window.storage.set('ai:geminikey','G');
+    _cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:U});
+    await cloudSignOut();
+    let rulesGone=false,keyGone=false;try{await window.storage.get('ai:rules');}catch(_e){rulesGone=true;}try{await window.storage.get('ai:geminikey');}catch(_e){keyGone=true;}
+    ok('28. התנתקות: נתוני המשימות, כללי מאיה, מפתחות וסשן נמחקים מהמכשיר, נשלח logout, והאפליקציה נטענת מחדש',localStorage.getItem(LS_KEY)===null&&rulesGone&&keyGone&&!cloudSignedIn()&&AI_RULES.length===0&&reloads===1&&calls.some(c=>c.u.includes('/auth/v1/logout')));
+    saveState();
+    ok('29. אחרי התנתקות saveState לא כותב מחדש את הנתונים הישנים (לפני הטעינה מחדש)',localStorage.getItem(LS_KEY)===null);
+    // 30. reset cancelled
+    reset();STATE_ACTIVE=baseState([task('t1','נשאר')]);saveState();_cloudAsk=()=>false;
+    const rcn=await resetUserData();
+    ok('30. איפוס שבוטל באישור → שום דבר לא נמחק',rcn.cancelled&&localStorage.getItem(LS_KEY)!==null&&reloads===0&&calls.length===0);
+    // 31. reset local-only (no account)
+    reset();_cloudAsk=()=>true;STATE_ACTIVE=baseState([task('t1','יימחק')]);saveState();AI_RULES=['כלל'];await _aiSaveRules();await window.storage.set('ai:geminikey','KEEPME');
+    const rl=await resetUserData();
+    let rg=false,kk='';try{await window.storage.get('ai:rules');}catch(_e){rg=true;}try{kk=(await window.storage.get('ai:geminikey')).value;}catch(_e){}
+    ok('31. איפוס בלי חשבון: משימות וכללים נמחקים, מפתח ה-API של המכשיר נשמר, בלי רשת, ואפליקציה נטענת מחדש לפתיחה נקייה',rl.ok&&localStorage.getItem(LS_KEY)===null&&rg&&kk==='KEEPME'&&calls.length===0&&reloads===1&&AI_RULES.length===0);
+    // 32. reset signed-in → remote row deleted, stays signed in
+    reset();STATE_ACTIVE=baseState([task('t1','x')]);_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:U});
+    const rsi=await resetUserData();
+    const del=calls.find(c=>c.m==='DELETE');
+    ok('32. איפוס כשמחוברים: נמחקת השורה בענן של המשתמש (user_id=eq.…), נשארים מחוברים',rsi.ok&&!!del&&del.u.includes('user_id=eq.u-1')&&cloudSignedIn()&&localStorage.getItem(CLOUD_SESSION_KEY)!==null&&reloads===1);
+    // 33. reset signed-in, cloud delete fails → abort, nothing lost locally
+    reset();STATE_ACTIVE=baseState([task('t1','נשאר')]);saveState();_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:U});srv.delStatus=500;
+    const rf=await resetUserData();
+    ok('33. איפוס שנכשל בענן → מבוטל, הנתונים המקומיים נשארים, אין טעינה מחדש, ושמירה ממשיכה לעבוד',!rf.ok&&localStorage.getItem(LS_KEY)!==null&&reloads===0&&_cloudResetting===false);
+    // 34. fresh start after reset really is a clean, onboarding state
+    ok('34. ברירת המחדל של STATE (ממנה נטענת אפליקציה אחרי איפוס) היא onboarded:false → מסך פתיחה (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('const STATE={');return a>0&&/onboarded:false/.test(src.slice(a,a+8000));})());
+    // 36. fresh device: a returning user can reach login straight from the welcome screen, above it
+    ok('36. במסך הפתיחה יש "כבר יש לי חשבון — התחבר" והחלון מוצג מעליו (z-index)',(()=>{const b=document.getElementById('wHaveAccount');const m=document.getElementById('accountModal');return !!b&&b.getAttribute('onclick')==='openAccount()'&&parseInt(m.style.zIndex,10)>9999;})());
+    // 35. engine untouched
+    ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
+  }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}
+  finally{
+    window.fetch=_f;Object.assign(CLOUD_CONFIG,_cfg);_cloudStoreSession(_sess);_reloadApp=_reload;_cloudAsk=_ask;
+    clearTimeout(_cloudPushTimer);_cloudPushTimer=null;_cloudApplying=_flags.a;_cloudResetting=_flags.r;_cloudRecovery=_flags.rec;
+    STATE_ACTIVE=_sS;
+    try{ if(_ls===null)localStorage.removeItem(LS_KEY);else localStorage.setItem(LS_KEY,_ls);}catch(_e){}
+    try{ if(_lsSess===null)localStorage.removeItem(CLOUD_SESSION_KEY);else localStorage.setItem(CLOUD_SESSION_KEY,_lsSess);}catch(_e){}
+    AI_PREFS=_ai.prefs;AI_RULES=_ai.rules;AI_PROFILE=_ai.profile;AI_ADDED_TASK_IDS=_ai.ids;AI_SIGNALS=_ai.sig;AI_CHAT_HISTORY=_ai.hist;
+    for(const k of Object.keys(_st)){try{ if(_st[k]===undefined)await window.storage.delete(k);else await window.storage.set(k,_st[k]); }catch(_e){}}
+    try{history.replaceState(null,'',location.pathname+location.search+_hash);}catch(_e){}
+    try{recalcAndRender();}catch(_e){}
+  }
+  const passed=results.filter(r=>r.passed).length;
+  console.log(`%cACCOUNT TESTS: ${passed}/${results.length} PASSED`,'font-weight:bold;font-size:1.1em;');
+  results.forEach(r=>console.log(`${r.passed?'✅':'❌'} ${r.name}${r.details?' — '+r.details:''}`));
+  return{passed,failed:results.length-passed,results};
 }
 
 async function runAIBootTests(){
@@ -11915,7 +12339,8 @@ function runCoreTests(){
    BOOT
    ═══════════════════════════════════════════════════════ */
 _checkOnboarding();
-_aiLoadPromise=_aiLoadState(); // tracked so sendAIMessage() can await it — see there
+_aiLoadPromise=_aiLoadState();
+_cloudBoot(); // restore session / handle password-reset link / sync (no-op when cloud is not configured) // tracked so sendAIMessage() can await it — see there
 </script>
 
 <!-- Exam Day Config Modal -->

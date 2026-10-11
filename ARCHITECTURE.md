@@ -385,3 +385,12 @@ If it already exists, read it before assuming it doesn't. This file (`ARCHITECTU
 - **שלב הסקה נסתר (פריט 6 בהנחיה):** ה-AI עובר על הכללים, מסיק מההודעה והתגובות מה חדש/השתנה/נסתר, ומעדכן דרך בלוק `LEARN_RULE` (`add`/`remove`).
 - **יוצא לאתר:** רק תשובה פרקטית (פריט 7 בהנחיה אוסר לדבר על כללים/למידה). `_aiStripHidden` מסיר בקוד כל בלוק נסתר (כולל כמה בלוקים, אותיות מעורבות ובלוק לא סגור בתשובה שנקטעה); גדרות קוד רגילות נשארות.
 - **היסטוריית השיחה** שומרת `SEMANTIC_PLAN` (מה הוצע) אבל לא בלוקי למידה — הכללים נשלחים טריים כל פעם, ולכן אין כפילויות.
+
+
+## 21. Accounts, sync and reset
+
+- **Client**: a thin fetch-based Supabase client inside `index.html` (section "ACCOUNTS"). `CLOUD_CONFIG={url,anonKey}` is empty by default → the app is local-only and the account window says so. The anon key is public by design; `cloud/setup.sql` enables row-level security so each user can only touch their own `user_state` row.
+- **Auth**: `cloudSignUp` (handles "confirm e-mail" → `needsConfirm`), `cloudSignIn`, token refresh (`_cloudEnsureFresh`), `cloudRecover` (+ `#…type=recovery` link → new-password form → `PUT /auth/v1/user`), `cloudSignOut`. Session lives in `localStorage['maya_cloud_session']`.
+- **Sync**: `saveState` and the AI-memory savers call `_cloudSchedulePush` (1.5 s debounce). Push = upsert of `{state, ai:{prefs,rules,profile}}`; API keys and chat history are never uploaded. On login `cloudSyncOnLogin` pulls: no remote row → push local; remote only/identical → apply remote; both differ → the user chooses. Remote state enters **only** through `migrateState` + `commitState` (flag `_cloudApplying` prevents push loops); the engine is untouched.
+- **Reset** (`resetUserData`, with confirmation): deletes the cloud row first (abort if that fails, so the next login can't resurrect old data), wipes `planner_state_v1` and Maya's memory (keeps the device's BYOK settings), stays signed in, reloads into a clean onboarding. **Sign-out** wipes everything local including API keys so a shared browser never leaks data. `_cloudResetting` freezes `saveState` during both.
+- **Tests**: `runAccountTests` (36, mocked fetch) in `tests/run.js`.
