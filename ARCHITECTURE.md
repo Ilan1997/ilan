@@ -396,3 +396,9 @@ If it already exists, read it before assuming it doesn't. This file (`ARCHITECTU
 - **Tests**: `runAccountTests` (44, mocked fetch) in `tests/run.js`.
 - **CSP** (meta tag): `connect-src` allow-list (Supabase, Gemini, Anthropic) so injected code cannot ship the session token to another server; `object-src`/`base-uri`/`form-action` locked. `script-src` still needs `'unsafe-inline'` because the app is one file with inline handlers, so CSP limits exfiltration, it does not make XSS impossible. Test 37 scans that every `fetch('https://…')` host is allowed.
 - **Google sign-in**: `cloudSignInWithGoogle` redirects to Supabase `/auth/v1/authorize?provider=google`; on return `_cloudHandleOAuthHash` takes `#access_token…`, verifies it with `GET /auth/v1/user` (a forged fragment is rejected), stores the session and syncs. Recovery links are routed separately.
+
+## 22. Work days, rolling horizon, day override
+
+- **No date-range question.** Onboarding step 3 is now "ימי עבודה" (day chips + hours; skipped in personal mode). `wFinish` sets `meta.startDate = meta.today` and `endDate = today + 365`. `extendPlanningHorizon(meta, today)` (pure) is applied at boot and moves `endDate` to today+365 whenever it is closer than 120 days.
+- **Day off / shorter day on the fly**: tapping a day header in the board opens `#dayModal` (regular / 🏖 day off / ⏱ shorter hours). `computeDayOverride` (pure) builds the week's window list and the existing `SET_WEEK_WORK_WINDOWS` event stores it — nothing new in the engine. A result identical to the default clears the override; an all-days-off week is stored with a harmless Saturday 00–01 sentinel because `[]` means "default". Headers show 🏖/⏱ badges. Past days can't be edited.
+- **Tests**: `runDayOverrideTests` (23), including that the real engine stops scheduling on a day marked off.

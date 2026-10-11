@@ -20,7 +20,7 @@ const w=dom.window;
   sync('runArchitectureAudit',()=>w.runArchitectureAudit());
   sync('runSemanticCompilerAudit',()=>w.runSemanticCompilerAudit());
   sync('runFullSystemAudit',()=>w.runFullSystemAudit());
-  for(const n of ['runBlockRenderTests','runApprovalCTATests','runAIProfileTests','runMayaInsightsTests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests'])sync(n,()=>w[n]());
+  for(const n of ['runBlockRenderTests','runApprovalCTATests','runAIProfileTests','runMayaInsightsTests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runDayOverrideTests'])sync(n,()=>w[n]());
   for(const n of ['runAIBootTests','runAccountTests']){try{const r=await w[n]();rows.push([n,`${r.passed}/${r.passed+r.failed}`]);if(r.failed)failed=true;}catch(e){rows.push([n,'THROW '+e.message]);failed=true;}}
   if(errs.length){failed=true;rows.push(['jsdom errors',errs.join(' | ')]);}
   rows.forEach(([n,r])=>console.log(n.padEnd(30),r));

@@ -576,7 +576,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
   <div class="ws-step on" id="wS0"><span class="ws-icon">🧠</span><div class="ws-h1">ברוך הבא למערכת ניהול<br>החיים והעבודה שלך</div><div class="ws-p">מנוע חכם שמתזמן משימות, לימודים ועבודה.<br>נגדיר יחד — פחות מדקה.</div><button id="wHaveAccount" onclick="openAccount()" style="margin-top:14px;background:none;border:none;color:#a5a5c8;font-size:.85em;text-decoration:underline;cursor:pointer;font-family:inherit;">כבר יש לי חשבון — התחבר</button></div>
   <div class="ws-step" id="wS1"><span class="ws-icon">👤</span><div class="ws-h1">מי אתה?</div><label class="ws-lbl">שם</label><input class="ws-inp" id="wName" placeholder="השם שלך" type="text"/><label class="ws-lbl">תפקיד / תחום</label><input class="ws-inp" id="wRole" placeholder="סטודנט, מנהל פרויקטים, יזם..." type="text"/></div>
   <div class="ws-step" id="wS2"><span class="ws-icon">🎯</span><div class="ws-h1">איך אתה רוצה לעבוד?</div><div class="ws-modes"><button class="ws-mode" data-m="personal" onclick="wMode(this)"><span class="ws-mode-ico">🎓</span><div><div class="ws-mode-name">ניהול חיים ולימודים</div><div class="ws-mode-desc">מטלות, מבחנים, יעדים אישיים</div></div></button><button class="ws-mode" data-m="work" onclick="wMode(this)"><span class="ws-mode-ico">💼</span><div><div class="ws-mode-name">ניהול עבודה</div><div class="ws-mode-desc">פרויקטים, דדליינים, שעות עבודה</div></div></button><button class="ws-mode" data-m="both" onclick="wMode(this)"><span class="ws-mode-ico">⚡</span><div><div class="ws-mode-name">גם וגם</div><div class="ws-mode-desc">שני המנועים — לחיים מלאים</div></div></button></div></div>
-  <div class="ws-step" id="wS3"><span class="ws-icon">📅</span><div class="ws-h1">מסגרת הזמן שלך</div><label class="ws-lbl">תאריך התחלה</label><input class="ws-inp" id="wStart" type="date"/><label class="ws-lbl">תאריך סיום</label><input class="ws-inp" id="wEnd" type="date"/><div id="wWorkBlock" style="display:none;"><label class="ws-lbl" style="margin-top:2px;">שעות עבודה</label><div style="font-size:.76em;color:var(--muted);margin-bottom:6px;line-height:1.4;">כל זמן שלא מוגדר כעבודה נשמר לחיים</div><div class="ws-pair"><div><label class="ws-lbl">מ-</label><input class="ws-inp" id="wSH" type="time" value="09:00"/></div><div><label class="ws-lbl">עד-</label><input class="ws-inp" id="wEH" type="time" value="18:00"/></div></div></div></div>
+  <div class="ws-step" id="wS3"><span class="ws-icon">💼</span><div class="ws-h1">ימי עבודה</div><div style="font-size:.78em;color:rgba(255,255,255,.5);margin-bottom:10px;line-height:1.5;">באילו ימים אתה עובד? אפשר לשנות יום בודד (חופש או שעות קצרות) בכל רגע מתוך הלוח.</div><div id="wDays" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;"><button class="ws-ub sel" data-d="0" onclick="wDay(this)">א׳</button><button class="ws-ub sel" data-d="1" onclick="wDay(this)">ב׳</button><button class="ws-ub sel" data-d="2" onclick="wDay(this)">ג׳</button><button class="ws-ub sel" data-d="3" onclick="wDay(this)">ד׳</button><button class="ws-ub sel" data-d="4" onclick="wDay(this)">ה׳</button><button class="ws-ub" data-d="5" onclick="wDay(this)">ו׳</button></div><div id="wWorkBlock" style="display:none;"><label class="ws-lbl" style="margin-top:2px;">שעות עבודה</label><div style="font-size:.76em;color:var(--muted);margin-bottom:6px;line-height:1.4;">כל זמן שלא מוגדר כעבודה נשמר לחיים</div><div class="ws-pair"><div><label class="ws-lbl">מ-</label><input class="ws-inp" id="wSH" type="time" value="09:00"/></div><div><label class="ws-lbl">עד-</label><input class="ws-inp" id="wEH" type="time" value="18:00"/></div></div></div></div>
   <div class="ws-step" id="wS4"><span class="ws-icon">✅</span><div class="ws-h1">מה יש לך על הראש?</div><div class="ws-p" style="margin-bottom:10px;">הוסף משימות ראשוניות — אפשר גם לדלג.</div><div class="ws-tlist" id="wTList"></div><input class="ws-inp" id="wTName" placeholder="למשל: ללמוד למבחן..." type="text" style="margin-bottom:8px;" onfocus="wRotatePlaceholder(this)"/><div style="display:flex;gap:8px;margin-bottom:9px;"><input class="ws-inp" id="wTDL" type="date" style="flex:1;margin-bottom:0;"/><select class="ws-inp" id="wTDur" style="flex:0 0 90px;margin-bottom:0;"><option value="60" selected>שעה</option><option value="120">2 שעות</option><option value="180">3 שעות</option><option value="240">4 שעות</option></select></div><div class="ws-urg"><button class="ws-ub sel" data-u="2" onclick="wUrg(this)">רגיל</button><button class="ws-ub" data-u="1" onclick="wUrg(this)">נמוך</button><button class="ws-ub" data-u="3" onclick="wUrg(this)">דחוף</button></div><div style="display:flex;gap:8px;"><button class="ws-btn" style="flex:1;padding:9px;font-size:.81em;" onclick="wAddTask()">+ הוסף</button><button class="ws-btn" style="flex:1;padding:9px;font-size:.81em;background:rgba(255,255,255,.07);box-shadow:none;" onclick="wNext()">דלג ›</button></div></div>
   <div class="ws-step" id="wS5"><span class="ws-icon">🚀</span><div class="ws-h1">הכל מוכן.</div><div class="ws-p">המערכת מוגדרת ומוכנה.</div><button class="ws-btn" style="width:100%;padding:14px;font-size:.98em;margin-top:5px;" onclick="wFinish()">היכנס ללוח ›</button></div>
   <div class="ws-nav" id="wNav"><button class="ws-back" id="wBack" onclick="wPrev()" style="visibility:hidden;">‹ חזרה</button><span class="ws-lbl-step" id="wLbl">1 / 6</span><button class="ws-btn" id="wNext" onclick="wNext()">הבא ›</button></div>
@@ -1177,6 +1177,14 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
 <div id="accountBody" style="margin-top:14px;"></div>
 </div>
 </div>
+<div class="modal-overlay" id="dayModal" onclick="if(event.target===this)closeDayEditor()">
+<div class="modal-box" style="max-width:360px;">
+<button class="modal-close" onclick="closeDayEditor()">✕</button>
+<div class="modal-title" id="dayModalTitle">יום</div>
+<div id="dayModalBody" style="margin-top:14px;"></div>
+<div class="modal-actions" style="margin-top:14px;"><button class="modal-btn" onclick="closeDayEditor()">ביטול</button><button class="modal-btn primary" id="daySave" onclick="saveDayEditor()">💾 שמור</button></div>
+</div>
+</div>
 <div class="modal-overlay" id="weekModal">
 <div class="modal-box">
 <button class="modal-close" onclick="closeWeekEditor()">✕</button>
@@ -1332,6 +1340,14 @@ const ISRAELI_HOLIDAYS_2026=[
   {date:'2026-09-21',closedHours:null,label:'יום כיפור'},
   {date:'2026-09-25',closedHours:null,label:'סוכות (יום ראשון)'},
 ];
+function _isoPlusDays(iso,n){const [y,m,d]=String(iso).split('-').map(Number);const t=new Date(Date.UTC(y,m-1,d+n));return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0');}
+// Rolling planning window: returns a new endDate when the current one is closer than 120 days
+// to "today" (or missing), else null. Pure — boot applies it, tests inject dates.
+function extendPlanningHorizon(meta,todayISO){
+  const end=meta&&meta.endDate;
+  if(!end||!/^\d{4}-\d{2}-\d{2}/.test(end))return _isoPlusDays(todayISO,365);
+  return end.slice(0,10)<_isoPlusDays(todayISO,120)?_isoPlusDays(todayISO,365):null;
+}
 function getTodayISO(){
   const d=new Date();
   const y=d.getFullYear();
@@ -3288,6 +3304,7 @@ let _bootStateChanged=false; // tracks if any boot migration mutated STATE_ACTIV
   for(const[k,v]of Object.entries(defaults)){
     if(patched[k]===undefined){patched[k]=v;needsPatch=true;}
   }
+  { const _ne=extendPlanningHorizon(patched,patched.today||getTodayISO()); if(_ne){patched.endDate=_ne;needsPatch=true;} }
   if(needsPatch){STATE_ACTIVE={...STATE_ACTIVE,meta:patched};_bootStateChanged=true;}
 }
 
@@ -3781,7 +3798,8 @@ function renderEngine(){
     const _isFullExam=isExamDy&&!_isPartialExam&&_examMode!=='none';
     const _examIcon=_isFullExam?'<br><span style="font-size:.7em;font-weight:800;color:#fff">📝</span>':
                     _isPartialExam?'<br><span style="font-size:.7em;color:#fbbf24">📝</span>':'';
-    head+=`<th class="${_isFullExam?'exam-day-col':_isToday?'today-col':''}">${DNAMES[date.getDay()]}<br><span style="font-weight:400;color:${isExamDy?'#9ca3af':'var(--muted)'}">${fmt(date)}</span>${isOnce?'<br><span class="bdg bdg-1x">חד-פעמי</span>':''}${_examIcon}</th>`;
+    const _dws=dayWorkStatus(STATE_ACTIVE,toISODate(date));
+    head+=`<th class="${_isFullExam?'exam-day-col':_isToday?'today-col':''}" onclick="openDayEditor('${toISODate(date)}')" style="cursor:pointer;" title="לחיצה: יום חופש / שעות קצרות">${DNAMES[date.getDay()]}<br><span style="font-weight:400;color:${isExamDy?'#9ca3af':'var(--muted)'}">${fmt(date)}</span>${isOnce?'<br><span class="bdg bdg-1x">חד-פעמי</span>':''}${_examIcon}${_dws==='off'?'<br><span style="font-size:.7em;color:#f59e0b;font-weight:700">🏖 חופש</span>':_dws==='short'?'<br><span style="font-size:.7em;color:#f59e0b;font-weight:700">⏱ קצר</span>':''}</th>`;
   }
   head+='</tr>';
   document.getElementById('tHead').innerHTML=head;
@@ -6382,7 +6400,9 @@ updateStatusBar();
    WELCOME WIZARD
    ═══════════════════════════════════════════════════════ */
 const _WN=6;
-let _ws=0,_wm='both',_wu=2,_wt=[];
+let _ws=0,_wm='both',_wu=2,_wt=[],_wDays=[0,1,2,3,4];
+function wDay(btn){const d=parseInt(btn.dataset.d,10);_wDays=_wDays.includes(d)?_wDays.filter(x=>x!==d):[..._wDays,d].sort();btn.classList.toggle('sel',_wDays.includes(d));}
+function _wUsesWorkStep(){return _wm==='work'||_wm==='both';}
 function _wShow(i){
   _ws=i;
   for(let k=0;k<_WN;k++){
@@ -6398,8 +6418,8 @@ function _wShow(i){
   if(lb)lb.textContent=(i+1)+' / '+_WN;
   if(i===3){const wb=document.getElementById('wWorkBlock');if(wb)wb.style.display=(_wm==='work'||_wm==='both')?'block':'none';}
 }
-function wNext(){if(_ws<_WN-1)_wShow(_ws+1);}
-function wPrev(){if(_ws>0)_wShow(_ws-1);}
+function wNext(){if(_ws>=_WN-1)return;let n=_ws+1;if(n===3&&!_wUsesWorkStep())n=4;_wShow(n);}
+function wPrev(){if(_ws<=0)return;let n=_ws-1;if(n===3&&!_wUsesWorkStep())n=2;_wShow(n);}
 function wMode(btn){_wm=btn.dataset.m;document.querySelectorAll('.ws-mode').forEach(b=>b.classList.toggle('sel',b===btn));}
 function wUrg(btn){_wu=parseInt(btn.dataset.u);document.querySelectorAll('.ws-ub').forEach(b=>b.classList.toggle('sel',b===btn));}
 function wAddTask(){
@@ -6424,8 +6444,10 @@ function wRotatePlaceholder(el){
 function wFinish(){
   const name=(document.getElementById('wName').value||'').trim();
   const role=(document.getElementById('wRole').value||'').trim();
-  const start=document.getElementById('wStart').value||STATE_ACTIVE.meta.startDate;
-  const end=document.getElementById('wEnd').value||STATE_ACTIVE.meta.endDate;
+  // No date-range question any more: the planning window starts at the anchor day
+  // and always reaches ~a year ahead (it also rolls forward on boot — see extendPlanningHorizon).
+  const start=STATE_ACTIVE.meta.today||getTodayISO();
+  const end=_isoPlusDays(start,365);
   // Build the whole onboarding result as ONE chain of pure state transforms,
   // then commit exactly once — not a direct write per step.
   let working={...STATE_ACTIVE,meta:{...STATE_ACTIVE.meta,startDate:start,endDate:end,...(name?{userName:name}:{}),...(role?{userRole:role}:{}),onboarded:true}};
@@ -6433,7 +6455,7 @@ function wFinish(){
     const sh=(document.getElementById('wSH').value||'09:00').split(':');
     const eh=(document.getElementById('wEH').value||'18:00').split(':');
     const sH=parseInt(sh[0]),eH=parseInt(eh[0]);
-    if(eH>sH){const wins=[0,1,2,3,4].map(dow=>({dow,startH:sH,endH:eH}));working={...working,weeklyWorkPlan:{...working.weeklyWorkPlan,defaultWorkWindows:wins}};}
+    if(eH>sH){const wins=(_wDays.length?_wDays:[0,1,2,3,4]).map(dow=>({dow,startH:sH,endH:eH}));working={...working,weeklyWorkPlan:{...working.weeklyWorkPlan,defaultWorkWindows:wins}};}
   }
   const calId=_wm==='work'?'work':'personal';
   for(const t of _wt){
@@ -6742,6 +6764,71 @@ function _cloudBoot(){
   if(cloudConfigured()&&_cloudHandleRecoveryHash()){ setTimeout(openAccount,300); return; }
   if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ if(r&&r.handled)setTimeout(()=>{openAccount();if(r.error)_cloudMsg(r.error,true);},300); }).catch(()=>{}); return; }
   if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DAY OVERRIDE — day off / shorter work day, on the fly
+   Uses the existing SET_WEEK_WORK_WINDOWS event (per-week override of the
+   default work windows). Nothing new in the engine.
+   ═══════════════════════════════════════════════════════ */
+function toISODate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function _dowOfISO(iso){const [y,m,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,m-1,d)).getUTCDay();}
+function _weekWindowsFor(state,iso){
+  const wwp=state.weeklyWorkPlan||{};const wk=planningWeekId(parseISO(iso));
+  return{wk,isOverride:!!(wwp.weeks&&wwp.weeks[wk]),windows:((wwp.weeks&&wwp.weeks[wk])||wwp.defaultWorkWindows||[]).map(w=>({...w})),def:(wwp.defaultWorkWindows||[]).map(w=>({...w}))};
+}
+// 'off' | 'short' | '' for the work window of this date vs. the default pattern (only when the week is overridden)
+function dayWorkStatus(state,iso){
+  const w=_weekWindowsFor(state,iso);if(!w.isOverride||!w.def.length)return'';
+  const dow=_dowOfISO(iso);const cur=w.windows.find(x=>x.dow===dow),df=w.def.find(x=>x.dow===dow);
+  if(!df)return'';
+  if(!cur)return'off';
+  return(cur.startH!==df.startH||cur.endH!==df.endH)?'short':'';
+}
+// PURE: returns {weekId,windows} for SET_WEEK_WORK_WINDOWS, or {error}
+function computeDayOverride(state,iso,mode,startH,endH){
+  const w=_weekWindowsFor(state,iso),dow=_dowOfISO(iso);
+  let wins=w.windows.filter(x=>x.dow!==dow&&!(x.dow===6&&x.startH===0&&x.endH===1)); // drop our own "all days off" sentinel
+  if(mode==='short'){
+    if(!_validRange(startH,endH))return{error:'שעת הסיום חייבת להיות אחרי שעת ההתחלה'};
+    wins.push({dow,startH,endH});
+  }else if(mode==='regular'){
+    const df=w.def.find(x=>x.dow===dow);if(df)wins.push({...df});
+  }else if(mode!=='off')return{error:'מצב לא מוכר'};
+  wins.sort((a,b)=>a.dow-b.dow);
+  const norm=a=>JSON.stringify(a.slice().sort((x,y)=>x.dow-y.dow).map(x=>[x.dow,x.startH,x.endH]));
+  if(norm(wins)===norm(w.def))return{weekId:w.wk,windows:[]}; // identical to the default → clear the override
+  if(wins.length===0)return{weekId:w.wk,windows:[{dow:6,startH:0,endH:1}]}; // whole week off: sentinel on Saturday 00–01 (outside the grid; [] would mean "default")
+  return{weekId:w.wk,windows:wins};
+}
+let _dayEditIso=null;
+function openDayEditor(iso){
+  const m=document.getElementById('dayModal');if(!m)return;
+  if(iso<STATE_ACTIVE.meta.today){showToast('אי אפשר לשנות יום שכבר עבר');return;}
+  _dayEditIso=iso;
+  const w=_weekWindowsFor(STATE_ACTIVE,iso),dow=_dowOfISO(iso);
+  const cur=w.windows.find(x=>x.dow===dow&&!(x.dow===6&&x.startH===0&&x.endH===1)),df=w.def.find(x=>x.dow===dow);
+  let mode='regular',sH=(cur||df||{startH:9}).startH,eH=(cur||df||{endH:14}).endH;
+  if(w.def.length){ if(!cur)mode='off'; else if(df&&(cur.startH!==df.startH||cur.endH!==df.endH))mode='short'; else if(!df)mode='short'; }
+  document.getElementById('dayModalTitle').textContent='יום '+DNAMES[dow]+' · '+fmt(parseISO(iso));
+  const opts=(sel)=>HOUR_OPTS.map(o=>`<option value="${o}"${o===sel?' selected':''}>${o}:00</option>`).join('');
+  const nameBtn='display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:.92em;';
+  document.getElementById('dayModalBody').innerHTML=
+    `<label style="${nameBtn}"><input type="radio" name="dayMode" value="regular" ${mode==='regular'?'checked':''}> יום רגיל</label>`+
+    `<label style="${nameBtn}"><input type="radio" name="dayMode" value="off" ${mode==='off'?'checked':''}> 🏖 יום חופש (בלי עבודה)</label>`+
+    `<label style="${nameBtn}"><input type="radio" name="dayMode" value="short" ${mode==='short'?'checked':''}> ⏱ עובד פחות:&nbsp;<select id="dayStartH">${opts(sH)}</select>&nbsp;עד&nbsp;<select id="dayEndH">${opts(Math.min(eH,23))}</select></label>`+
+    `<div style="font-size:.78em;color:var(--muted);margin-top:4px;">השינוי חל רק על היום הזה. שאר הימים נשארים כרגיל והתכנון מחושב מחדש.</div>`;
+  m.classList.add('open');
+}
+function closeDayEditor(){const m=document.getElementById('dayModal');if(m)m.classList.remove('open');_dayEditIso=null;}
+function saveDayEditor(){
+  if(!_dayEditIso)return;
+  const mode=(document.querySelector('input[name="dayMode"]:checked')||{}).value||'regular';
+  const r=computeDayOverride(STATE_ACTIVE,_dayEditIso,mode,parseInt((document.getElementById('dayStartH')||{}).value,10),parseInt((document.getElementById('dayEndH')||{}).value,10));
+  if(r.error){showErrorToast(r.error);return;}
+  dispatch({type:'SET_WEEK_WORK_WINDOWS',weekId:r.weekId,windows:r.windows});
+  closeDayEditor();
+  showToast(mode==='off'?'סימנתי יום חופש והמערכת חושבה מחדש ✓':mode==='short'?'עדכנתי את שעות היום והמערכת חושבה מחדש ✓':'היום חזר לרגיל ✓');
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -8938,7 +9025,7 @@ function auditStateMutationPaths(){
   // function (tracking function boundaries via regex alone is unreliable for
   // attribution, but the RHS pattern match itself is exact and reliable).
   const ALLOWED_RHS=/=\s*(commitState\(|loadState\(\)|freshState\(\)|freshRealState\(\)|_savedActive\s*;|STATE\s*;|v\s*;)/;
-  const ALLOWED_CONTAINING_FUNCS=['commitState','migrateState','_deepDefaults','runCoreTests','runUserScenarios','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests'];
+  const ALLOWED_CONTAINING_FUNCS=['commitState','migrateState','_deepDefaults','runCoreTests','runUserScenarios','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests'];
   lines.forEach((line,i)=>{
     const fm=line.match(funcDeclPattern);
     if(fm)currentFunc=fm[1];
@@ -8968,7 +9055,7 @@ function auditStateMutationPaths(){
 function auditAssignmentMutationPaths(){
   const src=Array.from(document.getElementsByTagName('script')).map(s=>s.textContent||'').join('\n');
   const lines=src.split('\n');
-  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests'];
+  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests'];
   const writePattern=/\.lockedAssignments\[[^\]]+\]\s*=(?!=)/;
   const deletePattern=/delete\s+\w+\.lockedAssignments\[/;
   const validatedPlanPaths=[];
@@ -9608,6 +9695,91 @@ function runBlockRenderTests(){
 }
 
 /* ═══════════════════════════════════════════════════════
+   DAY OVERRIDE / NO-DATE-RANGE TESTS
+   ═══════════════════════════════════════════════════════ */
+function runDayOverrideTests(){
+  const results=[];
+  const ok=(name,passed,details)=>results.push({name,passed:!!passed,details:details||''});
+  const _sS=STATE_ACTIVE,_sP=RESULT_P,_sW=RESULT_W,_sT=ACTIVE_TAB,_sC=ACTIVE_CALENDAR,_sCW=CW,_sM=_cwManuallySet,_swm=_wm,_swd=[..._wDays],_swt=_wt,_sws=_ws;
+  const _tB=document.getElementById('tBody'),_tH=document.getElementById('tHead');const _sTB=_tB?_tB.innerHTML:'',_sTH=_tH?_tH.innerHTML:'';
+  const _ov=document.getElementById('welcomeScreen');const _sOv=_ov?_ov.style.display:'';const _sLock=document.body.classList.contains('app-locked');
+  try{
+    const mk=()=>{const s=structuredClone(STATE);s.meta.today=s.meta.startDate;s.calendars.work.tasks=[];s.calendars.personal.tasks=[];s.calendars.work.lockedAssignments={};s.calendars.personal.lockedAssignments={};s.weeklyWorkPlan={...s.weeklyWorkPlan,weeks:{},defaultWorkWindows:[0,1,2,3,4].map(dow=>({dow,startH:9,endH:18}))};return s;};
+    const base=mk(); // startDate 2026-02-16 is a Monday
+    // 1-3 wizard
+    ok('1. במסך "ימי עבודה" אין יותר שדות תאריך התחלה/סיום',!document.getElementById('wStart')&&!document.getElementById('wEnd'));
+    ok('2. מוצגים כפתורי ימים א׳–ו׳ וברירת המחדל א׳–ה׳',document.querySelectorAll('#wDays button').length===6&&JSON.stringify(_wDays)==='[0,1,2,3,4]'&&document.querySelectorAll('#wDays button.sel').length===5);
+    _wDays=[0,1,2,3,4];const b5=document.querySelector('#wDays button[data-d="5"]');wDay(b5);const added=_wDays.includes(5)&&b5.classList.contains('sel');wDay(b5);
+    ok('3. לחיצה על יום מוסיפה/מסירה אותו',added&&!_wDays.includes(5)&&!b5.classList.contains('sel'));
+    _wm='personal';_ws=2;wNext();const skipped=_ws===4;wPrev();const backSkipped=_ws===2;_wm='work';_ws=2;wNext();const noSkip=_ws===3;
+    ok('4. מצב "אישי" מדלג על שלב ימי העבודה; מצב "עבודה" לא',skipped&&backSkipped&&noSkip);
+    // 5 wFinish
+    STATE_ACTIVE=mk();STATE_ACTIVE.meta.onboarded=false;_wm='work';_wDays=[0,1,2];_wt=[];
+    const _n=document.getElementById('wName');if(_n)_n.value='בדיקה';
+    wFinish();
+    const wp=STATE_ACTIVE.weeklyWorkPlan.defaultWorkWindows;
+    ok('5. סיום האשף: ימי העבודה שנבחרו (א׳ ב׳ ג׳) נשמרים כחלונות עבודה',JSON.stringify(wp.map(x=>x.dow))==='[0,1,2]'&&STATE_ACTIVE.meta.onboarded===true,JSON.stringify(wp));
+    ok('6. טווח התכנון נקבע אוטומטית: מ"היום" ועד שנה קדימה',STATE_ACTIVE.meta.startDate===STATE_ACTIVE.meta.today&&STATE_ACTIVE.meta.endDate===_isoPlusDays(STATE_ACTIVE.meta.today,365),STATE_ACTIVE.meta.startDate+' → '+STATE_ACTIVE.meta.endDate);
+    // 7 horizon
+    ok('7. extendPlanningHorizon: סוף רחוק → null; קרוב (<120 יום) או חסר → שנה מהיום',extendPlanningHorizon({endDate:'2027-12-31'},'2026-10-11')===null&&extendPlanningHorizon({endDate:'2026-11-01'},'2026-10-11')==='2027-10-11'&&extendPlanningHorizon({},'2026-10-11')==='2027-10-11'&&extendPlanningHorizon({endDate:'2027-02-08'},'2026-10-11')===null);
+    ok('8. _isoPlusDays נכון גם מעל גבולות חודש/שנה/מעבר שעון',_isoPlusDays('2026-12-31',1)==='2027-01-01'&&_isoPlusDays('2026-03-27',2)==='2026-03-29'&&_isoPlusDays('2026-10-25',1)==='2026-10-26');
+    // 9-14 computeDayOverride (pure)
+    const wed='2026-02-18';// Wednesday dow 3
+    const sj=JSON.stringify(base);
+    const off=computeDayOverride(base,wed,'off');
+    ok('9. יום חופש: מוסר רק את היום הזה מהשבוע (4 ימים נשארים), מזהה שבוע נכון, state לא משתנה',off.weekId==='2026-02-15'&&off.windows.length===4&&!off.windows.some(w=>w.dow===3)&&JSON.stringify(base)===sj,JSON.stringify(off));
+    const sh=computeDayOverride(base,wed,'short',9,13);
+    ok('10. עובד פחות: אותו יום 9–13 והשאר רגיל',sh.windows.find(w=>w.dow===3).endH===13&&sh.windows.length===5);
+    ok('11. טווח שעות לא חוקי נדחה',!!computeDayOverride(base,wed,'short',13,9).error);
+    ok('12. "יום רגיל" על שבוע בלי שינוי → אין override (windows ריק)',computeDayOverride(base,wed,'regular').windows.length===0);
+    const s1=applyEvent(base,'work',{type:'SET_WEEK_WORK_WINDOWS',weekId:off.weekId,windows:off.windows});
+    ok('13. חזרה ל"רגיל" אחרי חופש מנקה את השינוי השבועי',computeDayOverride(s1,wed,'regular').windows.length===0);
+    let allOff=base;for(const d of ['2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19']){const r=computeDayOverride(allOff,d,'off');allOff=applyEvent(allOff,'work',{type:'SET_WEEK_WORK_WINDOWS',weekId:r.weekId,windows:r.windows});}
+    ok('14. כל השבוע חופש: נשמר override אמיתי (לא חוזרים בטעות לברירת מחדל)',(allOff.weeklyWorkPlan.weeks['2026-02-15']||[]).length>0&&!(allOff.weeklyWorkPlan.weeks['2026-02-15']||[]).some(w=>w.dow<=5));
+    ok('15. dayWorkStatus: off / short / רגיל',dayWorkStatus(s1,wed)==='off'&&dayWorkStatus(applyEvent(base,'work',{type:'SET_WEEK_WORK_WINDOWS',weekId:sh.weekId,windows:sh.windows}),wed)==='short'&&dayWorkStatus(base,wed)==='');
+    // 16-17 engine honours it
+    const task={id:'dy1',title:'עבודה גדולה',requiredUnits:14,deadline:'2026-02-19',deadlineTimeStart:'00:00',deadlineTimeEnd:'23:59',planningDeadlineOffset:0,priorityWeight:3,splitMode:'allowed',location:'',type:'generic',policy:{enforceFinishBeforeDeadline:false,blockOnDeadlineDay:false}};
+    const withTask=applyEvent(base,'work',{type:'ADD_TASK',payload:{...task,calendarId:'work'}});
+    const daysOf=(st)=>{const r=buildEngine(st,'work');return new Set(Object.keys(r.assignments||{}).map(k=>String(k).split('T')[0]));};
+    const dBefore=daysOf(withTask);
+    const offState=applyEvent(withTask,'work',{type:'SET_WEEK_WORK_WINDOWS',weekId:off.weekId,windows:off.windows});
+    const dAfter=daysOf(offState);
+    ok('16. הלוח שלפני שינוי משתמש ביום רביעי (תנאי מקדים לבדיקה)',[...dBefore].some(d=>d===wed),[...dBefore].join(','));
+    ok('17. אחרי "יום חופש" ברביעי המנוע לא משבץ עבודה בו, וממשיך לשבץ בימים אחרים',!dAfter.has(wed)&&dAfter.size>0,[...dAfter].join(','));
+    // 18-22 UI
+    STATE_ACTIVE=withTask;ACTIVE_CALENDAR='work';CW=0;_cwManuallySet=true;ACTIVE_TAB='work';recalcAndRender();
+    const ths=[...document.querySelectorAll('#tHead th')].filter(th=>th.getAttribute('onclick')&&th.getAttribute('onclick').includes('openDayEditor'));
+    ok('18. כותרות הימים בלוח לחיצות (7)',ths.length===7,String(ths.length));
+    openDayEditor(wed);
+    const dm=document.getElementById('dayModal');
+    ok('19. פתיחת עורך יום: חלון נפתח, כותרת עם שם היום, 3 אפשרויות',dm.classList.contains('open')&&document.getElementById('dayModalTitle').textContent.includes('רביעי')&&document.querySelectorAll('input[name="dayMode"]').length===3);
+    const rev0=STATE_ACTIVE.meta.revision;
+    document.querySelector('input[name="dayMode"][value="off"]').checked=true;saveDayEditor();
+    ok('20. שמירה כ"חופש": revision עלה, החלון נסגר, השבוע נשמר כ-override',STATE_ACTIVE.meta.revision>rev0&&!dm.classList.contains('open')&&dayWorkStatus(STATE_ACTIVE,wed)==='off');
+    recalcAndRender();
+    ok('21. בכותרת היום מופיע סימון "חופש"',[...document.querySelectorAll('#tHead th')].some(th=>th.textContent.includes('חופש')));
+    openDayEditor(wed);const preOff=document.querySelector('input[name="dayMode"][value="off"]').checked;
+    document.querySelector('input[name="dayMode"][value="regular"]').checked=true;saveDayEditor();
+    ok('22. העורך נפתח עם המצב הנוכחי (חופש) וחזרה ל"רגיל" מנקה את הסימון',preOff&&dayWorkStatus(STATE_ACTIVE,wed)===''&&!(STATE_ACTIVE.weeklyWorkPlan.weeks&&STATE_ACTIVE.weeklyWorkPlan.weeks['2026-02-15']));
+    STATE_ACTIVE=commitState({...STATE_ACTIVE,meta:{...STATE_ACTIVE.meta,today:'2026-02-18'}},'t-today',{render:false});
+    openDayEditor('2026-02-16');
+    ok('23. יום שכבר עבר: העורך לא נפתח',!document.getElementById('dayModal').classList.contains('open'));
+    closeDayEditor();
+  }catch(e){ok('runDayOverrideTests threw',false,e.stack||e.message);}
+  finally{
+    STATE_ACTIVE=_sS;RESULT_P=_sP;RESULT_W=_sW;ACTIVE_TAB=_sT;ACTIVE_CALENDAR=_sC;CW=_sCW;_cwManuallySet=_sM;_wm=_swm;_wDays=_swd;_wt=_swt;_ws=_sws;
+    const dm=document.getElementById('dayModal');if(dm)dm.classList.remove('open');
+    if(_tB)_tB.innerHTML=_sTB;if(_tH)_tH.innerHTML=_sTH;
+    if(_ov)_ov.style.display=_sOv;document.body.classList.toggle('app-locked',_sLock);
+    try{saveState();}catch(_e){}
+  }
+  const passed=results.filter(r=>r.passed).length;
+  console.log(`%cDAY OVERRIDE TESTS: ${passed}/${results.length} PASSED`,'font-weight:bold;font-size:1.1em;');
+  results.forEach(r=>console.log(`${r.passed?'✅':'❌'} ${r.name}${r.details?' — '+r.details:''}`));
+  return{passed,failed:results.length-passed,results};
+}
+
+/* ═══════════════════════════════════════════════════════
    ACCOUNT TESTS — mocked Supabase (no network). Async; run via tests/run.js.
    ═══════════════════════════════════════════════════════ */
 async function runAccountTests(){
@@ -9946,7 +10118,7 @@ function runFullSystemAudit(){
   const uiSuites={
     blockRender:runBlockRenderTests(),approvalCTA:runApprovalCTATests(),
     aiProfile:runAIProfileTests(),mayaInsights:runMayaInsightsTests(),
-    sacredEnforcement:runSacredEnforcementTests(),profileEnforcement:runProfileEnforcementTests(),placementOptions:runPlacementOptionsTests(),mayaScreen:runMayaScreenTests()
+    sacredEnforcement:runSacredEnforcementTests(),profileEnforcement:runProfileEnforcementTests(),placementOptions:runPlacementOptionsTests(),mayaScreen:runMayaScreenTests(),dayOverride:runDayOverrideTests()
   };
   const uiSuitesPassed=Object.values(uiSuites).every(x=>x.failed===0);
 
