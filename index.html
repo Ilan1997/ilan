@@ -6586,6 +6586,36 @@ function _cloudHandleRecoveryHash(){
   try{history.replaceState(null,'',location.pathname+location.search);}catch(_e){}
   return true;
 }
+// Google sign-in (Supabase OAuth, implicit flow): redirect out, come back with #access_token=…
+let _navigate=(u)=>{try{location.href=u;}catch(_e){}};
+function cloudSignInWithGoogle(){
+  if(!cloudConfigured())return{ok:false,error:'חשבונות בענן עוד לא הופעלו באתר הזה'};
+  let back='';try{back=location.origin+location.pathname;}catch(_e){}
+  const url=CLOUD_CONFIG.url.replace(/\/$/,'')+'/auth/v1/authorize?provider=google'+(back?'&redirect_to='+encodeURIComponent(back):'');
+  _navigate(url);
+  return{ok:true,url};
+}
+let _cloudOAuthError='';
+async function _cloudHandleOAuthHash(){
+  let h='';try{h=location.hash||'';}catch(_e){}
+  if(!h||h.includes('type=recovery'))return{handled:false};
+  const p=new URLSearchParams(h.replace(/^#/,''));
+  const clean=()=>{try{history.replaceState(null,'',location.pathname+location.search);}catch(_e){}};
+  if(p.get('error')||p.get('error_description')){
+    clean();_cloudOAuthError='ההתחברות עם גוגל לא הושלמה'+(p.get('error_description')?': '+p.get('error_description').replace(/\+/g,' '):'');
+    return{handled:true,ok:false,error:_cloudOAuthError};
+  }
+  if(!p.get('access_token')||!p.get('refresh_token'))return{handled:false};
+  clean();
+  // never trust the fragment blindly: ask the auth server who this token belongs to
+  const prev=CLOUD_SESSION;
+  CLOUD_SESSION={access_token:p.get('access_token'),refresh_token:p.get('refresh_token'),expires_at:Math.floor(Date.now()/1000)+parseInt(p.get('expires_in')||'3600',10),user:{id:'pending',email:''}};
+  const r=await _cloudFetch('/auth/v1/user');
+  if(!r.ok||!r.data||!r.data.id){CLOUD_SESSION=prev;_cloudOAuthError='ההתחברות עם גוגל נכשלה — נסה שוב';return{handled:true,ok:false,error:_cloudOAuthError};}
+  _cloudStoreSession({...CLOUD_SESSION,user:{id:r.data.id,email:r.data.email||''}});
+  await cloudSyncOnLogin();
+  return{handled:true,ok:true};
+}
 async function cloudSignOut(){
   _cloudResetting=true; // freeze saveState so nothing re-persists the old account's data
   clearTimeout(_cloudPushTimer);
@@ -6694,7 +6724,7 @@ function renderAccountModal(){
   }else if(cloudSignedIn()){
     h='<div style="font-size:.92em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
   }else{
-    h='<input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+resetBlock;
+    h='<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div><input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+resetBlock;
   }
   body.innerHTML=h+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
 }
@@ -6707,6 +6737,7 @@ async function _accSyncNow(){ _cloudMsg('מסנכרן…'); const r=await cloudP
 function _cloudBoot(){
   _cloudLoadSession();
   if(cloudConfigured()&&_cloudHandleRecoveryHash()){ setTimeout(openAccount,300); return; }
+  if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ if(r&&r.handled)setTimeout(()=>{openAccount();if(r.error)_cloudMsg(r.error,true);},300); }).catch(()=>{}); return; }
   if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); }
 }
 
@@ -9579,7 +9610,7 @@ function runBlockRenderTests(){
 async function runAccountTests(){
   const results=[];
   const ok=(name,passed,details)=>results.push({name,passed:!!passed,details:details||''});
-  const _f=window.fetch,_cfg={...CLOUD_CONFIG},_sess=CLOUD_SESSION,_sS=STATE_ACTIVE,_reload=_reloadApp,_ask=_cloudAsk;
+  const _f=window.fetch,_navSaved=_navigate,_cfg={...CLOUD_CONFIG},_sess=CLOUD_SESSION,_sS=STATE_ACTIVE,_reload=_reloadApp,_ask=_cloudAsk;
   const _flags={a:_cloudApplying,r:_cloudResetting,rec:_cloudRecovery};
   const _ls=localStorage.getItem(LS_KEY),_lsSess=localStorage.getItem(CLOUD_SESSION_KEY);
   const _ai={prefs:AI_PREFS,rules:AI_RULES,profile:AI_PROFILE,ids:AI_ADDED_TASK_IDS,sig:AI_SIGNALS,hist:AI_CHAT_HISTORY};
@@ -9598,6 +9629,7 @@ async function runAccountTests(){
     if(u.includes('grant_type=refresh_token'))return srv.refresh?srv.refresh(body):J(200,tokenOk({access_token:'at2'}));
     if(u.includes('/auth/v1/recover'))return J(200,{});
     if(u.includes('/auth/v1/user')&&m==='PUT')return J(200,{id:'u-1'});
+    if(u.includes('/auth/v1/user')&&m==='GET')return srv.userGet?srv.userGet():J(200,{id:'u-1',email:'g@x.co'});
     if(u.includes('/auth/v1/logout'))return J(204,null);
     if(u.includes('/rest/v1/user_state')){
       if(m==='GET')return J(200,srv.row?[srv.row]:[]);
@@ -9740,11 +9772,28 @@ async function runAccountTests(){
       if(!cs||/(^|\s)\*(\s|$)|https:\s*(;|$)/.test(cs)||!/object-src 'none'/.test(c)||!/base-uri 'none'/.test(c))return false;
       const src=document.documentElement.innerHTML;const hosts=[...src.matchAll(/fetch\('https:\/\/([a-z0-9.-]+)/g)].map(x=>x[1]);
       return hosts.length>=2&&hosts.every(h=>cs.includes(h));})());
+    // 38-41. Google sign-in
+    reset();renderAccountModal();
+    let navUrl=null;const _nav=_navigate;_navigate=(u)=>{navUrl=u;};
+    const gb=document.getElementById('accGoogle');if(gb)gb.click();_navigate=_nav;
+    ok('38. כפתור "המשך עם Google" קיים, ולחיצה מפנה ל-/auth/v1/authorize?provider=google עם redirect_to לאתר',!!gb&&!!navUrl&&navUrl.startsWith('https://x.supabase.co/auth/v1/authorize?provider=google')&&navUrl.includes('redirect_to='),String(navUrl));
+    reset();STATE_ACTIVE=baseState([]);
+    history.replaceState(null,'','#access_token=g-at&refresh_token=g-rt&expires_in=3600&token_type=bearer');
+    const go=await _cloudHandleOAuthHash();
+    ok('39. חזרה מגוגל: הטוקן נבדק מול השרת (GET /auth/v1/user), הסשן נשמר עם האימייל, ה-hash נמחק, והסנכרון רץ',go.ok&&cloudSignedIn()&&CLOUD_SESSION.user.email==='g@x.co'&&location.hash===''&&calls.some(c=>c.m==='GET'&&c.u.includes('/auth/v1/user'))&&calls.some(c=>c.m==='GET'&&c.u.includes('user_state')));
+    reset();history.replaceState(null,'','#error=access_denied&error_description=User+cancelled');
+    const ge=await _cloudHandleOAuthHash();
+    ok('40. ביטול בגוגל: הודעה בעברית, אין סשן, ה-hash נמחק',ge.handled&&!ge.ok&&ge.error.includes('לא הושלמה')&&!cloudSignedIn()&&location.hash==='');
+    reset();srv.userGet=()=>J(401,{msg:'bad jwt'});history.replaceState(null,'','#access_token=forged&refresh_token=x&expires_in=3600');
+    const gf=await _cloudHandleOAuthHash();
+    ok('41. טוקן מזויף ב-hash (השרת דוחה) → לא נכנסים, אין סשן, אין סנכרון',gf.handled&&!gf.ok&&!cloudSignedIn()&&!calls.some(c=>c.u.includes('user_state')));
+    history.replaceState(null,'',location.pathname+location.search);
+    ok('42. hash של שחזור סיסמה לא נבלע על ידי מסלול גוגל',await(async()=>{history.replaceState(null,'','#access_token=a&refresh_token=b&type=recovery');const r=await _cloudHandleOAuthHash();history.replaceState(null,'',location.pathname+location.search);return r.handled===false;})());
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}
   finally{
-    window.fetch=_f;Object.assign(CLOUD_CONFIG,_cfg);_cloudStoreSession(_sess);_reloadApp=_reload;_cloudAsk=_ask;
+    window.fetch=_f;_navigate=_navSaved;Object.assign(CLOUD_CONFIG,_cfg);_cloudStoreSession(_sess);_reloadApp=_reload;_cloudAsk=_ask;
     clearTimeout(_cloudPushTimer);_cloudPushTimer=null;_cloudApplying=_flags.a;_cloudResetting=_flags.r;_cloudRecovery=_flags.rec;
     STATE_ACTIVE=_sS;
     try{ if(_ls===null)localStorage.removeItem(LS_KEY);else localStorage.setItem(LS_KEY,_ls);}catch(_e){}
