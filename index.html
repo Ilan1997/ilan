@@ -1402,6 +1402,7 @@ let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken=''
 const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
 let _micSpeakNext=false;
 let _boardCat='all';
+let AI_SOFT=[];              // Maya's flexible, learned preferences/boundaries (persisted: ai:soft) — soft context only, never an engine rule
 let _accForced=false;
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
 let _reloadApp=()=>{try{location.reload();}catch(_e){}};
@@ -4811,6 +4812,7 @@ async function _aiLoadState(){
     }
   }catch(_e){}
   try{ const pr=await window.storage.get('ai:profile'); AI_PROFILE=normalizeAIProfile(JSON.parse(pr.value)); }catch(_e){ AI_PROFILE=emptyAIProfile(); }
+  try{ const sf=await window.storage.get('ai:soft'); AI_SOFT=normalizeSoft(JSON.parse(sf.value)); }catch(_e){ AI_SOFT=[]; }
   try{ const ids=await window.storage.get('ai:addedTaskIds'); AI_ADDED_TASK_IDS=JSON.parse(ids.value)||[]; }catch(_e){ AI_ADDED_TASK_IDS=[]; }
   AI_CHAT_HISTORY=[];
   // One-time migration: remove the old chat-history key if it still exists,
@@ -4824,6 +4826,7 @@ async function _aiLoadState(){
 async function _aiSaveHistory(){ /* no-op — conversation history is session-only now, never persisted (see goal 2/3) */ }
 async function _aiSaveAddedIds(){ try{ await window.storage.set('ai:addedTaskIds', JSON.stringify(AI_ADDED_TASK_IDS.slice(-200))); }catch(_e){} }
 async function _aiSaveRules(){ try{ await window.storage.set('ai:rules', JSON.stringify(AI_RULES)); _cloudSchedulePush(); }catch(_e){} }
+async function _aiSaveSoft(){ try{ await window.storage.set('ai:soft', JSON.stringify(AI_SOFT)); _cloudSchedulePush(); }catch(_e){} }
 async function _aiSaveProfile(){ try{ await window.storage.set('ai:profile', JSON.stringify(AI_PROFILE)); _cloudSchedulePush(); }catch(_e){} }
 async function _aiSavePrefs(){ try{ await window.storage.set('ai:prefs', AI_PREFS); _cloudSchedulePush(); }catch(_e){} }
 
@@ -5005,6 +5008,75 @@ function workHoursAck(profile){
   if(!T.work||T.work.none||!T.work.days)return null;
   const dn=T.work.days.map(x=>AI_DAY_NAMES_HE[x]).join(', ');
   return `רשמתי את שעות העבודה שכתבת: ${dn}, ${T.work.start}:00–${T.work.end}:00. אשתדל לא לחרוג מהן, ואם אצטרך חריגה אשאל אותך קודם.`;
+}
+// ── Soft, learned preferences ("מה מאיה יודעת עליי"). PURE helpers. Flexible by design: a rule has a STRENGTH, exceptions are
+// recorded and tolerated (they never delete a rule), and Maya's wording follows the strength ("אשתדל" / "בדרך כלל" / firm).
+// Soft context only: these never touch buildEngine; hard enforcement stays with sacred hours / work windows.
+const AI_SOFT_MAX=30,AI_SOFT_WHAT_MAX=90;
+const SOFT_STRENGTHS=['try','usually','firm'],SOFT_KINDS=['value','boundary','rhythm'];
+function _softKey(r){return r.pol+'|'+r.what.replace(/\s+/g,' ').trim();}
+function normalizeSoft(a){
+  if(!Array.isArray(a))return[];
+  const out=[],seen=new Set();
+  for(const r of a){
+    if(!r||typeof r!=='object')continue;
+    const what=typeof r.what==='string'?r.what.trim().replace(/\s+/g,' ').slice(0,AI_SOFT_WHAT_MAX):'';
+    if(what.length<3)continue;
+    const kind=SOFT_KINDS.includes(r.kind)?r.kind:'boundary';
+    const pol=r.pol==='prefer'?'prefer':'avoid';
+    const strength=SOFT_STRENGTHS.includes(r.strength)?r.strength:'try';
+    const o={id:typeof r.id==='string'&&r.id?r.id.slice(0,24):'s'+Math.abs(_hash32(what+pol)).toString(36),what,pol,strength,kind,exc:Number.isInteger(r.exc)&&r.exc>0?Math.min(r.exc,99):0,src:r.src==='user'?'user':'maya'};
+    const k=_softKey(o);if(seen.has(k))continue;seen.add(k);out.push(o);
+  }
+  return out.slice(-AI_SOFT_MAX);
+}
+function _hash32(str){let h=0;for(let i=0;i<str.length;i++){h=((h<<5)-h+str.charCodeAt(i))|0;}return h;}
+// Maya's wording for a rule: values are stated plainly; boundaries/preferences soften or harden with the strength.
+function softPhrase(r){
+  if(!r)return'';
+  if(r.kind==='value')return'חשוב לך: '+r.what;
+  const neg=r.pol==='avoid';
+  if(r.strength==='firm')return neg?'לא '+r.what:'תמיד '+r.what;
+  if(r.strength==='usually')return neg?'בדרך כלל לא '+r.what:'בדרך כלל '+r.what;
+  return neg?'אשתדל לא '+r.what:'אשתדל '+r.what;
+}
+const SOFT_STRENGTH_LABEL={try:'אשתדל',usually:'בדרך כלל',firm:'תמיד'};
+function softCycle(list,id){
+  return normalizeSoft(list).map(r=>r.id===id?{...r,strength:SOFT_STRENGTHS[(SOFT_STRENGTHS.indexOf(r.strength)+1)%3]}:r);
+}
+function softRemove(list,id){return normalizeSoft(list).filter(r=>r.id!==id);}
+// update from the model (hidden SOFT_RULE block): {add:[{what,pol,strength,kind,quote}], exception:[substr], soften:[substr], remove:[substr]}
+// A rule becomes "firm" only if the user's own message is quoted verbatim; otherwise it is capped at "usually". Exceptions never delete a rule.
+function applySoftUpdate(list,update,userText){
+  let cur=normalizeSoft(list);
+  if(!update||typeof update!=='object')return cur;
+  const text=String(userText||'');
+  const hit=(arr)=>(Array.isArray(arr)?arr:[]).filter(x=>typeof x==='string'&&x.trim().length>=3).map(x=>x.trim());
+  hit(update.remove).forEach(sub=>{cur=cur.filter(r=>!r.what.includes(sub));});
+  hit(update.soften).forEach(sub=>{cur=cur.map(r=>r.what.includes(sub)?{...r,strength:r.strength==='firm'?'usually':'try'}:r);});
+  hit(update.exception).forEach(sub=>{cur=cur.map(r=>{
+    if(!r.what.includes(sub))return r;
+    const exc=Math.min(99,r.exc+1);
+    return{...r,exc,strength:(r.strength==='firm'&&exc>=2)?'usually':r.strength}; // a firm rule that keeps getting exceptions relaxes; it is never dropped
+  });});
+  if(Array.isArray(update.add)){
+    const add=update.add.filter(x=>x&&typeof x==='object').slice(0,3).map(x=>{
+      let strength=SOFT_STRENGTHS.includes(x.strength)?x.strength:'try';
+      if(strength==='firm'){const q=typeof x.quote==='string'?x.quote.trim():'';if(!q||!text.includes(q))strength='usually';}
+      return{what:x.what,pol:x.pol,kind:x.kind,strength,src:'maya'};
+    });
+    cur=normalizeSoft([...cur,...add]);
+  }
+  return cur;
+}
+function _aiExtractSoftUpdate(fullText){
+  const m=String(fullText||'').match(/```SOFT_RULE\s*([\s\S]*?)```/);
+  if(!m)return null;
+  try{return JSON.parse(m[1]);}catch(_e){return null;}
+}
+function _aiSoftContext(list){
+  const rs=normalizeSoft(list);if(!rs.length)return'';
+  return'\nמה שלמדת על המשתמש/ת (העדפות גמישות, לא איסורים — אפשר לחרוג בהן; אם הוא/היא מבקש/ת חריגה, עשה/י זאת בלי להתנגד ורשום/י exception): '+rs.map((r,i)=>`${i+1}) ${softPhrase(r)}${r.exc?` (היו ${r.exc} חריגות)`:''}`).join(' ')+'.';
 }
 // Context block appended to Maya's system prompt: what is known, and the ONE topic to ask about next.
 function _aiProfileContext(profile){
@@ -5222,6 +5294,89 @@ function _aiAskAbout(title){
   input.value=`איך מסדרים את "${title}"? מה את מציעה?`;
   sendAIMessage();
 }
+// ── "מה מאיה יודעת עליי": one card, plain words, everything correctable ──
+function _knowItems(){
+  const P=normalizeAIProfile(AI_PROFILE),T=P.topics,dn=d=>d.map(x=>AI_DAY_NAMES_HE[x]).join(', ');
+  const out=[];
+  if(T.role&&!T.role.none)out.push({group:'work',key:'role',text:'מה אתה עושה: '+T.role.text});
+  if(T.work&&!T.work.none)out.push({group:'work',key:'work',text:`שעות העבודה שלך: ${dn(T.work.days)}, ${T.work.start}:00–${T.work.end}:00. אשתדל לא לחרוג מהן.`,change:'אני רוצה לשנות את שעות העבודה שלי'});
+  if(T.freeDays&&!T.freeDays.none)out.push({group:'work',key:'freeDays',text:'ימים שאתה חופשי מעבודה: '+dn(T.freeDays.days)});
+  if(T.peak&&!T.peak.none)out.push({group:'work',key:'peak',text:`אתה הכי ממוקד בין ${T.peak.start}:00 ל-${T.peak.end}:00, ואנסה לשמור את השעות האלה למה שדורש ריכוז`});
+  if(T.routines&&!T.routines.none)out.push({group:'work',key:'routines',text:'שגרות קבועות: '+T.routines.notes});
+  if(T.sacred&&!T.sacred.none)out.push({group:'bounds',key:'sacred',text:'שעות שביקשת שלא אתכנן בהן כלום: '+T.sacred.items.map(i=>`${dn(i.days)} ${i.start}:00–${i.end}:00`).join('; '),change:'אני רוצה לשנות את השעות שאסור לתכנן בהן'});
+  return out;
+}
+function _knowGroups(){
+  const soft=normalizeSoft(AI_SOFT),prof=_knowItems();
+  return{
+    values:{title:'מה חשוב לך',soft:soft.filter(r=>r.kind==='value'),prof:[]},
+    bounds:{title:'גבולות והעדפות',soft:soft.filter(r=>r.kind==='boundary'),prof:prof.filter(x=>x.group==='bounds')},
+    work:{title:'איך אתה עובד',soft:soft.filter(r=>r.kind==='rhythm'),prof:prof.filter(x=>x.group==='work')}
+  };
+}
+function knowRemoveSoft(id){AI_SOFT=softRemove(AI_SOFT,id);_aiSaveSoft();renderMayaScreen();}
+function knowCycleSoft(id){AI_SOFT=softCycle(AI_SOFT,id);_aiSaveSoft();renderMayaScreen();}
+function knowRemoveProfile(key){
+  const next=normalizeAIProfile(AI_PROFILE);
+  if(!(key in next.topics))return;
+  next.topics[key]={none:true}; // "none" keeps Maya from asking about it again; work windows themselves are never wiped by a "no"
+  AI_PROFILE=next;_aiSaveProfile();
+  if(key==='sacred')dispatchEvent('personal',{type:'SET_SACRED_HOURS',items:[]});
+  renderMayaScreen();
+}
+function knowAdd(){
+  const inp=document.getElementById('knowAddInp'),sel=document.getElementById('knowAddKind');if(!inp)return;
+  const what=String(inp.value||'').trim();if(what.length<3)return;
+  const kind=sel&&SOFT_KINDS.includes(sel.value)?sel.value:'value';
+  AI_SOFT=normalizeSoft([...AI_SOFT,{what,kind,pol:kind==='boundary'&&/^(לא|אל)\s/.test(what)?'avoid':'prefer',strength:'try',src:'user'}]);
+  // a boundary typed as "לא …" is stored without the leading "לא" so the wording can soften ("אשתדל לא …")
+  AI_SOFT=AI_SOFT.map(r=>r.src==='user'&&r.pol==='avoid'&&/^(לא|אל)\s/.test(r.what)?{...r,what:r.what.replace(/^(לא|אל)\s+/,'')}:r);
+  _aiSaveSoft();inp.value='';renderMayaScreen();
+}
+function knowChange(text){const input=document.getElementById('aiChatInput');if(input){input.value=text;input.focus();}}
+function renderKnowCard(box){
+  const G=_knowGroups(),total=Object.values(G).reduce((n,g)=>n+g.soft.length+g.prof.length,0);
+  const det=document.createElement('details');det.className='maya-card maya-know';det.id='mayaKnowCard';
+  det.style.cssText='background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:8px 14px;';
+  try{det.open=localStorage.getItem('maya_know_open')==='1';}catch(_e){}
+  det.ontoggle=()=>{try{localStorage.setItem('maya_know_open',det.open?'1':'0');}catch(_e){}};
+  const sm=document.createElement('summary');sm.style.cssText='cursor:pointer;font-weight:700;font-size:.9em;';
+  sm.textContent='🧠 מה מאיה יודעת עליי'+(total?` (${total})`:'');det.appendChild(sm);
+  const hint=document.createElement('div');hint.style.cssText='font-size:.78em;color:var(--muted);margin:6px 0 8px;line-height:1.5;';
+  hint.textContent=total?'זה מה שלמדתי עליך. אלה העדפות ולא איסורים: אפשר תמיד לבקש חריגה, ואפשר לתקן או להסיר כל שורה.':'עוד לא למדתי עליך הרבה. ככל שנדבר אכיר אותך, ואפשר גם להוסיף כאן בעצמך.';
+  det.appendChild(hint);
+  Object.values(G).forEach(g=>{
+    if(!g.soft.length&&!g.prof.length)return;
+    const t=document.createElement('div');t.style.cssText='font-weight:700;font-size:.8em;margin:8px 0 3px;color:var(--text2);';t.textContent=g.title;det.appendChild(t);
+    const row=(text,btns,note)=>{
+      const d=document.createElement('div');d.className='know-row';d.style.cssText='display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--border);font-size:.84em;line-height:1.55;';
+      const tx=document.createElement('div');tx.style.cssText='flex:1;min-width:0;';tx.textContent=text;
+      if(note){const n=document.createElement('div');n.style.cssText='font-size:.82em;color:var(--muted);';n.textContent=note;tx.appendChild(n);}
+      d.appendChild(tx);btns.forEach(b=>d.appendChild(b));det.appendChild(d);
+    };
+    const btn=(label,title,fn,css)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.title=title;b.style.cssText='flex:none;border:1px solid var(--border);background:#fff;border-radius:999px;padding:2px 9px;font-size:.78em;cursor:pointer;font-family:inherit;'+(css||'');b.onclick=fn;return b;};
+    g.soft.forEach(r=>{
+      const bs=[];
+      if(r.kind!=='value')bs.push(btn(SOFT_STRENGTH_LABEL[r.strength],'לחץ כדי לרכך או להחמיר',()=>knowCycleSoft(r.id)));
+      bs.push(btn('✕','כבר לא נכון',()=>knowRemoveSoft(r.id)));
+      row(softPhrase(r),bs,r.exc?'היו כמה יוצאים מן הכלל, וזה בסדר.':'');
+    });
+    g.prof.forEach(it=>{
+      const bs=[];
+      if(it.change)bs.push(btn('שנה','אפתח את זה בשיחה',()=>knowChange(it.change)));
+      else bs.push(btn('✕','כבר לא נכון',()=>knowRemoveProfile(it.key)));
+      row(it.text,bs);
+    });
+  });
+  const add=document.createElement('div');add.style.cssText='display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;';
+  const sel=document.createElement('select');sel.id='knowAddKind';sel.style.cssText='border:1px solid var(--border);border-radius:8px;padding:5px;font-family:inherit;font-size:.82em;';
+  [['value','חשוב לי'],['boundary','גבול או העדפה'],['rhythm','ככה אני עובד']].forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;sel.appendChild(o);});
+  const inp=document.createElement('input');inp.id='knowAddInp';inp.maxLength=AI_SOFT_WHAT_MAX;inp.placeholder='למשל: ארוחת שישי עם המשפחה';inp.style.cssText='flex:1;min-width:140px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;font-family:inherit;font-size:.84em;';
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();knowAdd();}};
+  const ab=document.createElement('button');ab.type='button';ab.className='btn btn-xs';ab.textContent='הוסף';ab.onclick=knowAdd;
+  add.appendChild(sel);add.appendChild(inp);add.appendChild(ab);det.appendChild(add);
+  box.appendChild(det);
+}
 function renderMayaScreen(){
   const box=document.getElementById('mayaInsights');if(!box)return;
   box.textContent='';
@@ -5244,6 +5399,7 @@ function renderMayaScreen(){
       box.appendChild(card);
     }
   }
+  try{if(STATE_ACTIVE.meta&&STATE_ACTIVE.meta.onboarded)renderKnowCard(box);}catch(_ke){console.warn('know card failed',_ke);}
   const crit=I.atRisk.filter(x=>x.level==='critical');
   crit.slice(0,3).forEach(c=>{
     const card=mk('maya-card maya-urgent','background:var(--red-lt);border:1px solid var(--red);border-radius:12px;padding:10px 14px;');
@@ -5260,7 +5416,7 @@ function renderMayaScreen(){
 // Blocks the user must NEVER see. Pure. Removes closed fenced blocks of the given names
 // (case-insensitive, all occurrences) and any trailing UNCLOSED block of those names
 // (e.g. a reply cut off mid-block). Ordinary code fences are left alone.
-const AI_HIDDEN_BLOCKS=['SEMANTIC_PLAN','PLAN_JSON','PROFILE_UPDATE','LEARN_RULE','CAL_CREATE'];
+const AI_HIDDEN_BLOCKS=['SEMANTIC_PLAN','PLAN_JSON','PROFILE_UPDATE','LEARN_RULE','SOFT_RULE','CAL_CREATE'];
 function _aiStripHidden(text,names){
   const alt=(names||AI_HIDDEN_BLOCKS).join('|');
   return String(text||'')
@@ -5288,9 +5444,9 @@ function _aiInsightsContext(state,rules,signals){
   return'\n'+L.join('\n');
 }
 async function resetAILearned(){
-  AI_PROFILE=emptyAIProfile();AI_PREFS='';AI_RULES=normalizeAIRules(MAYA_CORE_RULES);AI_SIGNALS=[];
+  AI_PROFILE=emptyAIProfile();AI_PREFS='';AI_RULES=normalizeAIRules(MAYA_CORE_RULES);AI_SIGNALS=[];AI_SOFT=[];
   if((STATE_ACTIVE?.constraintsGlobal?.weeklyClosed||[]).some(w=>w.sacred))dispatchEvent('personal',{type:'SET_SACRED_HOURS',items:[]});
-  await _aiSaveProfile();await _aiSavePrefs();await _aiSaveRules();
+  await _aiSaveProfile();await _aiSavePrefs();await _aiSaveRules();await _aiSaveSoft();
 }
 
 const AI_SYSTEM_PROMPT_BASE=`את/ה מאיה, המזכירה האישית של המשתמש/ת — עוזר/ת תכנון שבועי חברותי/ת, משולב/ת בתוך אפליקציית לוח זמנים. משתמש/ת כותב/ת בשפה חופשית מה יש לה/לו על הראש השבוע (מבחנים, אימונים, פגישות, מטלות). תפקידך:
@@ -5315,6 +5471,7 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 4. היכרות (פרופיל): כשהמשתמש/ת מוסר/ת מידע אישי קבוע, צרף/י בסוף בלוק \`\`\`PROFILE_UPDATE עם JSON בלבד של הנושאים שנאמרו, למשל {"role":{"text":"סטודנט"},"work":{"days":[1,2,3],"start":9,"end":13},"peak":{"start":9,"end":12},"freeDays":{"days":[0]},"routines":{"notes":"..."},"sacred":{"items":[{"days":[5],"start":17,"end":23,"quote":"ציטוט מדויק מהודעת המשתמש/ת שמזכיר את היום"}]},"routines":"none"}. ימים: 0=ראשון…6=שבת, שעות 0–24. שעות קדושות (שהמנוע יחסום באמת) רק אם המשתמש/ת אמר/ה במפורש יום ושעות, וה-quote חייב להיות העתקה מילה במילה מההודעה שלו/ה שמכילה את שם היום — אחרת אל תכלול/י. אם נאמר שאין כזה לנושא — "none". אל תמציא/י מידע שלא נאמר. מקצוע (role): ציין/י במילות המשתמש/ת. כשנאמר מקצוע — הבן/י מה זה אומר על אופי ניהול הזמן שלו/ה (קצבי עומס, סוג הריכוז הנדרש, קטיעות, עונתיות) והוסף/י בבלוק LEARN_RULE עד שני כללים קצרים שמתחילים במילה \"מקצוע\" (למשל \"מקצוע סטודנט: …\"). אין לך גישה לחיפוש באינטרנט — הסק/י מהידע הכללי שלך ואל תמציא/י עובדות על המשתמש/ת. כשנמסרו שעות עבודה — אשר/י אותן בקצרה כפי שנאמרו והבטח/י לא לחרוג מהן. תשובות קצרות: 2-3 משפטים.
 5. למידה מתמשכת: בכל הודעה את/ה מקבל/ת מחדש את כל מה שלמדת — נתוני הלוח העדכניים, הפרופיל, כל הכללים וההעדפות מהגרירות — ותשובתך צריכה להתבסס על כולם יחד, לא רק על ההודעה האחרונה. כשהמשתמש/ת מגלה העדפה או הרגל חדשים (למשל "אני לא יכול ללמוד בערב"), צרף/י בסוף בלוק \`\`\`LEARN_RULE עם JSON: {"add":["כלל קצר וברור, עד 140 תווים"],"remove":["קטע מדויק מכלל ישן שהכלל החדש מחליף או סותר"]}. אל תוסיף/י כלל שכבר קיים, אל תנסח/י כללים על דברים חד-פעמיים, ושפר/י כללים קיימים (החלף/י ניסוח לא מדויק) במקום לצבור כפילויות. כשתשובה נוגעת למשימות בסיכון או לשעות פנויות — השתמש/י במספרים מנתוני הלוח העדכניים בלבד, אל תמציא/י.
 6. תהליך נסתר בכל הודעה (המשתמש/ת לא רואה אותו): לפני שאת/ה כותב/ת תשובה — (א) עבור/י על כל הכללים שקיבלת, (ב) הסק/י מההודעה, מהתגובות האחרונות של המשתמש/ת להצעות שלך ומנתוני הלוח מה חדש, מה השתנה ומה כבר לא נכון, (ג) עדכן/י את הכללים בבלוק LEARN_RULE — הוסף/י כלל חדש, החלף/י כלל שהתברר כלא מדויק, הסר/י כלל שנסתר. אם לא נלמד דבר חדש — אל תצרף/י בלוק. הבלוקים הנסתרים (LEARN_RULE, PROFILE_UPDATE) נמחקים אוטומטית לפני שהמשתמש/ת רואה את התשובה.
+6ב. גבולות והעדפות גמישים ("מה מאיה יודעת עליו/ה"): את/ה לא מכונה בינארית. כשאת/ה מזהה דפוס או העדפה — אל תקבע/י כלל מיד. שאל/י בעדינות ובקצרה, למשל "רוצה שאנסה לא להכניס לך דברים בשישי?", ורק אחרי שהמשתמש/ת הסכים/ה צרף/י בלוק \`\`\`SOFT_RULE עם JSON: {"add":[{"what":"להכניס לך משימות ביום שישי","pol":"avoid","strength":"try","kind":"boundary"}],"exception":["שישי"],"soften":["..."],"remove":["..."]}. what הוא ביטוי קצר בלשון המקור ("להכניס…", "לשמור על…"); pol הוא avoid (לא) או prefer (כן); kind הוא value (מה חשוב לו/ה), boundary (גבול/העדפה) או rhythm (איך הוא/היא עובד/ת). strength תמיד "try" אלא אם המשתמש/ת אמר/ה במפורש "תמיד/אף פעם" — אז "firm" עם שדה quote שהוא ציטוט מדויק מהודעתו/ה. כשהמשתמש/ת מבקש/ת חריגה חד-פעמית ("הפעם כן") — עשי זאת בלי להתווכח, אל תסיר/י את הכלל, וצרף/י "exception". אם החריגות חוזרות — הצע/י לרכך ("נראה שזה כבר לא תמיד נכון, לרכך?"). בניסוח: בקשי רשות והציעי ("אשתדל", "בדרך כלל", "רוצה שננסה?"), לא "אסור/חובה/אי אפשר", ואל תחזור/י על אותה הצעה פעמיים. הבלוק נסתר מהמשתמש/ת.
 7א. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
 7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
@@ -5403,7 +5560,7 @@ async function sendAIMessage(){
   const todayStr=STATE_ACTIVE?.meta?.today||getTodayISO();
   const sys=AI_SYSTEM_PROMPT_BASE+`\nהיום בתאריך (עוגן תכנון): ${todayStr}.`+`\nיומן גוגל: ${gcalWriteEnabled()?'מחובר וכתיבה מאופשרת — מותר להציע CAL_CREATE':(_gcalPrefs().on?'מחובר לקריאה בלבד — כתיבה לא מאופשרת':'לא מחובר')}.`+
     `\n${_aiCurrentItemsSummary()}`+
-    _aiInsightsContext(STATE_ACTIVE,AI_RULES,AI_SIGNALS)+_aiProfileContext(AI_PROFILE||emptyAIProfile())+
+    _aiInsightsContext(STATE_ACTIVE,AI_RULES,AI_SIGNALS)+_aiProfileContext(AI_PROFILE||emptyAIProfile())+_aiSoftContext(AI_SOFT)+
     (AI_PREFS?`\nהעדפות שנלמדו על המשתמש/ת מתיקונים קודמים (קח/י בחשבון בעדינות, אל תזכיר/י את זה במפורש): ${AI_PREFS}`:'');
 
   try{
@@ -5420,12 +5577,19 @@ async function sendAIMessage(){
     const displayText=strippedText||(anyMatch?'הבנתי — הכנתי הצעה, אשר/י למטה כדי לבצע 👇':'קיבלתי.');
     _aiAppendBubble(displayText,'bot');
     // History keeps what was proposed (SEMANTIC_PLAN) but not the learning blocks — rules are re-sent fresh every turn.
-    AI_CHAT_HISTORY.push({role:'assistant',content:_aiStripHidden(fullText,['PROFILE_UPDATE','LEARN_RULE','CAL_CREATE']),displayText});
+    AI_CHAT_HISTORY.push({role:'assistant',content:_aiStripHidden(fullText,['PROFILE_UPDATE','LEARN_RULE','SOFT_RULE','CAL_CREATE']),displayText});
     {
       const ru=_aiExtractRuleUpdate(fullText);
       if(ru){
         const nextRules=applyRuleUpdate(AI_RULES,ru);
         if(JSON.stringify(nextRules)!==JSON.stringify(AI_RULES)){AI_RULES=nextRules;_aiSaveRules();}
+      }
+    }
+    {
+      const su=_aiExtractSoftUpdate(fullText);
+      if(su){
+        const ns=applySoftUpdate(AI_SOFT,su,text);
+        if(JSON.stringify(ns)!==JSON.stringify(AI_SOFT)){AI_SOFT=ns;_aiSaveSoft();try{renderMayaScreen();}catch(_e){}}
       }
     }
     {
@@ -7014,7 +7178,7 @@ function _checkOnboarding(){
    public by design; row-level security (cloud/setup.sql) protects the data.
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
-const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:rules_seeded','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
+const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:rules_seeded','ai:profile','ai:soft','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
 function _inClaudeHost(){try{return !!(window.claude&&typeof window.claude.use==='function');}catch(_e){return false;}}
 
@@ -7173,11 +7337,11 @@ async function _cloudWipeLocal(alsoKeys){
   try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
   CLOUD_SESSION=null;
   for(const k of (alsoKeys?AI_DATA_KEYS.concat(AI_KEY_KEYS):AI_DATA_KEYS)){ try{ await window.storage.delete(k); }catch(_e){} }
-  AI_PREFS='';AI_RULES=[];AI_PROFILE=emptyAIProfile();AI_ADDED_TASK_IDS=[];AI_CHAT_HISTORY=[];AI_SIGNALS=[];
+  AI_PREFS='';AI_RULES=[];AI_PROFILE=emptyAIProfile();AI_SOFT=[];AI_ADDED_TASK_IDS=[];AI_CHAT_HISTORY=[];AI_SIGNALS=[];
 }
 
 /* ── sync ── */
-function _cloudAIBlob(){return{prefs:AI_PREFS||'',rules:Array.isArray(AI_RULES)?AI_RULES:[],profile:AI_PROFILE||null};}
+function _cloudAIBlob(){return{prefs:AI_PREFS||'',rules:Array.isArray(AI_RULES)?AI_RULES:[],profile:AI_PROFILE||null,soft:Array.isArray(AI_SOFT)?AI_SOFT:[]};}
 function _cloudSchedulePush(){
   if(_cloudApplying||_cloudResetting||!cloudConfigured()||!cloudSignedIn()||_cloudRecovery)return;
   clearTimeout(_cloudPushTimer);
@@ -7210,6 +7374,7 @@ async function _cloudApplyRemote(row){
     if(typeof ai.prefs==='string')await window.storage.set('ai:prefs',ai.prefs);
     if(Array.isArray(ai.rules)){await window.storage.set('ai:rules',JSON.stringify(ai.rules));await window.storage.set('ai:rules_seeded','1');}
     if(ai.profile)await window.storage.set('ai:profile',JSON.stringify(ai.profile));
+    if(Array.isArray(ai.soft))await window.storage.set('ai:soft',JSON.stringify(ai.soft));
     await _aiLoadState();
     const ov=document.getElementById('welcomeScreen');
     if(STATE_ACTIVE.meta.onboarded){ if(ov)ov.style.display='none'; document.body.classList.remove('app-locked'); switchTab('ai'); }
@@ -10703,7 +10868,7 @@ function runPlacementOptionsTests(){
 function runMayaScreenTests(){
   const results=[];
   const ok=(name,passed,details)=>results.push({name,passed:!!passed,details:details||''});
-  const _sS=STATE_ACTIVE,_sP=RESULT_P,_sW=RESULT_W,_sT=ACTIVE_TAB,_sC=ACTIVE_CALENDAR,_sCW=CW,_sM=_cwManuallySet,_sProf=AI_PROFILE,_sRules=AI_RULES,_sH=[...AI_CHAT_HISTORY];
+  const _sS=STATE_ACTIVE,_sP=RESULT_P,_sW=RESULT_W,_sT=ACTIVE_TAB,_sC=ACTIVE_CALENDAR,_sCW=CW,_sM=_cwManuallySet,_sProf=AI_PROFILE,_sSoft=AI_SOFT,_sRules=AI_RULES,_sH=[...AI_CHAT_HISTORY];
   const _log=document.getElementById('aiChatLog');const _sLog=_log?_log.innerHTML:'';
   const _box=document.getElementById('mayaInsights');const _sBox=_box?_box.innerHTML:'';
   const _tB=document.getElementById('tBody'),_tH=document.getElementById('tHead');const _sTB=_tB?_tB.innerHTML:'',_sTH=_tH?_tH.innerHTML:'';
@@ -10740,10 +10905,37 @@ function runMayaScreenTests(){
     ok('10. הפתיחה לא מוכפלת אחרי רינדור היסטוריה חוזר',document.querySelectorAll('#aiChatLog #aiGreeting').length===1&&document.querySelectorAll('#aiChatLog .ai-bot').length===1);
     ok('12. במסך מאיה כפתור ה-➕ הצף מוסתר (class ai-mode), ובמסכים אחרים לא',(()=>{const wasTab=ACTIVE_TAB;switchTab('ai');const on=document.body.classList.contains('ai-mode');switchTab('study');const off=!document.body.classList.contains('ai-mode');switchTab(wasTab);return on&&off;})());
     ok('11. renderMayaScreen לא משנה state',(()=>{const t=JSON.stringify(STATE_ACTIVE);renderMayaScreen();return t===JSON.stringify(STATE_ACTIVE);})());
+    // ── "מה מאיה יודעת עליי" ──
+    {
+      const kb=()=>document.getElementById('mayaKnowCard');
+      STATE_ACTIVE=mk([]);STATE_ACTIVE.meta.onboarded=true;AI_SOFT=[];AI_PROFILE=emptyAIProfile();
+      renderMayaScreen();
+      ok('K1. כרטיס "מה מאיה יודעת עליי" קיים, סגור כברירת מחדל, עם הסבר ריק עדין',!!kb()&&kb().querySelector('summary').textContent.includes('מה מאיה יודעת עליי')&&kb().textContent.includes('עוד לא למדתי עליך'));
+      AI_PROFILE=applyProfileUpdate(applyProfileUpdate(emptyAIProfile(),{role:{text:'מנהל פרויקטים'}},'x',8,24).profile,{work:{days:[0,1,2,3,4],start:9,end:17}},'x',8,23).profile;
+      AI_SOFT=normalizeSoft([{what:'להכניס לך משימות ביום שישי',pol:'avoid',strength:'try',kind:'boundary'},{what:'ארוחת שישי עם המשפחה',kind:'value'},{what:'לעבוד בבקרים',pol:'prefer',strength:'usually',kind:'rhythm'}]);
+      renderMayaScreen();
+      const t=kb().textContent;
+      ok('K2. הכרטיס מציג בשפה גמישה: "אשתדל לא…", "בדרך כלל…", "חשוב לך: …", מקצוע ושעות עבודה עם התחייבות',t.includes('אשתדל לא להכניס לך משימות ביום שישי')&&t.includes('בדרך כלל לעבוד בבקרים')&&t.includes('חשוב לך: ארוחת שישי')&&t.includes('מנהל פרויקטים')&&t.includes('9:00–17:00')&&t.includes('אשתדל לא לחרוג'),t.slice(0,300));
+      ok('K3. אין ניסוח מכני/בינארי ("אסור", "חובה") בכרטיס',!/אסור|חובה|אי אפשר/.test(t.replace('שביקשת שלא אתכנן','')));
+      const row=[...kb().querySelectorAll('.know-row')].find(r=>r.textContent.includes('יום שישי'));
+      const chip=[...row.querySelectorAll('button')].find(b=>b.textContent==='אשתדל');
+      chip.click();
+      ok('K4. לחיצה על הצ\'יפ מחמירה אחד-אחד: אשתדל ← בדרך כלל, והניסוח משתנה',AI_SOFT.find(r=>r.what.includes('שישי')&&r.kind==='boundary').strength==='usually'&&kb().textContent.includes('בדרך כלל לא להכניס לך משימות ביום שישי'));
+      [...kb().querySelectorAll('.know-row')].find(r=>r.textContent.includes('יום שישי')).querySelector('button[title="כבר לא נכון"]').click();
+      ok('K5. "✕ כבר לא נכון" מסיר את הכלל מהכרטיס ומהזיכרון',!AI_SOFT.some(r=>r.what.includes('יום שישי'))&&!kb().textContent.includes('להכניס לך משימות'));
+      const peakProf=applyProfileUpdate(AI_PROFILE,{peak:{start:9,end:12}},'x',8,23).profile;AI_PROFILE=peakProf;renderMayaScreen();
+      [...kb().querySelectorAll('.know-row')].find(r=>r.textContent.includes('ממוקד')).querySelector('button[title="כבר לא נכון"]').click();
+      ok('K6. הסרת פריט פרופיל מסמנת none (לא שואלת שוב) והכרטיס מתעדכן',AI_PROFILE.topics.peak&&AI_PROFILE.topics.peak.none===true&&!kb().textContent.includes('ממוקד'));
+      document.getElementById('knowAddKind').value='boundary';document.getElementById('knowAddInp').value='לא לתכנן שיחות בשבת בבוקר';knowAdd();
+      const added=AI_SOFT.find(r=>r.src==='user');
+      ok('K7. הוספה ידנית: גבול שנכתב "לא …" נשמר כהימנעות רכה ("אשתדל לא …")',!!added&&added.pol==='avoid'&&added.strength==='try'&&kb().textContent.includes('אשתדל לא לתכנן שיחות בשבת בבוקר'),added&&JSON.stringify(added));
+      ok('K8. יוצא בבלוק הענן (נשמר גם ב-ai:soft)',_cloudAIBlob().soft.some(r=>r.what.includes('שיחות בשבת')));
+      ok('K9. הכרטיס מתעדכן בלי לשנות את state התכנון',(()=>{const x=JSON.stringify(STATE_ACTIVE);renderMayaScreen();return x===JSON.stringify(STATE_ACTIVE);})());
+    }
   }catch(e){ok('runMayaScreenTests threw',false,e.stack||e.message);}
   finally{
     window.fetch=_fetch;
-    STATE_ACTIVE=_sS;RESULT_P=_sP;RESULT_W=_sW;ACTIVE_TAB=_sT;ACTIVE_CALENDAR=_sC;CW=_sCW;_cwManuallySet=_sM;AI_PROFILE=_sProf;AI_RULES=_sRules;AI_CHAT_HISTORY=_sH;
+    STATE_ACTIVE=_sS;RESULT_P=_sP;RESULT_W=_sW;ACTIVE_TAB=_sT;ACTIVE_CALENDAR=_sC;CW=_sCW;_cwManuallySet=_sM;AI_PROFILE=_sProf;AI_SOFT=_sSoft;AI_RULES=_sRules;AI_CHAT_HISTORY=_sH;
     if(_log)_log.innerHTML=_sLog;if(_box)_box.innerHTML=_sBox;if(_tB)_tB.innerHTML=_sTB;if(_tH)_tH.innerHTML=_sTH;
   }
   const passed=results.filter(r=>r.passed).length;
@@ -10804,6 +10996,30 @@ function runAIProfileTests(){
     ok('R10. הקשר ה-AI כולל את שעות העבודה והתחייבות לא לתכנן מחוץ להן',_aiProfileContext(wp).includes('9:00–17:00')&&_aiProfileContext(wp).includes('מחוץ להן'));
     ok('R11. הקשר ה-AI כולל את המקצוע בפרופיל',_aiProfileContext(rr.profile).includes('סטודנט לתואר שני'));
     ok('R12. הנחיית המערכת: מקצוע → כללי LEARN_RULE + אין חיפוש + אישור שעות עבודה',AI_SYSTEM_PROMPT_BASE.includes('"role"')&&AI_SYSTEM_PROMPT_BASE.includes('אין לך גישה לחיפוש')&&AI_SYSTEM_PROMPT_BASE.includes('לא לחרוג'));
+  }
+  // ── Soft rules: flexible wording, strength, exceptions ──
+  {
+    const S=(arr)=>normalizeSoft(arr);
+    const r1=S([{what:'להכניס לך משימות ביום שישי',pol:'avoid',strength:'try',kind:'boundary'}])[0];
+    ok('SF1. ניסוח לפי עוצמה: אשתדל לא / בדרך כלל לא / לא',softPhrase(r1)==='אשתדל לא להכניס לך משימות ביום שישי'&&softPhrase({...r1,strength:'usually'})==='בדרך כלל לא להכניס לך משימות ביום שישי'&&softPhrase({...r1,strength:'firm'})==='לא להכניס לך משימות ביום שישי');
+    ok('SF2. ערך (value) מנוסח כ"חשוב לך" בלי עוצמה',softPhrase({what:'ארוחת שישי',kind:'value',pol:'prefer',strength:'try'})==='חשוב לך: ארוחת שישי');
+    ok('SF3. normalizeSoft: זבל נזרק, כפילויות מוסרות, ברירות מחדל רכות',S([null,{what:'ab'},{what:'תכנון טוב בבוקר',pol:'prefer'},{what:'תכנון טוב בבוקר',pol:'prefer'}]).length===1&&S([{what:'תכנון טוב בבוקר'}])[0].strength==='try'&&S([{what:'תכנון טוב בבוקר'}])[0].pol==='avoid');
+    const base=S([{what:'להכניס לך משימות ביום שישי',pol:'avoid',strength:'try',kind:'boundary'}]);
+    let u=applySoftUpdate(base,{exception:['שישי']},'');
+    ok('SF4. חריגה נרשמת ואינה מוחקת את הכלל',u.length===1&&u[0].exc===1&&u[0].strength==='try');
+    let f=applySoftUpdate([],{add:[{what:'לעבוד בשבת',pol:'avoid',kind:'boundary',strength:'firm',quote:'אף פעם לא בשבת'}]},'אני אף פעם לא בשבת');
+    ok('SF5. firm רק עם ציטוט מדויק מהמשתמש',f[0].strength==='firm');
+    f=applySoftUpdate([],{add:[{what:'לעבוד בשבת',pol:'avoid',kind:'boundary',strength:'firm',quote:'המצאתי'}]},'אני אף פעם לא בשבת');
+    ok('SF6. firm בלי ציטוט מדויק מופחת ל"בדרך כלל"',f[0].strength==='usually');
+    let fm=S([{what:'לעבוד בשבת',pol:'avoid',kind:'boundary',strength:'firm'}]);
+    fm=applySoftUpdate(fm,{exception:['בשבת']},'');fm=applySoftUpdate(fm,{exception:['בשבת']},'');
+    ok('SF7. כלל firm שחוזרות בו חריגות מתרכך ל"בדרך כלל" ולא נמחק',fm.length===1&&fm[0].strength==='usually'&&fm[0].exc===2);
+    ok('SF8. soften מוריד עוצמה; remove מסיר',applySoftUpdate(S([{what:'לעבוד בשבת',pol:'avoid',strength:'firm'}]),{soften:['בשבת']},'')[0].strength==='usually'&&applySoftUpdate(base,{remove:['שישי']},'').length===0);
+    ok('SF9. softCycle: try→usually→firm→try; softRemove לפי מזהה',(()=>{let l=base;const id=l[0].id;l=softCycle(l,id);const a=l[0].strength;l=softCycle(l,id);const b=l[0].strength;l=softCycle(l,id);return a==='usually'&&b==='firm'&&l[0].strength==='try'&&softRemove(l,id).length===0;})());
+    ok('SF10. applySoftUpdate טהורה ועמידה בקלט שבור',(()=>{const x=JSON.stringify(base);applySoftUpdate(base,{add:[{what:'x y z q'}],exception:['שישי']},'');return JSON.stringify(base)===x&&applySoftUpdate(base,null,'').length===1&&applySoftUpdate(base,'bad','').length===1;})());
+    ok('SF11. SOFT_RULE נחלץ; JSON שבור → null; הבלוק נסתר מהמשתמש',_aiExtractSoftUpdate('hi\n```SOFT_RULE\n{"remove":["abc"]}\n```').remove[0]==='abc'&&_aiExtractSoftUpdate('```SOFT_RULE\n{bad\n```')===null&&_aiStripHidden('שלום\n```SOFT_RULE\n{"add":[]}\n```')==='שלום');
+    ok('SF12. הקשר ל-AI: ניסוח רך, "העדפות גמישות", חריגות מצוינות',(()=>{const c=_aiSoftContext(u);return c.includes('אשתדל לא להכניס לך')&&c.includes('לא איסורים')&&c.includes('היו 1 חריגות');})()&&_aiSoftContext([])==='');
+    ok('SF13. הנחיית המערכת: שואלת ברשות, בלי "אסור/חובה", חריגה ללא התנגדות, firm רק בציטוט',AI_SYSTEM_PROMPT_BASE.includes('SOFT_RULE')&&AI_SYSTEM_PROMPT_BASE.includes('רוצה שאנסה')&&AI_SYSTEM_PROMPT_BASE.includes('בלי להתווכח')&&AI_SYSTEM_PROMPT_BASE.includes('quote'));
   }
   // sacred conflict guard
   const pr=A({sacred:{items:[{days:[5],start:17,end:23,quote:'ביום שישי אחרי 17'}]}},t1).profile;
@@ -11441,6 +11657,20 @@ async function runAccountTests(){
       try{handleAddEvent();formEv=(STATE_ACTIVE.constraintsGlobal.events||[]).find(e=>e.title==='ידני');}finally{STATE_ACTIVE=_sb;}
       ok('ME5. טופס אירוע: 9:20–11:05 נשמר עם דקות מדויקות והשעות מעוגלות החוצה (9–12)',!!formEv&&formEv.startMin===560&&formEv.endMin===665&&formEv.startH===9&&formEv.endH===12,JSON.stringify(formEv));
       ['evStartM','evEndM','evTitle','evDate'].forEach(i=>{document.getElementById(i).value='';});
+    }
+    // SP. soft rules persist, load, sync and reset
+    {
+      const _ss=AI_SOFT;
+      try{
+        await window.storage.set('ai:soft',JSON.stringify([{what:'להכניס לך משימות ביום שישי',pol:'avoid',strength:'usually',kind:'boundary',exc:1},{what:'x'}]));
+        await _aiLoadState();
+        ok('SP1. טעינה מהאחסון: כלל תקין נטען עם עוצמה וחריגות, זבל מסונן',AI_SOFT.length===1&&AI_SOFT[0].strength==='usually'&&AI_SOFT[0].exc===1);
+        ok('SP2. בלוק הענן כולל soft',JSON.stringify(_cloudAIBlob().soft)===JSON.stringify(AI_SOFT));
+        ok('SP3. ai:soft ברשימת המפתחות שנמחקים באיפוס/מחיקת חשבון',AI_DATA_KEYS.includes('ai:soft'));
+        await resetAILearned();
+        let gone=false;try{const v=(await window.storage.get('ai:soft')).value;gone=JSON.parse(v).length===0;}catch(_e){gone=true;}
+        ok('SP4. איפוס למידה מנקה את הכללים הגמישים',AI_SOFT.length===0&&gone);
+      }finally{AI_SOFT=_ss;}
     }
     // RS. recurring Google events: scope choice for delete / edit (this one / this and following / all)
     {
