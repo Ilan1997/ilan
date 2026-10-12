@@ -5,7 +5,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
 // If the main model is rejected (renamed/retired/unavailable), try these in order. Override with GEMINI_FALLBACK_MODELS (comma separated).
-const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-2.5-flash,gemini-2.0-flash").split(",").map((x) => x.trim()).filter(Boolean);
+const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-flash-latest,gemini-2.5-flash").split(",").map((x) => x.trim()).filter(Boolean);
 const DAILY_LIMIT = Number(Deno.env.get("DAILY_LIMIT") ?? "40");
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://ilan1997.github.io").split(",").map((s) => s.trim());
 const MAX_SYSTEM = 30000, MAX_TOTAL = 90000, MAX_MESSAGES = 40;
