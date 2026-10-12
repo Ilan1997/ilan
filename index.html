@@ -615,7 +615,7 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
     <button class="hn-btn hn-btn-wide" id="hnCalBtn" onclick="switchTab(ACTIVE_CALENDAR==='work'?'work':'study')" title="יומן" aria-label="יומן">📅 <span class="hn-label">יומן</span></button>
     <button class="hn-btn hn-btn-wide" id="hnAiBtn" onclick="switchTab('ai')" title="מאיה" aria-label="מאיה">🤖 <span class="hn-label">מאיה</span></button>
     <button class="hn-btn hn-btn-wide" id="hnTasksBtn" onclick="switchTab('board')" title="משימות" aria-label="משימות">📋 <span class="hn-label">משימות</span></button>
-    <button class="hn-btn" id="hnAcc" onclick="openAccount()" title="החשבון שלי" aria-label="החשבון שלי" style="width:auto;padding:6px 10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82em;">👤 התחבר</button>
+    <button class="hn-btn" id="hnAcc" onclick="openAccount()" title="החשבון שלי" aria-label="החשבון שלי" style="width:auto;padding:6px 10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82em;position:relative;">👤 התחבר<span id="mayaErrDot" title="אירעה שגיאה — פתח את החשבון ← פרטי תקלה" style="display:none;position:absolute;top:-3px;inset-inline-start:-3px;width:9px;height:9px;border-radius:50%;background:#dc2626;"></span></button>
   </div>
 </nav>
 <!-- hidden stubs renderNav() writes into -->
@@ -1212,6 +1212,19 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
 </div>
 </div>
 <script>
+// Lightweight error log: keeps the last uncaught errors so a user without a console can copy them from the account window.
+window.__mayaErrors=[];
+function _mayaLogError(msg,where){
+  try{
+    const e={t:new Date().toISOString(),msg:String(msg||'').slice(0,300),at:String(where||'').slice(0,160)};
+    const last=window.__mayaErrors[window.__mayaErrors.length-1];
+    if(last&&last.msg===e.msg&&last.at===e.at)return;
+    window.__mayaErrors.push(e);if(window.__mayaErrors.length>8)window.__mayaErrors.shift();
+    try{const b=document.getElementById('mayaErrDot');if(b)b.style.display='';}catch(_x){}
+  }catch(_e){}
+}
+window.addEventListener('error',ev=>_mayaLogError(ev&&ev.message,(ev&&ev.filename?'':'')+(ev&&ev.lineno?'line '+ev.lineno:'')));
+window.addEventListener('unhandledrejection',ev=>_mayaLogError(ev&&ev.reason&&(ev.reason.message||ev.reason),'promise'));
 // Account-module state lives at the very top: boot code (saveState on a migrated state) runs long before the ACCOUNTS section is reached, and a `let` read before its declaration throws (TDZ) and kills the whole app.
 const CLOUD_SESSION_KEY='maya_cloud_session';
 const CLOUD_CONFIG={google:false,aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
@@ -6644,7 +6657,9 @@ function cloudDisplayName(){
 function _renderAccChip(){
   const b=document.getElementById('hnAcc');if(!b)return;
   const n=cloudDisplayName();
-  b.textContent=cloudSignedIn()?('👤 שלום'+(n?' '+n:'')):'👤 התחבר';
+  const _lbl=cloudSignedIn()?('👤 שלום'+(n?' '+n:'')):'👤 התחבר';
+  if(b.firstChild&&b.firstChild.nodeType===3)b.firstChild.nodeValue=_lbl;else b.textContent=_lbl;
+  const _dot=document.getElementById('mayaErrDot');if(_dot)_dot.style.display=(window.__mayaErrors||[]).length?'':'none';
   const g=document.getElementById('homeGreeting');
   if(g&&cloudSignedIn()&&n)g.textContent='שלום '+n+', אני מאיה 👋';
 }
@@ -6936,9 +6951,11 @@ function renderAccountModal(){
   }
   const ai='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">🤖 חיבור AI</div><div id="accAiRoute" style="font-size:.8em;color:var(--text2);margin-bottom:8px;"></div><div style="display:flex;gap:8px;"><button id="accAiTest" onclick="_accTestAI()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בדוק את ה-AI</button></div></div>';
   _renderAccChip();
+  const errs=window.__mayaErrors||[];
+  const diag=(_accForced||!errs.length)?'':'<div style="margin-top:12px;"><button id="accDiag" onclick="_accShowDiag()" style="'+btn+'width:100%;padding:8px;font-size:.8em;background:var(--card);border:1.5px solid #fca5a5;color:#b91c1c;">🐞 פרטי תקלה ('+errs.length+')</button></div>';
   const setBtn=_accForced?'':'<div style="margin-top:14px;"><button id="accSettings" onclick="closeAccount();openSettings()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">⚙ הגדרות</button></div>';
   const gc=(_accForced||!cloudSignedIn())?'':_gcalBlockHTML(btn);
-  body.innerHTML=h+gc+setBtn+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  body.innerHTML=h+gc+setBtn+diag+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
   _accRouteLabel();
 }
 async function _accRouteLabel(){
@@ -6947,6 +6964,13 @@ async function _accRouteLabel(){
   el.textContent={claude:'מחובר דרך Claude — אין צורך במפתח.',proxy:'משתמש בשירות המשותף של האפליקציה (עם מכסה יומית).',none:'לא מחובר ל-AI. התחבר לחשבון.'}[r]||'';
 }
 async function _accTestAI(){_cloudMsg('בודק…');const r=await testAIConnection();_cloudMsg(r.ok?'ה-AI עובד ✓ ('+r.route+')':r.error,!r.ok);_accRouteLabel();}
+function _accDiagText(){return (window.__mayaErrors||[]).map(e=>e.t+' | '+e.msg+(e.at?' | '+e.at:'')).join('\n')+'\n'+navigator.userAgent;}
+function _accShowDiag(){
+  const t=_accDiagText();const m=document.getElementById('accMsg');if(!m)return;
+  m.innerHTML='<textarea id="accDiagText" readonly rows="6" style="width:100%;box-sizing:border-box;font-size:.72em;direction:ltr;"></textarea><div style="font-size:.78em;color:var(--muted);">העתק את הטקסט ושלח אותו.</div>';
+  const ta=document.getElementById('accDiagText');ta.value=t;ta.focus();ta.select();
+  try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).catch(()=>{});}catch(_e){}
+}
 async function _accSaveName(){
   const el=document.getElementById('accName2');const n=String(el&&el.value||'').trim().slice(0,40);
   if(!n){_cloudMsg('כתוב את השם שלך',true);return;}
@@ -9774,6 +9798,18 @@ function runSacredEnforcementTests(){
     ok('6. items ריק מנקה רק את הקדושות',cleared.constraintsGlobal.weeklyClosed.every(w=>!w.sacred)&&cleared.constraintsGlobal.weeklyClosed.length>0);
     const before=JSON.stringify(base);applyEvent(base,'personal',{type:'SET_SACRED_HOURS',items});
     ok('7. האירוע טהור — ה-state המקורי לא משתנה',JSON.stringify(base)===before);
+    // 8. a lock created BEFORE the hours became sacred must never override them (sacred wins); the task still gets all its hours elsewhere
+    {
+      const b=mk();b.meta.today='2026-10-12';b.meta.startDate='2026-10-04';b.meta.endDate='2027-01-01';
+      b.calendars.personal.tasks=[{id:'sc_l',type:'generic',title:'נעולה',requiredUnits:3,deadline:'2026-10-30',deadlineTimeStart:'00:00',deadlineTimeEnd:'23:59',planningDeadlineOffset:0,priorityWeight:2,splitMode:'allowed',location:'',policy:{enforceFinishBeforeDeadline:true}}];
+      const locked=applyEvent(b,'personal',{type:'LOCK_SLOT',slotId:'2026-10-14T10',taskId:'sc_l',nth:1,hardLock:true});
+      const lockedOk=!!locked.calendars.personal.lockedAssignments['2026-10-14T10'];
+      const sac=applyEvent(locked,'personal',{type:'SET_SACRED_HOURS',items:[{days:[3],start:9,end:12}]});
+      const RL=buildEngine(sac,'personal');
+      const inSac=Object.keys(RL.assignments).filter(k=>k.startsWith('2026-10-14T')&&+k.split('T')[1]>=9&&+k.split('T')[1]<12);
+      const got=Object.values(RL.assignments).filter(x=>x.taskId==='sc_l').length;
+      ok('8. נעילה שנוצרה לפני שהשעות הוגדרו קדושות לא גוברת עליהן, והמשימה מקבלת את כל השעות במקום אחר',lockedOk&&inSac.length===0&&got===3,'lockedOk='+lockedOk+' inSacred='+inSac.length+' got='+got);
+    }
     ok('8. פריט לא חוקי מדולג (ימים/שעות שגויים)',applyEvent(base,'personal',{type:'SET_SACRED_HOURS',items:[{days:[9],start:8,end:9},{days:[1],start:12,end:9}]}).constraintsGlobal.weeklyClosed.every(w=>!w.sacred));
     ok('9. דטרמיניזם — אותו state אותו שיבוץ',JSON.stringify(buildEngine(withS,'personal').assignments)===JSON.stringify(buildEngine(withS,'personal').assignments));
     ok('10. הוולידציה של dispatchEvent/revision: commitState מעלה revision פעם אחת',(()=>{const sv=STATE_ACTIVE;try{STATE_ACTIVE=structuredClone(base);const r0=STATE_ACTIVE.meta.revision;dispatchEvent('personal',{type:'SET_SACRED_HOURS',items},{save:false,render:false});return STATE_ACTIVE.meta.revision===r0+1;}finally{STATE_ACTIVE=sv;}})());
@@ -10565,6 +10601,21 @@ async function runAccountTests(){
       reset();_accForced=true;renderAccountModal();
       ok('DA6. במסך הכניסה החובה מוצג אישור "בהמשך אתה מאשר את תנאי השימוש" עם קישור',!!document.querySelector('#accountBody a[href="privacy.html"]'));
       _accForced=false;
+    }
+    // ER. error log
+    {
+      const keep=window.__mayaErrors.slice();window.__mayaErrors.length=0;
+      _mayaLogError('boom','line 7');_mayaLogError('boom','line 7');_mayaLogError('another','promise');
+      ok('ER1. יומן שגיאות: שומר שגיאות, מסנן כפילויות רצופות',window.__mayaErrors.length===2&&window.__mayaErrors[1].msg==='another');
+      _cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3000,user:{id:'u-1',email:'x@y.co',name:'ד'}});_accForced=false;renderAccountModal();
+      const hasBtn=!!document.getElementById('accDiag');_accShowDiag();
+      const txt=document.getElementById('accDiagText');
+      ok('ER2. בחלון החשבון מופיע "פרטי תקלה", ובלחיצה — טקסט להעתקה עם השגיאות',hasBtn&&!!txt&&txt.value.includes('boom')&&txt.value.includes('another'));
+      window.__mayaErrors.length=0;renderAccountModal();
+      ok('ER3. בלי שגיאות — אין כפתור תקלה',!document.getElementById('accDiag'));
+      keep.forEach(e=>window.__mayaErrors.push(e));_cloudStoreSession(null);
+      _renderAccChip();
+      ok('ER4. עדכון הכפתור בכותרת לא מוחק את נקודת השגיאה',!!document.getElementById('mayaErrDot'));
     }
     // G. Google Calendar import + microphone
     {

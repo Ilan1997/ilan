@@ -439,3 +439,6 @@ Header = 📅 יומן / 🤖 מאיה / 📋 משימות / 👤 חשבון onl
 
 ## 31. Simple tasks page, account deletion, legal
 Tasks page: header + "➕ משימה חדשה" + search/filter + one table per world (a world with no tasks is hidden; both empty → one friendly line `boardEmpty`). Reserves, micro-tasks, alerts and global events moved into a collapsed `<details id="boardMore">` (ids unchanged, so the renderers keep working). The clock/anchor status bar shows only in simulation mode (`body.sim-mode`). `deleteAccount()` → RPC `delete_my_account` (cloud/delete_account.sql); local data is wiped only after the server confirms. Tests DA1–DA6 + static check for `privacy.html`/SQL.
+
+## 32. Error log + sacred-lock rule
+`window.__mayaErrors` (last 8 uncaught errors / rejections, registered at the top of the script) feeds a red dot on the 👤 button and a "🐞 פרטי תקלה" button in the account window that shows copyable text — so a user without a console can report a problem. Engine rule now covered by a test (Sacred #8): a lock created before the hours became sacred never overrides them; the task is replanned elsewhere. The legacy `_aiApplyPayload/_aiApplyPlan` were kept on purpose (still used for AI delete requests and by tests).
