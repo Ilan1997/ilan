@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://*.supabase.co https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'none'; form-action 'none'; object-src 'none'"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>מאיה, המזכירה האישית</title>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&amp;family=Rubik:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
   --white:#fff;--bg:#f7f8fa;--border:#e4e7ec;--border2:#d0d5dd;
@@ -571,6 +571,46 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
 .conf-acts{display:flex;gap:8px;justify-content:flex-end}
 .conf-cancel{border:1px solid var(--border2);background:#fff;color:var(--text2);border-radius:7px;padding:8px 16px;font-size:.83em;font-weight:700;cursor:pointer;font-family:inherit}
 .conf-ok{background:#7c3aed;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:.83em;font-weight:700;cursor:pointer;font-family:inherit}
+
+.mic-opts{display:flex;gap:14px;flex-wrap:wrap;font-size:.78em;color:var(--muted);padding:4px 2px 0;}
+.mic-opts label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+</style>
+
+<style id="themeModern">
+/* Modern layer: soft aurora background, floating pill header, glass cards, Maya orb. Pure CSS override — no logic. */
+:root{
+  --bg:#f4f3fb;--bg2:#ece9f8;--card:#ffffffcc;--border:#e3def3;--border2:#d3cce9;
+  --text:#1b1636;--text2:#3b3560;--muted:#6b6590;--muted2:#6f6a93;
+  --blue:#5b4bdb;--blue-lt:#efecff;--purple:#7a4df0;--purple-lt:#f1ebff;
+  --work-cell-bg:#dcf4f1;--life-cell-bg:#fdeede;--blocked-cell-bg:#ebe9f3;
+  --radius:16px;--shadow:0 6px 24px -10px rgba(60,40,140,.28),0 1px 2px rgba(60,40,140,.08);
+}
+body{font-family:'Rubik','Heebo',sans-serif;background:
+  radial-gradient(900px 500px at 85% -10%,#d9d0ff88,transparent 60%),
+  radial-gradient(700px 480px at -5% 10%,#bfeee8aa,transparent 60%),var(--bg);background-attachment:fixed;}
+.hn{margin:10px 10px 0;border:1px solid var(--border);border-radius:999px;background:#ffffffd9;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow);}
+.hn-btn,.hn-wbtn,.hn-date{border-radius:999px;}
+.hn-btn.on,.hn-tbtn.on{background:linear-gradient(135deg,#7a4df0,#5b4bdb);}
+.ai-bubble{border-radius:20px;}
+.ai-bubble.ai-bot{background:#ffffffe6;border-bottom-left-radius:6px;}
+.ai-bubble.ai-user{background:linear-gradient(135deg,#6a52ee,#4f46c8);border-bottom-right-radius:6px;}
+.ai-inputrow{border-radius:28px;background:#ffffffe6;padding:8px 10px;}
+.ai-inputrow textarea{font-family:inherit;}
+#aiSendBtn{border-radius:50%!important;background:linear-gradient(135deg,#7a4df0,#5b4bdb)!important;color:#fff!important;}
+#aiMicBtn{border-radius:50%!important;width:42px;height:42px;font-size:1.15em;}
+#aiMicBtn.rec{box-shadow:0 0 0 6px #dc262633;}
+#aiGreeting{position:relative;padding-inline-start:54px;}
+#aiGreeting::before{content:"";position:absolute;inset-inline-start:12px;top:12px;width:30px;height:30px;border-radius:50%;
+  background:radial-gradient(circle at 32% 30%,#fff 0 12%,#b9a6ff 30%,#6a52ee 62%,#33c9b8 100%);box-shadow:0 0 18px #7a4df066;animation:orbBreath 4.5s ease-in-out infinite;}
+@keyframes orbBreath{0%,100%{transform:scale(1);box-shadow:0 0 14px #7a4df055}50%{transform:scale(1.1);box-shadow:0 0 26px #33c9b866}}
+.blk-event{border-radius:10px;border-right:0;background:linear-gradient(135deg,#ece6ff,#e2f6f3);box-shadow:inset 0 0 0 1px #cfc5f5;}
+.blk-event-name{color:#44309e;}
+.blk-event-min{box-shadow:inset 0 0 0 1px #b9a6ff,0 2px 8px -3px #7a4df088;}
+#mayaWeekCard{border-radius:22px;background:#ffffffd9;backdrop-filter:blur(10px);}
+.ai-inputrow textarea:focus-visible{outline:none;}
+button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid #7a4df0aa;outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){#aiGreeting::before,#aiMicBtn.rec{animation:none!important;}}
+@media (max-width:640px){.hn{margin:6px 6px 0;border-radius:22px;}.ai-wrap{padding:12px 12px 10px;}}
 </style>
 
 </head>
@@ -885,6 +925,7 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
       <button id="aiMicBtn" onclick="micToggle()" title="דבר אל מאיה" aria-label="הקלט הודעה למאיה" aria-pressed="false" style="background:var(--card);color:var(--text);border:1px solid var(--border2);">🎙</button>
       <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">➤</button>
     </div>
+    <div class="mic-opts"><label><input type="checkbox" id="micAutoSend" onchange="micSetPref('autoSend',this.checked)"> שלח אוטומטית אחרי שאני מדבר</label><label><input type="checkbox" id="micSpeak" onchange="micSetPref('speak',this.checked)"> מאיה מקריאה בקול את התשובה</label></div>
     <div class="ai-hint" id="aiHint">Enter לשליחה · Shift+Enter לשורה חדשה · <a href="#" onclick="event.preventDefault();if(confirm('לאפס את כל מה שמאיה למדה עליך (פרופיל והעדפות)?'))resetAILearned().then(()=>showToast('האיפוס בוצע'));" style="color:inherit;text-decoration:underline;">אפס מה שנלמד</a></div>
   </div>
 </div>
@@ -1237,7 +1278,8 @@ let CLOUD_SESSION=null;
 // Google Calendar import (read-only). clientId = an OAuth *Web* client created by the site owner in Google Cloud; empty → the feature stays hidden.
 const GCAL_CONFIG={clientId:'',scope:'https://www.googleapis.com/auth/calendar.events.readonly',days:60};
 let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken='';
-const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent';
+const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
+let _micSpeakNext=false;
 let _accForced=false;
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
 let _reloadApp=()=>{try{location.reload();}catch(_e){}};
@@ -4630,6 +4672,7 @@ function _aiAppendBubble(text,who){
   div.appendChild(txt);
   log.appendChild(div);
   log.scrollTop=log.scrollHeight;
+  if(who!=='user'&&who!=='typing')micSpeak(text);
   return div;
 }
 
@@ -7251,6 +7294,9 @@ function _accGcalOff(){gcalDisconnect();renderAccountModal();_cloudMsg('היומ
 
 // ── Microphone → text (browser speech recognition, Hebrew). The text lands in the input box for the user to review and send. ──
 let _micRec=null,_micOn=false;
+function micPrefs(){let o={};try{o=JSON.parse(localStorage.getItem(MIC_PREF_KEY)||'{}')||{};}catch(_e){}return{autoSend:o.autoSend===true,speak:o.speak===true};}
+function micSetPref(k,v){const o=micPrefs();o[k]=!!v;try{localStorage.setItem(MIC_PREF_KEY,JSON.stringify(o));}catch(_e){}if(k==='speak'&&!v){try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(_e){}}}
+function micSpeak(text){try{if(!micPrefs().speak||!_micSpeakNext||!window.speechSynthesis||!text)return;const u=new SpeechSynthesisUtterance(String(text).slice(0,600));u.lang='he-IL';window.speechSynthesis.cancel();window.speechSynthesis.speak(u);}catch(_e){}}
 let _micAskConsent=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
 function micSupported(){return !!(window.SpeechRecognition||window.webkitSpeechRecognition);}
 function _micUI(on,msg){
@@ -7270,7 +7316,8 @@ function micToggle(){
   const input=document.getElementById('aiChatInput');const base=input?input.value:'';
   rec.onresult=ev=>{let t='';for(let i=0;i<ev.results.length;i++)t+=ev.results[i][0].transcript;if(input){input.value=(base?base+' ':'')+t.trim();input.focus();}};
   rec.onerror=ev=>{const e=ev&&ev.error;_micUI(false,e==='not-allowed'||e==='service-not-allowed'?'אין הרשאה למיקרופון — אפשר אותה בהגדרות הדפדפן.':(e==='no-speech'?'לא שמעתי כלום — נסה שוב.':(e==='audio-capture'?'לא נמצא מיקרופון.':'ההקלטה נכשלה — נסה שוב.')));};
-  rec.onend=()=>{_micOn=false;_micRec=null;_micUI(false);};
+  let _gotText=false;const _origRes=rec.onresult;rec.onresult=ev=>{_gotText=true;_micSpeakNext=true;_origRes(ev);};
+  rec.onend=()=>{_micOn=false;_micRec=null;_micUI(false);if(_gotText&&micPrefs().autoSend&&input&&input.value.trim()){_micSpeakNext=true;sendAIMessage();}};
   try{rec.start();_micRec=rec;_micOn=true;_micUI(true,'מקשיבה… דבר עכשיו');}catch(_e){_micOn=false;_micUI(false,'לא הצלחתי להפעיל את המיקרופון.');}
 }
 
@@ -10662,6 +10709,22 @@ async function runAccountTests(){
       try{handleAddEvent();formEv=(STATE_ACTIVE.constraintsGlobal.events||[]).find(e=>e.title==='ידני');}finally{STATE_ACTIVE=_sb;}
       ok('ME5. טופס אירוע: 9:20–11:05 נשמר עם דקות מדויקות והשעות מעוגלות החוצה (9–12)',!!formEv&&formEv.startMin===560&&formEv.endMin===665&&formEv.startH===9&&formEv.endH===12,JSON.stringify(formEv));
       ['evStartM','evEndM','evTitle','evDate'].forEach(i=>{document.getElementById(i).value='';});
+    }
+    // MIC4-5. voice prefs
+    {
+      try{localStorage.removeItem(MIC_PREF_KEY);}catch(_e){}
+      const d0=micPrefs();micSetPref('autoSend',true);micSetPref('speak',true);const d1=micPrefs();
+      const spoken=[];const prevSS=window.speechSynthesis,prevU=window.SpeechSynthesisUtterance;
+      window.SpeechSynthesisUtterance=function(t){this.text=t;};
+      Object.defineProperty(window,'speechSynthesis',{configurable:true,value:{speak:u=>spoken.push([u.text,u.lang]),cancel(){}}});
+      _micSpeakNext=false;micSpeak('שלום');const quiet=spoken.length===0;
+      _micSpeakNext=true;micSpeak('שלום');const said=spoken.length===1&&spoken[0][1]==='he-IL';
+      micSetPref('speak',false);micSpeak('עוד');const off=spoken.length===1;
+      ok('MIC4. ברירת מחדל כבויה; ההעדפות נשמרות',d0.autoSend===false&&d0.speak===false&&d1.autoSend===true&&d1.speak===true);
+      ok('MIC5. הקראה רק אחרי הודעה בקול, בעברית, וכבויה כשהמתג כבוי',quiet&&said&&off);
+      try{localStorage.removeItem(MIC_PREF_KEY);}catch(_e){}_micSpeakNext=false;
+      if(prevU)window.SpeechSynthesisUtterance=prevU;else delete window.SpeechSynthesisUtterance;
+      if(prevSS)Object.defineProperty(window,'speechSynthesis',{configurable:true,value:prevSS});else delete window.speechSynthesis;
     }
     // ER. error log
     {
