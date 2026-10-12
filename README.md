@@ -5,7 +5,7 @@
 ## הרצה
 פתח את `index.html` בדפדפן. הנתונים נשמרים בדפדפן (`localStorage`) ולא בריפו.
 
-> הצ'אט עם מאיה: בתוך claude.ai הוא עובד בלי מפתח. מחוץ לשם צריך מפתח API אישי — **Gemini של גוגל** (יש שכבה חינמית; גוגל עשויה להשתמש בתוכן בשכבה החינמית) או Anthropic. המפתח נשמר רק בדפדפן שלך (`localStorage`), אף פעם לא בריפו. הגדרה: בצ'אט, הקישור "מפתח AI". **אל תכניס מפתח ל-`index.html`.**
+> הצ'אט עם מאיה: בתוך claude.ai הוא עובד בלי מפתח. באתר הציבורי הוא עובד דרך השירות המשותף (Gemini) למשתמשים מחוברים בלבד, אחרי אישור חד-פעמי של המשתמש להעברת ההודעות לגוגל. אין מפתחות אישיים ואין Anthropic.
 
 ## בדיקות
 ```bash
@@ -25,7 +25,7 @@ Works without any setup (local only). To enable sign-up / sign-in / sync between
 3. Project Settings → API: copy the *Project URL* and the *anon public* key into `CLOUD_CONFIG` in `index.html`.
 4. Authentication → URL Configuration: set Site URL (and Redirect URLs) to the address the app is served from, so password-reset links return to it. Optionally turn off "Confirm email" for instant sign-up.
 
-Security: the page ships a Content-Security-Policy (meta tag) that only lets it talk to `*.supabase.co`, Gemini and Anthropic. If you use a custom Supabase domain, add it to `connect-src`. Minimum password length is 8; also set it to 8+ in Supabase → Authentication → Providers → Email.
+Security: the page ships a Content-Security-Policy (meta tag) that only lets it talk to `*.supabase.co` (the browser never talks to Gemini or Anthropic directly). If you use a custom Supabase domain, add it to `connect-src`. Minimum password length is 8; also set it to 8+ in Supabase → Authentication → Providers → Email.
 
 Google sign-in: Google Cloud Console → OAuth client (Web) with redirect URI `https://<project>.supabase.co/auth/v1/callback`; then Supabase → Authentication → Providers → Google: paste Client ID + Secret; add the site address to Redirect URLs. Keep the Secret only in Supabase.
 
@@ -37,7 +37,7 @@ Signed-in users can talk to Maya without any key: the page calls a Supabase Edge
 3. Edge Functions → *Deploy a new function* → *Via Editor* → name it exactly `maya-ai` → paste `cloud/functions/maya-ai/index.ts` → turn **Verify JWT** off (the function verifies the user itself) → Deploy.
 4. Edge Functions → Secrets → add `GEMINI_API_KEY` (your key). Optional: `DAILY_LIMIT`, `GEMINI_MODEL`, `ALLOWED_ORIGINS` (comma-separated; default `https://ilan1997.github.io`).
 5. In the app: 👤 → "בדוק את ה-AI".
-The free Gemini tier has shared limits and Google may use free-tier content to improve its products — say so to your users. Users can still add a personal key (🔑) and it takes priority.
+The free Gemini tier has shared limits and Google may use free-tier content to improve its products — the app asks each user for a one-time consent before the first AI message (`_aiEnsureConsent`). Personal API keys and direct Anthropic calls were removed; leftovers are deleted from the browser on load.
 
 ### Mandatory login
 On the GitHub Pages site the first thing shown is a sign-in / sign-up window that cannot be closed until signed in. Create users via Supabase → Authentication → Users → Add user (Auto Confirm) or sign up in the app.
