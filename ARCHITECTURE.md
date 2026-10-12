@@ -471,3 +471,9 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - `ROLE_PROFILES` / `roleTimeRules` / `applyRoleRules`: deterministic starter rules per profession (student, project manager, developer, teacher, medical, freelancer, manager). Rules start with "מקצוע", so a changed profession replaces them. Unknown professions yield no invented rules; the model may add up to two via `LEARN_RULE` from general knowledge (no web search is available).
 - `workHoursAck(profile)`: when work hours are accepted, Maya posts a deterministic confirmation of exactly what was recorded plus a commitment not to exceed it. `_aiProfileContext` re-sends the hours with the same commitment on every message. Enforcement for scheduling remains the engine's work windows (`SET_DEFAULT_WORK_WINDOWS`).
 - Tests: R1–R12 in `runAIProfileTests`.
+
+## §38 Overlapping events and recurring-event scope
+
+- **Overlaps**: `evaluateEvLayout(evs)` (pure) assigns each event a column inside its overlapping cluster. The grid draws minute events — and any event that overlaps another — once, from its first hour, side by side (`inset-inline-start`/`width` in %). Events that overlap nothing and have no minutes keep the legacy per-hour label. `gEvents` entries now carry `gid`.
+- **Recurring Google events**: `gcalDeleteScoped(g,scope)` (`one` = DELETE the instance; `all` = DELETE the series master `recurringEventId`; `following` = PATCH the master's RRULE with `UNTIL` one second before the instance via `rruleUntilBefore`, or DELETE the master when the instance is the first). `gcalUpdateScoped(g,ev,scope)` (`one` / `all`; `all` changes title and times only, and refuses a date change). The editor asks via `_gcalPick` (tests set `window._gcalPickHook`). Non-recurring events keep the single confirmation.
+- Tests: OV1–OV6, RS1–RS11 in `runAccountTests`. Real Google behavior is unverified (the sandbox cannot reach Google).

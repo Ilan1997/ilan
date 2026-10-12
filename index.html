@@ -1673,6 +1673,22 @@ const STATE={
 // ══════════════════════════════════════════════════════
 //  SLOT STATUS — two-layer architecture
 // ══════════════════════════════════════════════════════
+// PURE: column layout for a day's events. Returns Map(event → {col,n,overlaps}) — events in one overlapping cluster share n columns.
+function evaluateEvLayout(evs){
+  const span=e=>Number.isInteger(e.startMin)&&Number.isInteger(e.endMin)?[e.startMin,e.endMin]:[e.startH*60,e.endH*60];
+  const list=(evs||[]).map(e=>({e,s:span(e)[0],t:span(e)[1]})).sort((a,b)=>a.s-b.s||b.t-a.t);
+  const out=new Map();let cluster=[],clusterEnd=-1;
+  const flush=()=>{
+    if(!cluster.length)return;
+    const colEnds=[];
+    cluster.forEach(x=>{let c=colEnds.findIndex(en=>en<=x.s);if(c<0){c=colEnds.length;colEnds.push(x.t);}else colEnds[c]=x.t;x.col=c;});
+    const n=colEnds.length;cluster.forEach(x=>out.set(x.e,{col:x.col,n,overlaps:n>1}));
+    cluster=[];
+  };
+  list.forEach(x=>{if(cluster.length&&x.s>=clusterEnd)flush();cluster.push(x);clusterEnd=Math.max(clusterEnd,x.t);});
+  flush();
+  return out;
+}
 function computeGlobalStatus(dId,dow,h,gc,gOnce,gRange,gEvents){
   if(!gc)return null;
   for(const wc of(gc.weeklyClosed||[])){
@@ -1894,7 +1910,7 @@ function buildEngine(state,calendarId,options={}){
   for(const ev of(gc.events||[])){
     const dId=dayId(parseISO(ev.date));
     if(!gEvents.has(dId))gEvents.set(dId,[]);
-    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin});
+    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin,gid:ev.gid});
   }
 
   // Resolve tasks. NOTE: 'needed' is ALWAYS task.requiredUnits — buildEngine
@@ -4051,6 +4067,14 @@ function renderEngine(){
   // table body — each hour rendered as :00 row + :30 sub-row
   const taskMap={};tasks.forEach(t=>{taskMap[t.id]=t;});
   let body='';
+  // Overlapping events (Google-Calendar style): minute events, and any event that overlaps another, are drawn ONCE from their first hour,
+  // side by side in columns. Events that overlap nothing and have no minutes keep the legacy per-hour label.
+  const _evSpan=e=>Number.isInteger(e.startMin)&&Number.isInteger(e.endMin)?[e.startMin,e.endMin]:[e.startH*60,e.endH*60];
+  const _layoutCache=new Map();
+  function _dayEvLayout(dId,evs){
+    if(_layoutCache.has(dId))return _layoutCache.get(dId);
+    const m=evaluateEvLayout(evs);_layoutCache.set(dId,m);return m;
+  }
   // renderSlot: returns <td> HTML for a given slot (date, h is always an integer hour)
   function renderSlotTd(date,h,dId,assignments,cal,examsDy,uiStatus,workWindowsByDayId,taskMap,risk,_extraClass=''){
     const sid=slotId(date,h);
@@ -4088,6 +4112,24 @@ function renderEngine(){
 
     if(isGlobalEvent(status)){
       const evTitle=globalEventTitle(status);
+      {
+        const _all=(gEvents&&gEvents.get(dId))||[];
+        const _lay=_dayEvLayout(dId,_all);
+        const _cover=_all.filter(e=>h>=e.startH&&h<e.endH);
+        const _drawn=_cover.filter(e=>{const l=_lay.get(e);return Number.isInteger(e.startMin)&&Number.isInteger(e.endMin)||(l&&l.overlaps);});
+        const _legacy=_cover.filter(e=>!_drawn.includes(e));
+        if(_drawn.length&&!_legacy.length){
+          const _tdB=`style="pointer-events:none;position:relative;overflow:visible;"${_todayClass?` class="${_todayClass.trim()}"`:``}`;
+          const starts=_drawn.filter(e=>e.startH===h);
+          return`<td ${_tdB}>${starts.map(e=>{
+            const l=_lay.get(e)||{col:0,n:1},[sm,em]=_evSpan(e);
+            const cs=sm-h*60,dur=em-sm,isG=String(e.id||'').indexOf('gcal_')===0;
+            const w=100/l.n,left=l.col*w;
+            const tt=`${e.title} · ${_fmtMin(sm)}–${_fmtMin(em)}`;
+            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
+          }).join('')}</td>`;
+        }
+      }
       // minute-precise events: draw only the covered part of this hour; show the exact time once, in the first hour
       const _evs=(gEvents&&gEvents.get(dId))||[];
       const _ev=_evs.find(e=>e.title===evTitle&&h>=e.startH&&h<e.endH&&Number.isInteger(e.startMin)&&Number.isInteger(e.endMin));
@@ -7629,6 +7671,71 @@ async function gcalUpdateEvent(gid,ev){
 async function gcalDeleteEvent(gid){
   try{await _gcalCall('DELETE','/'+encodeURIComponent(gid));await gcalSync();return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
+// PURE: cut a recurring series so it ends right before an instance ("this and following" delete). recurrence = master.recurrence (RRULE/EXDATE lines).
+function rruleUntilBefore(recurrence,instanceStartISO){
+  const d=new Date(instanceStartISO);if(isNaN(d))return null;
+  d.setUTCSeconds(d.getUTCSeconds()-1);
+  const pad=n=>String(n).padStart(2,'0');
+  const u=d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+pad(d.getUTCMinutes())+pad(d.getUTCSeconds())+'Z';
+  let had=false;
+  const out=(recurrence||[]).map(l=>{
+    if(!/^RRULE:/i.test(l))return l;
+    had=true;
+    return l.replace(/;(COUNT|UNTIL)=[^;]*/gi,'')+';UNTIL='+u;
+  });
+  return had?out:null;
+}
+// Delete with a scope: 'one' (this instance), 'following' (this and later ones), 'all' (the whole series). g = the instance as returned by Google.
+async function gcalDeleteScoped(g,scope){
+  try{
+    if(!g||!g.id)return{ok:false,error:'האירוע לא נמצא'};
+    if(!g.recurringEventId||scope==='one'){await _gcalCall('DELETE','/'+encodeURIComponent(g.id));}
+    else if(scope==='all'){await _gcalCall('DELETE','/'+encodeURIComponent(g.recurringEventId));}
+    else if(scope==='following'){
+      const m=await gcalGetEvent(g.recurringEventId);
+      const sameStart=m&&m.start&&g.start&&m.start.dateTime&&new Date(m.start.dateTime).getTime()===new Date(g.start.dateTime).getTime();
+      if(sameStart)await _gcalCall('DELETE','/'+encodeURIComponent(g.recurringEventId)); // first occurrence → the whole series
+      else{
+        const rec=rruleUntilBefore(m&&m.recurrence,g.start.dateTime);
+        if(!rec)return{ok:false,error:'לא הצלחתי לקצר את הסדרה — אפשר למחוק ישירות ביומן גוגל'};
+        await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),{recurrence:rec});
+      }
+    }else return{ok:false,error:'בחירה לא חוקית'};
+    const sy=await gcalSync();
+    return{ok:true,synced:!!(sy&&sy.ok)};
+  }catch(e){return{ok:false,error:_gcalErrText(e)};}
+}
+// Edit with a scope: 'one' (this instance) or 'all' (whole series: title and times only — a date change applies to one instance).
+async function gcalUpdateScoped(g,ev,scope){
+  const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
+  try{
+    if(!g||!g.id)return{ok:false,error:'האירוע לא נמצא'};
+    if(!g.recurringEventId||scope==='one'){await _gcalCall('PATCH','/'+encodeURIComponent(g.id),_gcalBody(v.ev));}
+    else if(scope==='all'){
+      const origDate=(()=>{const d=new Date(g.start.dateTime),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());})();
+      if(v.ev.date!==origDate)return{ok:false,error:'שינוי תאריך חל רק על האירוע הזה — בחר "רק האירוע הזה"'};
+      const m=await gcalGetEvent(g.recurringEventId);
+      const md=new Date(m.start.dateTime),p=n=>String(n).padStart(2,'0');
+      const mDate=md.getFullYear()+'-'+p(md.getMonth()+1)+'-'+p(md.getDate());
+      await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),_gcalBody({...v.ev,date:mDate}));
+    }else return{ok:false,error:'בחירה לא חוקית'};
+    const sy=await gcalSync();
+    return{ok:true,synced:!!(sy&&sy.ok)};
+  }catch(e){return{ok:false,error:_gcalErrText(e)};}
+}
+// Scope picker: Promise<key|null>. Tests set window._gcalPickHook(title,options).
+function _gcalPick(title,options){
+  if(typeof window._gcalPickHook==='function')return Promise.resolve(window._gcalPickHook(title,options));
+  return new Promise(res=>{
+    const ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10003;display:flex;align-items:center;justify-content:center;padding:16px;';
+    const box=document.createElement('div');box.style.cssText='background:#fff;color:#111;border-radius:16px;max-width:380px;width:100%;padding:18px;direction:rtl;font-family:inherit;';
+    const t=document.createElement('div');t.style.cssText='font-weight:800;margin-bottom:12px;';t.textContent=title;box.appendChild(t);
+    const done=v=>{ov.remove();res(v);};
+    options.forEach(o=>{const b=document.createElement('button');b.textContent=o.label;b.style.cssText='display:block;width:100%;text-align:right;padding:11px 12px;margin-bottom:8px;border:1.5px solid '+(o.danger?'#fca5a5':'#d0d5dd')+';border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;font-size:.95em;';b.onclick=()=>done(o.key);box.appendChild(b);});
+    const c=document.createElement('button');c.textContent='ביטול';c.style.cssText='display:block;width:100%;padding:10px;border:none;border-radius:10px;background:#f2f4f7;cursor:pointer;font-family:inherit;';c.onclick=()=>done(null);box.appendChild(c);
+    ov.appendChild(box);document.body.appendChild(ov);
+  });
+}
 // Editor for an imported Google event (one-day events only; multi-day and all-day are edited in Google).
 async function openGcalEditor(blockId){
   const evs=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal)||{}).events||[];
@@ -7657,21 +7764,31 @@ async function openGcalEditor(blockId){
   ov.appendChild(box);document.body.appendChild(ov);
   const $=id=>box.querySelector('#'+id);
   $('gcalEdTitle').value=String(g.summary||'');$('gcalEdDate').value=dISO(st);$('gcalEdStart').value=tHM(st);$('gcalEdEnd').value=tHM(en);
-  $('gcalEdNote').textContent=(g.recurringEventId?'אירוע חוזר: השינוי או המחיקה חלים רק על המופע הזה. ':'')+(((g.attendees||[]).length>1)?'באירוע יש משתתפים — שינוי עלול להישלח אליהם.':'');
+  $('gcalEdNote').textContent=(g.recurringEventId?'אירוע חוזר: בשמירה או במחיקה תישאל אם זה חל על האירוע הזה בלבד או על יותר. ':'')+(((g.attendees||[]).length>1)?'באירוע יש משתתפים — שינוי עלול להישלח אליהם.':'');
   const err=m=>{$('gcalEdErr').textContent=m||'';};
   const close=()=>ov.remove();
   const hm=v=>{const m=/^(\d{2}):(\d{2})$/.exec(v||'');return m?(+m[1])*60+(+m[2]):NaN;};
   $('gcalEdCancel').onclick=close;
   $('gcalEdSave').onclick=async()=>{
     const ev={title:$('gcalEdTitle').value,date:$('gcalEdDate').value,startMin:hm($('gcalEdStart').value),endMin:hm($('gcalEdEnd').value)};
+    let scope='one';
+    if(g.recurringEventId){
+      scope=await _gcalPick('לשנות איזה אירועים?',[{key:'one',label:'רק האירוע הזה'},{key:'all',label:'כל האירועים בסדרה (שם ושעות)'}]);
+      if(!scope)return;
+    }
     $('gcalEdSave').disabled=true;err('שומר…');
-    const r=await gcalUpdateEvent(b.gid,ev);
-    if(r.ok){close();showToast('האירוע עודכן ביומן גוגל ✓');}else{$('gcalEdSave').disabled=false;err(r.error);}
+    const r=await gcalUpdateScoped(g,ev,scope);
+    if(r.ok){close();showToast(scope==='all'?'כל הסדרה עודכנה ביומן גוגל ✓':'האירוע עודכן ביומן גוגל ✓');}else{$('gcalEdSave').disabled=false;err(r.error);}
   };
   $('gcalEdDel').onclick=async()=>{
-    if(!(await _gcalAsk('למחוק את "'+String(g.summary||'האירוע')+'" מיומן גוגל?'))){return;}
-    const r=await gcalDeleteEvent(b.gid);
-    if(r.ok){close();showToast('האירוע נמחק מיומן גוגל ✓');}else err(r.error);
+    let scope='one';
+    if(g.recurringEventId){
+      scope=await _gcalPick('למחוק את "'+String(g.summary||'האירוע')+'" — איזה אירועים?',[{key:'one',label:'רק האירוע הזה',danger:true},{key:'following',label:'האירוע הזה וכל הבאים אחריו',danger:true},{key:'all',label:'כל האירועים בסדרה',danger:true}]);
+      if(!scope)return;
+    }else if(!(await _gcalAsk('למחוק את "'+String(g.summary||'האירוע')+'" מיומן גוגל?'))){return;}
+    $('gcalEdDel').disabled=true;err('מוחק…');
+    const r=await gcalDeleteScoped(g,scope);
+    if(r.ok){close();showToast(scope==='all'?'כל הסדרה נמחקה מיומן גוגל ✓':scope==='following'?'האירוע וכל הבאים אחריו נמחקו ✓':'האירוע נמחק מיומן גוגל ✓');}else{$('gcalEdDel').disabled=false;err(r.error);}
   };
 }
 // ── Maya proposes an event (hidden CAL_CREATE block) → a confirmation card; nothing is written until the user approves ──
@@ -11324,6 +11441,84 @@ async function runAccountTests(){
       try{handleAddEvent();formEv=(STATE_ACTIVE.constraintsGlobal.events||[]).find(e=>e.title==='ידני');}finally{STATE_ACTIVE=_sb;}
       ok('ME5. טופס אירוע: 9:20–11:05 נשמר עם דקות מדויקות והשעות מעוגלות החוצה (9–12)',!!formEv&&formEv.startMin===560&&formEv.endMin===665&&formEv.startH===9&&formEv.endH===12,JSON.stringify(formEv));
       ['evStartM','evEndM','evTitle','evDate'].forEach(i=>{document.getElementById(i).value='';});
+    }
+    // RS. recurring Google events: scope choice for delete / edit (this one / this and following / all)
+    {
+      const prevFetch=window.fetch,prevPick=window._gcalPickHook,prevPrefs=localStorage.getItem(GCAL_PREF_KEY),_sa=STATE_ACTIVE,pl=_gcalLastToken,pe=_gcalTokenExp;
+      try{
+        _gcalSavePrefs({on:true,write:true,hideTitles:false});_gcalLastToken='rs-tok';_gcalTokenExp=Date.now()+3600000;
+        let calls=[];
+        const inst={id:'mas1_20261014T063000Z',recurringEventId:'mas1',summary:'סדנה שבועית',start:{dateTime:'2026-10-14T09:30:00+03:00'},end:{dateTime:'2026-10-14T10:30:00+03:00'}};
+        const master={id:'mas1',summary:'סדנה שבועית',start:{dateTime:'2026-10-07T09:30:00+03:00'},end:{dateTime:'2026-10-07T10:30:00+03:00'},recurrence:['RRULE:FREQ=WEEKLY;COUNT=10;BYDAY=WE']};
+        window.fetch=async(u,o)=>{u=String(u);const m=(o&&o.method)||'GET';calls.push({u,m,b:o&&o.body});
+          if(m==='GET'&&u.includes('/events/mas1'))return{ok:true,status:200,json:async()=>master};
+          if(m==='GET')return{ok:true,status:200,json:async()=>({items:[]})};
+          if(m==='DELETE')return{ok:true,status:204,json:async()=>null};
+          return{ok:true,status:200,json:async()=>({})};};
+        STATE_ACTIVE=baseState([]);
+        const ru=rruleUntilBefore(['RRULE:FREQ=WEEKLY;COUNT=10;BYDAY=WE','EXDATE:20261021T063000Z'],'2026-10-14T09:30:00+03:00');
+        ok('RS1. rruleUntilBefore: מסיר COUNT, מוסיף UNTIL שנייה לפני המופע (UTC), שומר שורות אחרות',ru&&ru[0]==='RRULE:FREQ=WEEKLY;BYDAY=WE;UNTIL=20261014T062959Z'&&ru[1].startsWith('EXDATE'),JSON.stringify(ru));
+        ok('RS2. rruleUntilBefore: בלי RRULE → null (לא ממציא)',rruleUntilBefore(['EXDATE:20261021T063000Z'],'2026-10-14T09:30:00+03:00')===null);
+        calls=[];let r=await gcalDeleteScoped(inst,'one');
+        ok('RS3. מחיקה "רק הזה": DELETE על המופע בלבד',r.ok&&calls.filter(c=>c.m==='DELETE').length===1&&calls.find(c=>c.m==='DELETE').u.endsWith('/events/'+encodeURIComponent(inst.id)));
+        calls=[];r=await gcalDeleteScoped(inst,'all');
+        ok('RS4. מחיקה "כל הסדרה": DELETE על האירוע הראשי (mas1)',r.ok&&calls.filter(c=>c.m==='DELETE').length===1&&calls.find(c=>c.m==='DELETE').u.endsWith('/events/mas1'));
+        calls=[];r=await gcalDeleteScoped(inst,'following');
+        const pt=calls.find(c=>c.m==='PATCH');
+        ok('RS5. מחיקה "הזה והבאים": PATCH לאירוע הראשי עם UNTIL לפני המופע, ללא DELETE',r.ok&&pt&&pt.u.endsWith('/events/mas1')&&JSON.parse(pt.b).recurrence[0].includes('UNTIL=20261014T062959Z')&&!calls.some(c=>c.m==='DELETE'),pt&&pt.b);
+        const first={...inst,start:master.start,end:master.end};
+        calls=[];r=await gcalDeleteScoped(first,'following');
+        ok('RS6. "הזה והבאים" על המופע הראשון = מחיקת הסדרה כולה',r.ok&&calls.some(c=>c.m==='DELETE'&&c.u.endsWith('/events/mas1'))&&!calls.some(c=>c.m==='PATCH'));
+        calls=[];r=await gcalUpdateScoped(inst,{title:'סדנה חדשה',date:'2026-10-14',startMin:600,endMin:660},'one');
+        ok('RS7. עריכה "רק הזה": PATCH למופע עם התאריך והשעות החדשים',r.ok&&calls.find(c=>c.m==='PATCH').u.endsWith('/events/'+encodeURIComponent(inst.id))&&JSON.parse(calls.find(c=>c.m==='PATCH').b).start.dateTime==='2026-10-14T10:00:00');
+        const _ld=(()=>{const d=new Date(inst.start.dateTime),q=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate());})(); // the editor shows the user's local date
+        calls=[];r=await gcalUpdateScoped(inst,{title:'סדנה חדשה',date:_ld,startMin:600,endMin:660},'all');
+        const pa=calls.find(c=>c.m==='PATCH');
+        ok('RS8. עריכה "כל הסדרה": PATCH לאירוע הראשי, תאריך הסדרה נשמר (לפי אזור הזמן של המשתמש) והשעות מתעדכנות',r.ok&&pa&&pa.u.endsWith('/events/mas1')&&JSON.parse(pa.b).start.dateTime===(()=>{const d=new Date(master.start.dateTime),q=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate())+'T10:00:00';})()&&JSON.parse(pa.b).summary==='סדנה חדשה');
+        calls=[];r=await gcalUpdateScoped(inst,{title:'x y',date:'2026-10-15',startMin:600,endMin:660},'all');
+        ok('RS9. עריכה "כל הסדרה" עם תאריך שונה נדחית (בלי רשת) עם הסבר',!r.ok&&r.error.includes('רק האירוע הזה')&&!calls.some(c=>c.m==='PATCH'));
+        // the editor asks for the scope on a recurring event, and cancel sends nothing
+        const events=[{id:'gcal_inst_2026-10-14',gid:inst.id,title:'סדנה שבועית',date:'2026-10-14',startH:9,endH:11,startMin:570,endMin:630,source:'gcal'}];
+        STATE_ACTIVE=applyEvent(baseState([]),'personal',{type:'REPLACE_GCAL_EVENTS',events});
+        let asked=null;window._gcalPickHook=(t,o)=>{asked={t,keys:o.map(x=>x.key)};return null;};
+        window.fetch=async(u,o)=>{u=String(u);const m=(o&&o.method)||'GET';calls.push({u,m,b:o&&o.body});
+          if(m==='GET'&&u.includes('/events/'+encodeURIComponent(inst.id)))return{ok:true,status:200,json:async()=>inst};
+          if(m==='GET'&&u.includes('/events/mas1'))return{ok:true,status:200,json:async()=>master};
+          if(m==='GET')return{ok:true,status:200,json:async()=>({items:[]})};return{ok:true,status:204,json:async()=>null};};
+        calls=[];await openGcalEditor('gcal_inst_2026-10-14');
+        document.getElementById('gcalEdDel').click();await new Promise(r2=>setTimeout(r2,50));
+        ok('RS10. בעורך, מחיקת אירוע חוזר שואלת: רק הזה / הזה והבאים / כל הסדרה; ביטול לא שולח דבר',!!asked&&asked.keys.join()==='one,following,all'&&!calls.some(c=>c.m==='DELETE'||c.m==='PATCH'),JSON.stringify(asked));
+        asked=null;document.getElementById('gcalEdSave').click();await new Promise(r2=>setTimeout(r2,50));
+        ok('RS11. בעורך, שמירת אירוע חוזר שואלת: רק הזה / כל הסדרה',!!asked&&asked.keys.join()==='one,all'&&!calls.some(c=>c.m==='PATCH'));
+        const ed=document.getElementById('gcalEd');if(ed)ed.remove();
+      }finally{
+        window.fetch=prevFetch;window._gcalPickHook=prevPick;STATE_ACTIVE=_sa;_gcalLastToken=pl;_gcalTokenExp=pe;
+        try{if(prevPrefs===null)localStorage.removeItem(GCAL_PREF_KEY);else localStorage.setItem(GCAL_PREF_KEY,prevPrefs);}catch(_e){}
+        const ed2=document.getElementById('gcalEd');if(ed2)ed2.remove();
+      }
+    }
+    // OV. overlapping events render side by side
+    {
+      const mk=(id,t,sm,em)=>({id,title:t,startH:Math.floor(sm/60),endH:Math.ceil(em/60),startMin:sm,endMin:em});
+      const A=mk('a','א',600,720),B=mk('b','ב',660,690),C=mk('c','ג',780,840);
+      const L=evaluateEvLayout([A,B,C]);
+      ok('OV1. layout: שני אירועים חופפים — שתי עמודות; אירוע בודד — עמודה אחת מלאה',L.get(A).n===2&&L.get(B).n===2&&L.get(A).col!==L.get(B).col&&L.get(C).n===1&&L.get(C).col===0);
+      const L3=evaluateEvLayout([mk('x','x',600,720),mk('y','y',610,700),mk('z','z',620,690)]);
+      ok('OV2. layout: שלושה חופפים — שלוש עמודות שונות',[...L3.values()].every(v=>v.n===3)&&new Set([...L3.values()].map(v=>v.col)).size===3);
+      ok('OV3. layout: אירועים צמודים (ללא חפיפה) לא נחשבים חופפים',(()=>{const l=evaluateEvLayout([mk('p','p',600,660),mk('q','q',660,720)]);return [...l.values()].every(v=>v.n===1);})());
+      const b=baseState([]);b.meta.today='2026-10-12';b.meta.startDate='2026-10-04';b.meta.endDate='2027-01-01';
+      let st=b;[A,B,C].forEach(e=>{st=applyEvent(st,'personal',{type:'ADD_GLOBAL_EVENT',payload:{...e,date:'2026-10-14'}});});
+      const _sa=STATE_ACTIVE,_st=ACTIVE_TAB;
+      try{
+        STATE_ACTIVE=st;switchTab('study');goToToday();recalcAndRender();
+        const els=[...document.querySelectorAll('.blk-event-min')];
+        const names=els.map(e=>e.querySelector('.blk-event-name').textContent.replace(/[^א-ת]/g,'')).sort().join(',');
+        ok('OV4. בלוח מוצגים כל שלושת האירועים (לא רק אחד)',els.length===3&&names==='א,ב,ג',names+' ('+els.length+')');
+        const byName=n=>els.find(e=>e.querySelector('.blk-event-name').textContent.includes(n));
+        const wA=byName('א').style.width,wB=byName('ב').style.width,wC=byName('ג').style.width;
+        ok('OV5. שני החופפים חולקים את הרוחב (≈50% כל אחד) והבודד ברוחב מלא',wA.includes('50%')&&wB.includes('50%')&&wC.includes('100%'),wA+' | '+wB+' | '+wC);
+        ok('OV6. החופפים בעמודות שונות (מיקום אופקי שונה)',byName('א').style.insetInlineStart!==byName('ב').style.insetInlineStart);
+      }finally{STATE_ACTIVE=_sa;switchTab(_st||'study');recalcAndRender();}
     }
     // GB. briefing from calendar events (titles known) + all-day events + hidden-title hint
     {
