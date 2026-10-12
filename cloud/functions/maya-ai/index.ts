@@ -5,7 +5,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
 // If the main model is rejected (renamed/retired/unavailable), try these in order. Override with GEMINI_FALLBACK_MODELS (comma separated).
-const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-flash-latest").split(",").map((x) => x.trim()).filter(Boolean);
+const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash-lite").split(",").map((x) => x.trim()).filter(Boolean);
 const DAILY_LIMIT = Number(Deno.env.get("DAILY_LIMIT") ?? "40");
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://ilan1997.github.io").split(",").map((s) => s.trim());
 const MAX_SYSTEM = 30000, MAX_TOTAL = 90000, MAX_MESSAGES = 40;
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     if (r.ok && !data?.error) break;
     lastDetail = `${model}: ${r.status} ${String(data?.error?.message ?? "").slice(0, 200)}`;
     console.error("gemini error", lastDetail); // visible in Supabase → Edge Functions → Logs
-    if (r.status === 401 || r.status === 403 || r.status === 429) break; // key/permission/quota problems: other models (and aliases like -latest) share the same free-tier quota, so extra attempts only burn requests per minute. Fall through to the next model only for 404/400 (model retired).
+    if (r.status === 401 || r.status === 403) break; // bad key/permission: other models won't help. 429 (quota) and 404 (retired) fall through: each distinct model has its own free-tier quota.
   }
   if (!r || !r.ok || data?.error) {
     const busy = r?.status === 429;
