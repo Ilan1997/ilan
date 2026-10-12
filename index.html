@@ -1203,6 +1203,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
 <script>
 // Account-module state lives at the very top: boot code (saveState on a migrated state) runs long before the ACCOUNTS section is reached, and a `let` read before its declaration throws (TDZ) and kills the whole app.
 const CLOUD_SESSION_KEY='maya_cloud_session';
+const CLOUD_CONFIG={google:false,aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
 let CLOUD_SESSION=null;
 let _accForced=false;
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
@@ -4898,7 +4899,11 @@ async function _aiCallModel(sys,msgs){
   // Outside claude.ai: a personal API key kept ONLY in this browser (never in the repo).
   // Provider = 'gemini' (free tier, Google) or 'anthropic'; defaults to whichever key exists.
   const _st=async k=>{try{return((await window.storage.get(k)).value||'').trim();}catch(_e){return'';}};
-  const gKey=await _st('ai:geminikey'),aKey=await _st('ai:apikey');
+  // A key with non-ASCII characters (e.g. pasted placeholder text) makes fetch() throw on the header — treat it as unset and say why.
+  let gKey=await _st('ai:geminikey'),aKey=await _st('ai:apikey');let _badKey=false;
+  if(gKey&&!_aiKeyValid(gKey)){gKey='';_badKey=true;}
+  if(aKey&&!_aiKeyValid(aKey)){aKey='';_badKey=true;}
+  if(_badKey&&!(cloudConfigured()&&cloudSignedIn())){const e=new Error('badkey');e.userMessage='המפתח האישי ששמור מכיל תווים לא תקינים (כנראה הודבק טקסט במקום המפתח). פתח 🔑 מפתח אישי והדבק מחדש, או השאר ריק כדי למחוק.';throw e;}
   // No personal key but signed in → the shared, rate-limited server proxy (Gemini key stays server-side)
   if(!gKey&&!aKey&&cloudConfigured()&&cloudSignedIn())return _aiCallProxy(sys,msgs);
   let provider=await _st('ai:provider');
@@ -4957,6 +4962,7 @@ async function testAIConnection(){
   }
 }
 // Choose provider + save/clear the personal key (browser storage only).
+function _aiKeyValid(k){return /^[\x21-\x7E]+$/.test(String(k||''));}
 async function setupAIKey(){
   const get=k=>window.storage.get(k).then(r=>r.value).catch(()=>'');
   const choice=window.prompt('איזה ספק AI? כתוב 1 ל-Gemini של גוגל (יש שכבה חינמית; בשכבה החינמית גוגל עשויה להשתמש בתוכן לשיפור המוצרים שלה) או 2 ל-Anthropic (בתשלום). השאר ריק לביטול.','1');
@@ -4966,6 +4972,7 @@ async function setupAIKey(){
   const v=window.prompt((isG?'מפתח Gemini (מ-aistudio.google.com/apikey)':'מפתח Anthropic')+' — נשמר רק בדפדפן הזה. השאר ריק כדי למחוק.',await get(keyName));
   if(v===null)return false;
   const t=v.trim();
+  if(t&&!_aiKeyValid(t)){showToast('המפתח לא תקין — הדבק רק את המפתח עצמו (אותיות באנגלית, מספרים וסימנים)');return false;}
   if(t){await window.storage.set(keyName,t);await window.storage.set('ai:provider',isG?'gemini':'anthropic');}
   else await window.storage.delete(keyName).catch(()=>{});
   showToast(t?'המפתח נשמר ✓':'המפתח נמחק');
@@ -6561,7 +6568,6 @@ function _checkOnboarding(){
    public by design; row-level security (cloud/setup.sql) protects the data.
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
-const CLOUD_CONFIG={google:false,aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
 const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
 function _inClaudeHost(){try{return !!(window.claude&&typeof window.claude.use==='function');}catch(_e){return false;}}
@@ -10249,6 +10255,12 @@ async function runAccountTests(){
     await _accSignUp();const needsName=calls.length===0;
     ok('N5. הרשמה: שדה שם מופיע בלחיצה ראשונה, ולא נשלחת בקשה בלי שם',hiddenFirst&&noCallYet&&needsName);
     _accForced=false;_cloudStoreSession(null);
+    // K. a stored key with non-ASCII characters must not crash fetch headers
+    ok('K1. _aiKeyValid: מפתח תקין עובר, טקסט בעברית או עם רווח נפסל',_aiKeyValid('AIzaSyA-b_c123')&&!_aiKeyValid('המפתח שלי')&&!_aiKeyValid('abc def')&&!_aiKeyValid(''));
+    await window.storage.set('ai:geminikey','הדבק כאן מפתח');await window.storage.set('ai:provider','gemini');
+    let kerr=null;try{await _aiCallModel('s',[{role:'user',content:'היי'}]);}catch(e){kerr=e;}
+    ok('K2. מפתח לא תקין ושמור + לא מחובר → הודעה ברורה בעברית, בלי קריאת fetch שמתרסקת',!!kerr&&!!kerr.userMessage&&kerr.userMessage.includes('תווים לא תקינים'),kerr&&kerr.message);
+    await window.storage.delete('ai:geminikey');await window.storage.delete('ai:provider');
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}

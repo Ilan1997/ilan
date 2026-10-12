@@ -421,3 +421,5 @@ Sign-up asks for a name (the "הרשמה" button first reveals the `accName` fie
 
 ## 26. Boot-order rule (TDZ)
 Module-level `let` state used by `saveState`/`openAccount` (`_cloudResetting`, `_accForced`, `CLOUD_SESSION`, …) is declared at the very top of the script. Boot code can call `saveState()` (migrated stored state) before the ACCOUNTS section runs, and reading a `let` before its declaration throws and aborts the whole script. `tests/run.js` boots a second jsdom with an existing user whose plan needs migration and asserts no errors and a working account button.
+
+Addendum: `CLOUD_CONFIG` also moved to the top (saveState → cloudConfigured read it before declaration; saveState swallowed the error, so only the console showed it — the boot test now also fails on `console.warn` containing "failed"/"before initialization"). Personal AI keys must be printable ASCII (`_aiKeyValid`); a stored key with other characters is ignored with a clear Hebrew message instead of crashing `fetch` headers.
