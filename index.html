@@ -5095,7 +5095,7 @@ async function _aiCallProxy(sys,msgs){
   const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))}});
   if(r.network){const e=new Error('network');e.userMessage='אין חיבור לשרת — בדוק אינטרנט ונסה שוב.';throw e;}
   if(r.status===404){const e=new Error('proxy-not-deployed');e.noKey=true;throw e;} // service not set up yet → offer a personal key
-  if(!r.ok){const e=new Error((r.data&&r.data.error)||('HTTP '+r.status));e.userMessage=(r.data&&r.data.message)||null;e.noKey=!!(r.data&&r.data.error==='not_configured');throw e;}
+  if(!r.ok){const e=new Error((r.data&&r.data.error)||('HTTP '+r.status));e.userMessage=(r.data&&r.data.message)?(r.data.message+((r.data.detail&&r.data.error==='upstream')?' ('+String(r.data.detail).slice(0,140)+')':'')):null;e.noKey=!!(r.data&&r.data.error==='not_configured');throw e;}
   return String((r.data&&r.data.text)||'');
 }
 // Which route would a message take right now? 'claude' | 'proxy' | 'none'
@@ -10555,6 +10555,9 @@ async function runAccountTests(){
     srv.fn=()=>J(429,{error:'limit',message:'הגעת למכסה היומית (40 הודעות).'});
     let e1=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e1=e;}
     ok('P6. מכסה יומית (429): נזרקת שגיאה עם הודעה בעברית למשתמש, בלי noKey',!!e1&&e1.userMessage.includes('מכסה')&&!e1.noKey);
+    srv.fn=()=>J(502,{error:'upstream',detail:'gemini-x: 404 model not found',message:'שגיאה מול ה-AI.'});
+    let e5=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e5=e;}
+    ok('P6b. שגיאת upstream (502): ההודעה כוללת את פירוט השגיאה מהשרת כדי שאפשר יהיה לאבחן',!!e5&&e5.userMessage.includes('שגיאה מול ה-AI')&&e5.userMessage.includes('model not found')&&!e5.noKey);
     srv.fn=()=>J(404,{});
     let e2=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e2=e;}
     ok('P7. הפונקציה עוד לא הופעלה (404) → noKey=true',!!e2&&e2.noKey===true);

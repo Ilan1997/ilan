@@ -4,6 +4,8 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
+// If the main model is rejected (renamed/retired/unavailable), try these in order. Override with GEMINI_FALLBACK_MODELS (comma separated).
+const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-2.5-flash,gemini-2.0-flash").split(",").map((x) => x.trim()).filter(Boolean);
 const DAILY_LIMIT = Number(Deno.env.get("DAILY_LIMIT") ?? "40");
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://ilan1997.github.io").split(",").map((s) => s.trim());
 const MAX_SYSTEM = 30000, MAX_TOTAL = 90000, MAX_MESSAGES = 40;
@@ -54,18 +56,26 @@ Deno.serve(async (req) => {
   if (Number(n) > DAILY_LIMIT) return json({ error: "limit", message: `הגעת למכסה היומית (${DAILY_LIMIT} הודעות). אפשר להמשיך מחר, או להגדיר מפתח Gemini אישי.` }, 429, origin);
 
   // 4. call Gemini
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: msgs.map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
-    }),
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: msgs.map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
   });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok || data?.error) {
-    const busy = r.status === 429;
-    return json({ error: busy ? "busy" : "upstream", message: busy ? "השירות עמוס כרגע — נסה שוב בעוד דקה." : "שגיאה מול ה-AI." }, busy ? 503 : 502, origin);
+  let r: Response | null = null, data: any = {}, lastDetail = "";
+  for (const model of [MODEL, ...FALLBACKS.filter((x) => x !== MODEL)]) {
+    try {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey }, body: payload,
+      });
+      data = await r.json().catch(() => ({}));
+    } catch (e) { lastDetail = `${model}: network ${String(e).slice(0, 120)}`; console.error("gemini fetch failed", lastDetail); r = null; continue; }
+    if (r.ok && !data?.error) break;
+    lastDetail = `${model}: ${r.status} ${String(data?.error?.message ?? "").slice(0, 200)}`;
+    console.error("gemini error", lastDetail); // visible in Supabase → Edge Functions → Logs
+    if (r.status === 429 || r.status === 401 || r.status === 403) break; // quota/key problems: other models won't help
+  }
+  if (!r || !r.ok || data?.error) {
+    const busy = r?.status === 429;
+    return json({ error: busy ? "busy" : "upstream", detail: lastDetail, message: busy ? "השירות עמוס כרגע — נסה שוב בעוד דקה." : "שגיאה מול ה-AI." }, busy ? 503 : 502, origin);
   }
   const text = (data.candidates?.[0]?.content?.parts ?? [])
     .filter((p: { thought?: boolean; text?: unknown }) => !p.thought && typeof p.text === "string")
