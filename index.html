@@ -194,6 +194,7 @@ tbody td.exam-day-td{background:#f5f5f5;border-right:2px solid #1a1a1a;border-le
 .ex-remove-btn{border:none;background:none;color:var(--muted2);cursor:pointer;font-size:.78em;padding:2px 5px;border-radius:4px;line-height:1;transition:color .15s,background .15s;margin-right:-4px;}
 .ex-remove-btn:hover{color:var(--red);background:var(--red-lt);}
 /* GLOBAL EVENTS — table cell + sidebar */
+.blk-event-time{font-weight:500;opacity:.8;font-size:.9em;margin-inline-start:4px;}
 .blk-event{padding:5px 7px;border-radius:5px;border-right:3px solid #8b5cf6;background:#f5f3ff;margin-bottom:3px;font-size:.76em;line-height:1.3;}
 .blk-event-name{font-weight:700;font-size:.84em;color:#5b21b6;}
 .bld-event{background:#f5f3ff;text-align:center;color:#7c3aed;font-size:.68em;font-weight:600;padding:9px 2px;}
@@ -1156,6 +1157,10 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
 </select>
 </div>
 </div>
+<div class="form-grid">
+<div class="form-row"><label>דקות התחלה (אופציונלי)</label><input id="evStartM" type="number" min="0" max="59" step="1" placeholder="0–59" inputmode="numeric"/></div>
+<div class="form-row"><label>דקות סיום (אופציונלי)</label><input id="evEndM" type="number" min="0" max="59" step="1" placeholder="0–59" inputmode="numeric"/></div>
+</div>
 <div class="form-row" style="flex-direction:row;align-items:center;gap:10px;margin-top:4px;">
 <input id="evRepeat" style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed;" type="checkbox"/>
 <label for="evRepeat" style="font-size:.82em;font-weight:600;color:var(--text2);cursor:pointer;">חזור כל שבוע עד תאריך הסיום</label>
@@ -1630,6 +1635,16 @@ function escapeHTML(s){
   return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Minute precision for events: optional startMin/endMin (minutes from midnight). The ENGINE still blocks whole hours (startH..endH, rounded outward); minutes only drive display + text.
+function _cleanEvMinutes(ev){
+  if(!ev)return ev;
+  const a=ev.startMin,b=ev.endMin;
+  if(Number.isInteger(a)&&Number.isInteger(b)&&a>=0&&b<=1440&&a<b&&Math.floor(a/60)===ev.startH&&Math.ceil(b/60)===ev.endH)return ev;
+  if(a===undefined&&b===undefined)return ev;
+  const {startMin,endMin,...rest}=ev;return rest;
+}
+function _fmtMin(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+function _evTimeText(ev){return(Number.isInteger(ev.startMin)&&Number.isInteger(ev.endMin))?_fmtMin(ev.startMin)+'–'+_fmtMin(ev.endMin):ev.startH+':00–'+ev.endH+':00';}
 function isGlobalEvent(s){return s&&s.startsWith('global_event:');}
 function globalEventTitle(s){return s&&s.startsWith('global_event:')?s.slice(13):null;}
 
@@ -1715,7 +1730,7 @@ function buildEngine(state,calendarId,options={}){
   for(const ev of(gc.events||[])){
     const dId=dayId(parseISO(ev.date));
     if(!gEvents.has(dId))gEvents.set(dId,[]);
-    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id});
+    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin});
   }
 
   // Resolve tasks. NOTE: 'needed' is ALWAYS task.requiredUnits — buildEngine
@@ -2981,7 +2996,7 @@ function _applyEventInner(state,calendarId,event){
       console.warn('ADD_GLOBAL_EVENT: invalid payload',ev);return state;
     }
     if(ev.endH<=ev.startH){console.warn('ADD_GLOBAL_EVENT: endH<=startH');return state;}
-    const gc={...state.constraintsGlobal,events:[...(state.constraintsGlobal.events||[]),ev]};
+    const gc={...state.constraintsGlobal,events:[...(state.constraintsGlobal.events||[]),_cleanEvMinutes(ev)]};
     return{...state,constraintsGlobal:gc};
   }
 
@@ -2991,7 +3006,7 @@ function _applyEventInner(state,calendarId,event){
     const valid=(event.events||[]).filter(ev=>
       ev&&ev.id&&ev.title&&ev.date&&ev.startH!=null&&ev.endH!=null&&ev.endH>ev.startH);
     if(!valid.length)return state;
-    const gc={...state.constraintsGlobal,events:[...(state.constraintsGlobal.events||[]),...valid]};
+    const gc={...state.constraintsGlobal,events:[...(state.constraintsGlobal.events||[]),...valid.map(_cleanEvMinutes)]};
     return{...state,constraintsGlobal:gc};
   }
 
@@ -2999,7 +3014,7 @@ function _applyEventInner(state,calendarId,event){
   if(event.type==='REPLACE_GCAL_EVENTS'){
     const valid=(event.events||[]).filter(ev=>ev&&typeof ev.id==='string'&&ev.id.startsWith('gcal_')&&ev.title&&ev.date&&ev.startH!=null&&ev.endH!=null&&ev.endH>ev.startH);
     const keep=((state.constraintsGlobal||{}).events||[]).filter(e=>!String(e.id).startsWith('gcal_'));
-    return{...state,constraintsGlobal:{...state.constraintsGlobal,events:[...keep,...valid]}};
+    return{...state,constraintsGlobal:{...state.constraintsGlobal,events:[...keep,...valid.map(_cleanEvMinutes)]}};
   }
 
   if(event.type==='REMOVE_GLOBAL_EVENT'){
@@ -3909,6 +3924,14 @@ function renderEngine(){
 
     if(isGlobalEvent(status)){
       const evTitle=globalEventTitle(status);
+      // minute-precise events: draw only the covered part of this hour; show the exact time once, in the first hour
+      const _evs=(gEvents&&gEvents.get(dId))||[];
+      const _ev=_evs.find(e=>e.title===evTitle&&h>=e.startH&&h<e.endH&&Number.isInteger(e.startMin)&&Number.isInteger(e.endMin));
+      if(_ev){
+        const cs=Math.max(_ev.startMin,h*60)-h*60,ce=Math.min(_ev.endMin,(h+1)*60)-h*60;
+        const first=(h===_ev.startH);
+        return`<td style="pointer-events:none;position:relative;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event blk-event-min" style="position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${((ce-cs)/60*100).toFixed(2)}%;"><div class="blk-event-name">${first?`📅 ${evTitle} <span class="blk-event-time">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</span>`:''}</div></div></td>`;
+      }
       return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event"><div class="blk-event-name">📅 ${evTitle}</div></div></td>`;
     }
     if(ent){
@@ -4168,7 +4191,7 @@ function renderEngine(){
             <div class="event-card-name">📅 ${ev.title}</div>
             <button class="ex-remove-btn" onclick="removeGlobalEvent('${ev.id}')" title="הסר אירוע" aria-label="הסר אירוע">✕</button>
           </div>
-          <div class="event-card-meta">${ev.date} · ${ev.startH}:00–${ev.endH}:00</div>
+          <div class="event-card-meta">${ev.date} · ${_evTimeText(ev)}</div>
         </div>`).join('');
     }
   }
@@ -5332,7 +5355,7 @@ function _aiCurrentItemsSummary(){
     // ── Constraints ───────────────────────────────────
     const events=STATE_ACTIVE.constraintsGlobal?.events||[];
     if(events.length>0){
-      const evLines=events.slice(0,10).map(ev=>`- [event ${ev.id}] "${ev.title}" (${ev.date}, ${ev.startH}:00–${ev.endH}:00)`);
+      const evLines=events.slice(0,10).map(ev=>`- [event ${ev.id}] "${ev.title}" (${ev.date}, ${_evTimeText(ev)})`);
       if(events.length>10)evLines.push(`... ועוד ${events.length-10} אירועים נוספים`);
       sections.push('Constraints:\n'+evLines.join('\n'));
     }
@@ -5976,10 +5999,15 @@ function removeGlobalEvent(eventId){
 function handleAddEvent(){
   const title=document.getElementById('evTitle').value.trim();
   const date =document.getElementById('evDate').value;
-  const startH=parseInt(document.getElementById('evStartH').value,10);
-  const endH  =parseInt(document.getElementById('evEndH').value,10);
+  let startH=parseInt(document.getElementById('evStartH').value,10);
+  let endH  =parseInt(document.getElementById('evEndH').value,10);
+  const _sm=parseInt(document.getElementById('evStartM')?.value||'0',10)||0,_em=parseInt(document.getElementById('evEndM')?.value||'0',10)||0;
   const errEl =document.getElementById('evErr');
   errEl.style.display='none';
+  let startMin=null,endMin=null;
+  if(_sm<0||_sm>59||_em<0||_em>59){errEl.textContent='דקות חייבות להיות בין 0 ל-59';errEl.style.display='block';return;}
+  if(_sm||_em){startMin=startH*60+_sm;endMin=endH*60+_em;if(endMin<=startMin){errEl.textContent='שעת סיום חייבת להיות אחרי שעת התחלה';errEl.style.display='block';return;}startH=Math.floor(startMin/60);endH=Math.ceil(endMin/60);}
+  const _mins=startMin!==null?{startMin,endMin}:{};
 
   if(!title){errEl.textContent='נא למלא שם אירוע';errEl.style.display='block';return;}
   if(!date) {errEl.textContent='נא לבחור תאריך';errEl.style.display='block';return;}
@@ -6001,18 +6029,19 @@ function handleAddEvent(){
     const batch=[];
     while(cur<=end&&batch.length<52){
       const d=`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
-      batch.push({id:genId('ev'),title,date:d,startH,endH,recurring:true});
+      batch.push({id:genId('ev'),title,date:d,startH,endH,recurring:true,..._mins});
       cur=addDays(cur,7);
     }
     dispatch({type:'ADD_GLOBAL_EVENTS_BATCH',events:batch});
     showToast(`${batch.length} אירועים שבועיים נוספו ✓`);
   } else {
-    dispatch({type:'ADD_GLOBAL_EVENT',payload:{id:genId('ev'),title,date,startH,endH}});
+    dispatch({type:'ADD_GLOBAL_EVENT',payload:{id:genId('ev'),title,date,startH,endH,..._mins}});
   }
 
   // Clear form
   document.getElementById('evTitle').value='';
   document.getElementById('evDate').value='';
+  {const a=document.getElementById('evStartM'),b=document.getElementById('evEndM');if(a)a.value='';if(b)b.value='';}
   document.getElementById('evStartH').value='8';
   document.getElementById('evEndH').value='9';
   if(document.getElementById('evRepeat'))document.getElementById('evRepeat').checked=false;
@@ -7119,7 +7148,10 @@ function gcalItemsToBlocks(items,hideTitles){
       const startH=first?Math.min(23,Math.floor(st.getHours()+st.getMinutes()/60)):0;
       const endH=last?Math.min(24,Math.ceil(en.getHours()+en.getMinutes()/60)):24;
       if(endH<=startH)continue;
-      out.push({id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal'});
+      const sMin=first?st.getHours()*60+st.getMinutes():0,eMin=last?Math.min(1440,en.getHours()*60+en.getMinutes()||1440):1440;
+      const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal'};
+      if(sMin<eMin){blk.startMin=sMin;blk.endMin=eMin;}
+      out.push(blk);
     }
   });
   return out;
@@ -10601,6 +10633,35 @@ async function runAccountTests(){
       reset();_accForced=true;renderAccountModal();
       ok('DA6. במסך הכניסה החובה מוצג אישור "בהמשך אתה מאשר את תנאי השימוש" עם קישור',!!document.querySelector('#accountBody a[href="privacy.html"]'));
       _accForced=false;
+    }
+    // ME. minute-precise events
+    {
+      const good={id:'e1',title:'בדיקה',date:'2026-10-14',startH:9,endH:11,startMin:570,endMin:615};
+      ok('ME1. _cleanEvMinutes: תקין נשמר; דקות שלא מתאימות לשעות המנוע נמחקות; בלי דקות — ללא שינוי',_cleanEvMinutes(good).startMin===570&&_cleanEvMinutes({...good,startMin:1}).startMin===undefined&&_cleanEvMinutes({id:'x',title:'t',date:'2026-10-14',startH:9,endH:10}).startMin===undefined&&_evTimeText(good)==='09:30–10:15');
+      const b=baseState([]);b.meta.today='2026-10-12';b.meta.startDate='2026-10-04';b.meta.endDate='2027-01-01';
+      const withEv=applyEvent(b,'personal',{type:'ADD_GLOBAL_EVENT',payload:good});
+      const stored=withEv.constraintsGlobal.events.find(e=>e.id==='e1');
+      ok('ME2. אירוע עם דקות נשמר עם startMin/endMin',stored&&stored.startMin===570&&stored.endMin===615);
+      const R=buildEngine(withEv,'personal');
+      const hrs=[8,9,10,11].map(h=>{try{return String(R.derived.gEvents.get(dayId(parseISO('2026-10-14')))||'').length>0;}catch(_e){return false;}});
+      const evs=R.derived.gEvents.get(dayId(parseISO('2026-10-14')))||[];
+      ok('ME3. המנוע עדיין חוסם שעות שלמות (9 ו-10) והדקות עוברות לתצוגה בלבד',evs.length===1&&evs[0].startH===9&&evs[0].endH===11&&evs[0].startMin===570&&evs[0].endMin===615);
+      // render
+      const _sa=STATE_ACTIVE,_st=ACTIVE_TAB;
+      try{
+        STATE_ACTIVE=withEv;switchTab('study');goToToday();recalcAndRender();
+        const mins=[...document.querySelectorAll('.blk-event-min')];
+        const tops=mins.map(e=>e.style.top+'/'+e.style.height);
+        ok('ME4. בלוח: האירוע מצויר בדיוק — שעה ראשונה מ-50% בגובה 50%, שעה שנייה 0 בגובה 25%, והזמן 09:30–10:15 מוצג',mins.length===2&&tops[0]==='50%/50%'&&tops[1]==='0%/25%'&&mins[0].textContent.includes('09:30–10:15'),tops.join(' | '));
+      }finally{STATE_ACTIVE=_sa;switchTab(_st||'study');recalcAndRender();}
+      // form
+      document.getElementById('evTitle').value='ידני';document.getElementById('evDate').value='2027-01-05';
+      document.getElementById('evStartH').value='9';document.getElementById('evEndH').value='11';
+      document.getElementById('evStartM').value='20';document.getElementById('evEndM').value='5';
+      const _sb=STATE_ACTIVE;STATE_ACTIVE=b;let formEv=null;
+      try{handleAddEvent();formEv=(STATE_ACTIVE.constraintsGlobal.events||[]).find(e=>e.title==='ידני');}finally{STATE_ACTIVE=_sb;}
+      ok('ME5. טופס אירוע: 9:20–11:05 נשמר עם דקות מדויקות והשעות מעוגלות החוצה (9–12)',!!formEv&&formEv.startMin===560&&formEv.endMin===665&&formEv.startH===9&&formEv.endH===12,JSON.stringify(formEv));
+      ['evStartM','evEndM','evTitle','evDate'].forEach(i=>{document.getElementById(i).value='';});
     }
     // ER. error log
     {

@@ -442,3 +442,6 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 
 ## 32. Error log + sacred-lock rule
 `window.__mayaErrors` (last 8 uncaught errors / rejections, registered at the top of the script) feeds a red dot on the 👤 button and a "🐞 פרטי תקלה" button in the account window that shows copyable text — so a user without a console can report a problem. Engine rule now covered by a test (Sacred #8): a lock created before the hours became sacred never overrides them; the task is replanned elsewhere. The legacy `_aiApplyPayload/_aiApplyPlan` were kept on purpose (still used for AI delete requests and by tests).
+
+## 33. אירועים ברמת הדקה
+אירוע גלובלי יכול לשאת `startMin`/`endMin` (דקות מתחילת היום). המנוע נשאר בגרנולריות של שעה: `startH=floor`, `endH=ceil`, והדקות משמשות לתצוגה בלבד (בלוק ממוקם בתוך התא לפי אחוזים + טקסט `HH:MM–HH:MM`). `_cleanEvMinutes` מנקה דקות לא עקביות. ייבוא יומן גוגל שומר דקות. בדיקות ME1–ME5.
