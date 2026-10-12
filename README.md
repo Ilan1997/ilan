@@ -41,3 +41,13 @@ The free Gemini tier has shared limits and Google may use free-tier content to i
 
 ### Mandatory login
 On the GitHub Pages site the first thing shown is a sign-in / sign-up window that cannot be closed until signed in. Create users via Supabase → Authentication → Users → Add user (Auto Confirm) or sign up in the app.
+
+### Google Calendar import (optional, read-only)
+Hidden until `GCAL_CONFIG.clientId` is set in `index.html`. Setup (Google Cloud Console, free):
+1. Create a project → **APIs & Services → Library → Google Calendar API → Enable**.
+2. **OAuth consent screen**: External, app name, support e-mail; add scope `.../auth/calendar.events.readonly`; while in *Testing* add each user as a **Test user** (max 100; going public needs Google verification for this sensitive scope).
+3. **Credentials → Create credentials → OAuth client ID → Web application**; **Authorized JavaScript origins**: `https://ilan1997.github.io` (no path). Copy the Client ID into `GCAL_CONFIG.clientId`.
+The user sees a consent window first (risk + responsibility; "busy times only" is pre-checked). Events become blocked time (`gcal_…` ids), no write-back. Disconnect deletes the imported events.
+
+### Microphone
+🎙 in Maya's input uses the browser's speech recognition (`he-IL`, Chrome/Edge; Chrome sends audio to Google). One-time consent; the text lands in the box and is **not** sent automatically.

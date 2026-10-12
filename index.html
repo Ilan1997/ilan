@@ -3,7 +3,7 @@
 <html dir="rtl" lang="he">
 <head>
 <meta charset="utf-8"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://*.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://*.supabase.co https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'none'; form-action 'none'; object-src 'none'"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>מאיה, המזכירה האישית</title>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
@@ -297,6 +297,9 @@ body.work-mode .cap-over-tag{background:var(--purple);}
 .ai-inputrow button:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
 .ai-inputrow button{background:var(--blue);color:#fff;border:none;border-radius:10px;width:38px;height:38px;flex-shrink:0;font-size:1em;cursor:pointer;transition:background .15s;}
 .ai-inputrow button:hover{background:#1d4ed8;}
+.ai-inputrow #aiMicBtn:hover{background:var(--bg2);}
+.ai-inputrow #aiMicBtn.rec{background:#dc2626!important;color:#fff!important;border-color:#dc2626!important;animation:micPulse 1.1s infinite;}
+@keyframes micPulse{50%{box-shadow:0 0 0 6px rgba(220,38,38,.25)}}
 .ai-inputrow button:disabled{opacity:.5;cursor:default;}
 .ai-hint{font-size:.68em;color:var(--muted2);text-align:center;margin-top:6px;}
 /* TOAST notification */
@@ -874,6 +877,7 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
     </div>
     <div class="ai-inputrow">
       <textarea id="aiChatInput" placeholder="כתוב כאן איך אתה רוצה שהשבוע ייראה…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+      <button id="aiMicBtn" onclick="micToggle()" title="דבר אל מאיה" aria-label="הקלט הודעה למאיה" aria-pressed="false" style="background:var(--card);color:var(--text);border:1px solid var(--border2);">🎙</button>
       <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">➤</button>
     </div>
     <div class="ai-hint" id="aiHint">Enter לשליחה · Shift+Enter לשורה חדשה · <a href="#" onclick="event.preventDefault();if(confirm('לאפס את כל מה שמאיה למדה עליך (פרופיל והעדפות)?'))resetAILearned().then(()=>showToast('האיפוס בוצע'));" style="color:inherit;text-decoration:underline;">אפס מה שנלמד</a></div>
@@ -1208,6 +1212,10 @@ body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.
 const CLOUD_SESSION_KEY='maya_cloud_session';
 const CLOUD_CONFIG={google:false,aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
 let CLOUD_SESSION=null;
+// Google Calendar import (read-only). clientId = an OAuth *Web* client created by the site owner in Google Cloud; empty → the feature stays hidden.
+const GCAL_CONFIG={clientId:'',scope:'https://www.googleapis.com/auth/calendar.events.readonly',days:60};
+let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken='';
+const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent';
 let _accForced=false;
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
 let _reloadApp=()=>{try{location.reload();}catch(_e){}};
@@ -2968,6 +2976,13 @@ function _applyEventInner(state,calendarId,event){
     if(!valid.length)return state;
     const gc={...state.constraintsGlobal,events:[...(state.constraintsGlobal.events||[]),...valid]};
     return{...state,constraintsGlobal:gc};
+  }
+
+  // REPLACE_GCAL_EVENTS: swap ALL Google-Calendar-imported blocks (id prefix 'gcal_') for a fresh set — one state update.
+  if(event.type==='REPLACE_GCAL_EVENTS'){
+    const valid=(event.events||[]).filter(ev=>ev&&typeof ev.id==='string'&&ev.id.startsWith('gcal_')&&ev.title&&ev.date&&ev.startH!=null&&ev.endH!=null&&ev.endH>ev.startH);
+    const keep=((state.constraintsGlobal||{}).events||[]).filter(e=>!String(e.id).startsWith('gcal_'));
+    return{...state,constraintsGlobal:{...state.constraintsGlobal,events:[...keep,...valid]}};
   }
 
   if(event.type==='REMOVE_GLOBAL_EVENT'){
@@ -6761,6 +6776,7 @@ async function cloudSignOut(){
 async function _cloudWipeLocal(alsoKeys){
   try{localStorage.removeItem(LS_KEY);}catch(_e){}
   try{localStorage.removeItem(CLOUD_SESSION_KEY);}catch(_e){}
+  try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
   CLOUD_SESSION=null;
   for(const k of (alsoKeys?AI_DATA_KEYS.concat(AI_KEY_KEYS):AI_DATA_KEYS)){ try{ await window.storage.delete(k); }catch(_e){} }
   AI_PREFS='';AI_RULES=[];AI_PROFILE=emptyAIProfile();AI_ADDED_TASK_IDS=[];AI_CHAT_HISTORY=[];AI_SIGNALS=[];
@@ -6889,7 +6905,8 @@ function renderAccountModal(){
   const ai='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">🤖 חיבור AI</div><div id="accAiRoute" style="font-size:.8em;color:var(--text2);margin-bottom:8px;"></div><div style="display:flex;gap:8px;"><button id="accAiTest" onclick="_accTestAI()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בדוק את ה-AI</button></div></div>';
   _renderAccChip();
   const setBtn=_accForced?'':'<div style="margin-top:14px;"><button id="accSettings" onclick="closeAccount();openSettings()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">⚙ הגדרות</button></div>';
-  body.innerHTML=h+setBtn+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  const gc=(_accForced||!cloudSignedIn())?'':_gcalBlockHTML(btn);
+  body.innerHTML=h+gc+setBtn+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
   _accRouteLabel();
 }
 async function _accRouteLabel(){
@@ -7020,6 +7037,153 @@ function saveDayEditor(){
   dispatch({type:'SET_WEEK_WORK_WINDOWS',weekId:r.weekId,windows:r.windows});
   closeDayEditor();
   showToast(mode==='off'?'סימנתי יום חופש והמערכת חושבה מחדש ✓':mode==='short'?'עדכנתי את שעות היום והמערכת חושבה מחדש ✓':'היום חזר לרגיל ✓');
+}
+
+/* ═══════════════════════════════════════════════════════
+   GOOGLE CALENDAR (read-only import) + MICROPHONE
+   Calendar: user consent first; times-only mode by default; events become blocked time (constraintsGlobal.events, ids 'gcal_…').
+   ═══════════════════════════════════════════════════════ */
+function gcalAvailable(){return !!GCAL_CONFIG.clientId;}
+function _gcalPrefs(){try{return JSON.parse(localStorage.getItem(GCAL_PREF_KEY)||'null')||{};}catch(_e){return{};}}
+function _gcalSavePrefs(o){try{localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o));}catch(_e){}}
+// PURE: Google event items → engine blocks. Skips all-day, cancelled, "free" (transparent) and declined events; splits multi-day events.
+function gcalItemsToBlocks(items,hideTitles){
+  const out=[];const pad=n=>String(n).padStart(2,'0');
+  const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  (items||[]).forEach(it=>{
+    if(!it||!it.id||it.status==='cancelled'||it.transparency==='transparent')return;
+    if(!(it.start&&it.start.dateTime&&it.end&&it.end.dateTime))return; // all-day events are not imported
+    if((it.attendees||[]).some(a=>a&&a.self&&a.responseStatus==='declined'))return;
+    const st=new Date(it.start.dateTime),en=new Date(it.end.dateTime);
+    if(isNaN(st)||isNaN(en)||en<=st)return;
+    const title=hideTitles?'תפוס (יומן גוגל)':String(it.summary||'אירוע ביומן').slice(0,80);
+    let day=new Date(st.getFullYear(),st.getMonth(),st.getDate());const lastDay=new Date(en.getFullYear(),en.getMonth(),en.getDate());
+    for(let guard=0;day<=lastDay&&guard<40;guard++,day=new Date(day.getFullYear(),day.getMonth(),day.getDate()+1)){
+      const first=iso(day)===iso(st),last=iso(day)===iso(en);
+      const startH=first?Math.min(23,Math.floor(st.getHours()+st.getMinutes()/60)):0;
+      const endH=last?Math.min(24,Math.ceil(en.getHours()+en.getMinutes()/60)):24;
+      if(endH<=startH)continue;
+      out.push({id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal'});
+    }
+  });
+  return out;
+}
+function _gcalLoadGis(){
+  return new Promise((res,rej)=>{
+    try{if(window.google&&window.google.accounts&&window.google.accounts.oauth2)return res(window.google.accounts.oauth2);}catch(_e){}
+    const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client';sc.async=true;
+    sc.onload=()=>{try{res(window.google.accounts.oauth2);}catch(e){rej(e);}};sc.onerror=()=>rej(new Error('gis-load'));
+    document.head.appendChild(sc);
+  });
+}
+function _gcalRequestToken(){
+  return _gcalLoadGis().then(o2=>new Promise((res,rej)=>{
+    const tc=o2.initTokenClient({client_id:GCAL_CONFIG.clientId,scope:GCAL_CONFIG.scope,callback:r=>{r&&r.access_token?res(r.access_token):rej(new Error((r&&r.error)||'denied'));},error_callback:e=>rej(new Error((e&&e.type)||'popup'))});
+    _gcalTokenClient=tc;
+    tc.requestAccessToken({prompt:_gcalPrefs().on?'':'consent'});
+  }));
+}
+async function _gcalFetchItems(token){
+  const from=new Date();from.setHours(0,0,0,0);const to=new Date(+from+GCAL_CONFIG.days*86400000);
+  let items=[],pageToken='';
+  for(let page=0;page<6;page++){
+    const q='singleEvents=true&orderBy=startTime&maxResults=250&timeMin='+encodeURIComponent(from.toISOString())+'&timeMax='+encodeURIComponent(to.toISOString())+(pageToken?'&pageToken='+encodeURIComponent(pageToken):'');
+    const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?'+q,{headers:{Authorization:'Bearer '+token}});
+    if(r.status===401||r.status===403){const e=new Error('auth');e.status=r.status;throw e;}
+    if(!r.ok)throw new Error('http-'+r.status);
+    const d=await r.json();items=items.concat(d.items||[]);pageToken=d.nextPageToken||'';if(!pageToken)break;
+  }
+  return items;
+}
+// Real consent window. Resolves {ok,hideTitles}. Replaceable for tests via _gcalAskConsent.
+function _gcalConsentDialog(){
+  if(typeof _gcalAskConsent==='function')return Promise.resolve(_gcalAskConsent());
+  return new Promise(res=>{
+    const ov=document.createElement('div');ov.id='gcalConsent';ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;';
+    const box=document.createElement('div');box.style.cssText='background:#fff;color:#111;border-radius:14px;max-width:420px;width:100%;padding:18px;direction:rtl;max-height:90vh;overflow:auto;font-family:inherit;';
+    box.innerHTML='<div style="font-weight:800;font-size:1.05em;margin-bottom:8px;">📅 חיבור יומן גוגל — לפני שממשיכים</div>'
+      +'<div style="font-size:.88em;line-height:1.7;">'
+      +'• האפליקציה תקרא (בלבד, בלי לשנות) את האירועים שביומן שלך ל-60 הימים הקרובים, ותסמן אותם כזמן תפוס כדי שמאיה לא תשבץ עליהם.<br>'
+      +'• האירועים נשמרים בחשבון שלך באפליקציה (בענן) ועלולים להישלח ל-AI של גוגל (Gemini) כחלק מהתכנון.<br>'
+      +'• <b>אל תחבר יומן שיש בו מידע אישי או רגיש שאינך רוצה לשתף.</b> מומלץ להשאיר את האפשרות "רק זמנים תפוסים" מסומנת — אז שמות האירועים, המשתתפים והמיקומים לא נכנסים בכלל.<br>'
+      +'• האחריות על המידע שביומן ועל ההחלטה לחבר אותו היא שלך בלבד. אפשר לנתק בכל רגע, וזה ימחק את האירועים שיובאו.'
+      +'</div>'
+      +'<label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 6px;font-size:.88em;"><input type="checkbox" id="gcalHide" checked style="margin-top:3px;"/><span>ייבא רק זמנים תפוסים, בלי שמות אירועים (מומלץ)</span></label>'
+      +'<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px;font-size:.88em;"><input type="checkbox" id="gcalOk" style="margin-top:3px;"/><span>קראתי והבנתי את הסיכון, אין ביומן מידע שאני לא מוכן לחשוף, והכול באחריותי.</span></label>'
+      +'<div style="display:flex;gap:8px;"><button id="gcalGo" disabled style="flex:1;padding:10px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;opacity:.5;cursor:pointer;font-family:inherit;">אישור והמשך לגוגל</button><button id="gcalNo" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;">ביטול</button></div>';
+    ov.appendChild(box);document.body.appendChild(ov);
+    const ok=box.querySelector('#gcalOk'),go=box.querySelector('#gcalGo');
+    ok.onchange=()=>{go.disabled=!ok.checked;go.style.opacity=ok.checked?'1':'.5';};
+    const done=v=>{ov.remove();res(v);};
+    go.onclick=()=>done({ok:true,hideTitles:box.querySelector('#gcalHide').checked});
+    box.querySelector('#gcalNo').onclick=()=>done({ok:false});
+  });
+}
+async function gcalConnect(){
+  if(!gcalAvailable()||_gcalBusy)return{ok:false,error:'חיבור יומן גוגל עוד לא הופעל באתר הזה'};
+  const pr=_gcalPrefs();
+  if(!pr.consent){
+    const c=await _gcalConsentDialog();
+    if(!c||!c.ok)return{ok:false,cancelled:true};
+    _gcalSavePrefs({...pr,consent:new Date().toISOString(),hideTitles:c.hideTitles!==false});
+  }
+  return gcalSync();
+}
+async function gcalSync(){
+  if(!gcalAvailable()||_gcalBusy)return{ok:false,error:'חיבור יומן גוגל עוד לא הופעל באתר הזה'};
+  const pr=_gcalPrefs();if(!pr.consent)return{ok:false,error:'צריך קודם לאשר את חיבור היומן'};
+  _gcalBusy=true;
+  try{
+    const token=await _gcalRequestToken();_gcalLastToken=token;
+    const items=await _gcalFetchItems(token);
+    const blocks=gcalItemsToBlocks(items,pr.hideTitles!==false);
+    dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:blocks});
+    _gcalSavePrefs({..._gcalPrefs(),on:true,last:new Date().toISOString(),count:blocks.length});
+    return{ok:true,count:blocks.length};
+  }catch(e){
+    const m=String(e&&e.message||e);
+    return{ok:false,error:(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')?'לא אושרה גישה ליומן בגוגל':(e&&e.status?'ההרשאה ליומן פגה או נדחתה — נסה לחבר שוב':(m==='gis-load'?'לא הצלחתי לטעון את גוגל — בדוק אינטרנט':'סנכרון היומן נכשל — נסה שוב'))};
+  }finally{_gcalBusy=false;}
+}
+function gcalDisconnect(){
+  try{dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:[]});}catch(_e){}
+  try{const o2=window.google&&window.google.accounts&&window.google.accounts.oauth2;if(o2&&o2.revoke&&_gcalLastToken)o2.revoke(_gcalLastToken,()=>{});}catch(_e){}
+  try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
+}
+function _gcalBlockHTML(btn){
+  if(!gcalAvailable())return'';
+  const pr=_gcalPrefs();
+  if(!pr.on)return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">📅 יומן גוגל</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">ייבוא אירועים כזמן תפוס, כדי שמאיה לא תשבץ עליהם. קריאה בלבד.</div><button id="accGcal" onclick="_accGcalConnect()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">חבר יומן גוגל</button></div>';
+  const t=pr.last?new Date(pr.last).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:4px;">📅 יומן גוגל — מחובר</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">'+(pr.hideTitles!==false?'רק זמנים תפוסים · ':'')+(pr.count||0)+' אירועים'+(t?' · סונכרן '+escapeHTML(t):'')+'</div><div style="display:flex;gap:8px;"><button id="accGcalSync" onclick="_accGcalSync()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accGcalOff" onclick="_accGcalOff()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">נתק ומחק</button></div></div>';
+}
+async function _accGcalConnect(){_cloudMsg('מחבר…');const r=await gcalConnect();renderAccountModal();if(r.cancelled){_cloudMsg('');return;}_cloudMsg(r.ok?'היומן סונכרן ✓ ('+r.count+' אירועים)':r.error,!r.ok);}
+async function _accGcalSync(){_cloudMsg('מסנכרן יומן…');const r=await gcalSync();renderAccountModal();_cloudMsg(r.ok?'היומן סונכרן ✓ ('+r.count+' אירועים)':r.error,!r.ok);}
+function _accGcalOff(){gcalDisconnect();renderAccountModal();_cloudMsg('היומן נותק והאירועים שיובאו נמחקו');}
+
+// ── Microphone → text (browser speech recognition, Hebrew). The text lands in the input box for the user to review and send. ──
+let _micRec=null,_micOn=false;
+let _micAskConsent=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
+function micSupported(){return !!(window.SpeechRecognition||window.webkitSpeechRecognition);}
+function _micUI(on,msg){
+  const b=document.getElementById('aiMicBtn');if(b){b.classList.toggle('rec',!!on);b.title=on?'עצור הקלטה':'דבר אל מאיה';b.setAttribute('aria-pressed',on?'true':'false');}
+  const h=document.getElementById('aiHint');if(h&&msg!==undefined){h.dataset.orig=h.dataset.orig||h.innerHTML;if(msg)h.textContent=msg;else if(h.dataset.orig)h.innerHTML=h.dataset.orig;}
+}
+function micToggle(){
+  if(_micOn&&_micRec){try{_micRec.stop();}catch(_e){}return;}
+  if(!micSupported()){_micUI(false,'הדפדפן הזה לא תומך בהקלטה לטקסט. נסה Chrome או Edge.');return;}
+  let ok=false;try{ok=localStorage.getItem(MIC_CONSENT_KEY)==='1';}catch(_e){}
+  if(!ok){
+    if(!_micAskConsent('להפעיל את המיקרופון? מה שתגיד יומר לטקסט. ברוב הדפדפנים (כמו Chrome) ההמרה נעשית בשרתי גוגל, ולכן אל תגיד פרטים רגישים שאינך רוצה לשתף. הטקסט יופיע בתיבה ותוכל לערוך לפני שליחה. הכול באחריותך. להמשיך?'))return;
+    try{localStorage.setItem(MIC_CONSENT_KEY,'1');}catch(_e){}
+  }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const rec=new SR();rec.lang='he-IL';rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=1;
+  const input=document.getElementById('aiChatInput');const base=input?input.value:'';
+  rec.onresult=ev=>{let t='';for(let i=0;i<ev.results.length;i++)t+=ev.results[i][0].transcript;if(input){input.value=(base?base+' ':'')+t.trim();input.focus();}};
+  rec.onerror=ev=>{const e=ev&&ev.error;_micUI(false,e==='not-allowed'||e==='service-not-allowed'?'אין הרשאה למיקרופון — אפשר אותה בהגדרות הדפדפן.':(e==='no-speech'?'לא שמעתי כלום — נסה שוב.':(e==='audio-capture'?'לא נמצא מיקרופון.':'ההקלטה נכשלה — נסה שוב.')));};
+  rec.onend=()=>{_micOn=false;_micRec=null;_micUI(false);};
+  try{rec.start();_micRec=rec;_micOn=true;_micUI(true,'מקשיבה… דבר עכשיו');}catch(_e){_micOn=false;_micUI(false,'לא הצלחתי להפעיל את המיקרופון.');}
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -10201,7 +10365,7 @@ async function runAccountTests(){
       const c=m.getAttribute('content');const cs=(c.match(/connect-src ([^;]+)/)||[])[1]||'';
       if(!cs||/(^|\s)\*(\s|$)|https:\s*(;|$)/.test(cs)||!/object-src 'none'/.test(c)||!/base-uri 'none'/.test(c))return false;
       const src=document.documentElement.innerHTML;const hosts=[...src.matchAll(/fetch\('https:\/\/([a-z0-9.-]+)/g)].map(x=>x[1]);
-      return hosts.every(h=>cs.includes(h))&&!cs.includes('googleapis')&&!cs.includes('anthropic')&&cs.includes('supabase.co');})());
+      return hosts.every(h=>cs.includes(h))&&!cs.includes('generativelanguage')&&!cs.includes('anthropic')&&cs.includes('supabase.co')&&/script-src[^;]*https:\/\/accounts\.google\.com\/gsi\/client/.test(c)&&!/script-src[^;]*\*/.test(c);})());
     // 38-41. Google sign-in
     reset();CLOUD_CONFIG.google=true;renderAccountModal();
     let navUrl=null;const _nav=_navigate;_navigate=(u)=>{navUrl=u;};
@@ -10344,6 +10508,71 @@ async function runAccountTests(){
       STATE_ACTIVE=_sa;renderMayaScreen();
       ok('S6. מצב ריק: אין כרטיס סקירה',noCard);
       ok('S7. בחלון החשבון יש כפתור הגדרות (כשלא כפוי), ובמשימות יש כפתור "משימה חדשה"',(()=>{_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3000,user:{id:'u-1',email:'x@y.co',name:'ד'}});_accForced=false;renderAccountModal();const r=!!document.getElementById('accSettings');_cloudStoreSession(null);return r&&!!document.getElementById('boardAddBtn');})());
+    }
+    // G. Google Calendar import + microphone
+    {
+      const dt=(d,h,m=0)=>{const x=new Date(2026,9,d,h,m,0);return x.toISOString();};
+      const items=[
+        {id:'a1',summary:'פגישה עם רופא',start:{dateTime:dt(14,9,30)},end:{dateTime:dt(14,10,15)}},
+        {id:'a2',summary:'יום הולדת',start:{date:'2026-10-14'},end:{date:'2026-10-15'}},
+        {id:'a3',summary:'בוטל',status:'cancelled',start:{dateTime:dt(14,12)},end:{dateTime:dt(14,13)}},
+        {id:'a4',summary:'פנוי',transparency:'transparent',start:{dateTime:dt(14,14)},end:{dateTime:dt(14,15)}},
+        {id:'a5',summary:'סירבתי',attendees:[{self:true,responseStatus:'declined'}],start:{dateTime:dt(14,16)},end:{dateTime:dt(14,17)}},
+        {id:'a6',summary:'לילה',start:{dateTime:dt(14,22)},end:{dateTime:dt(15,1,30)}}
+      ];
+      const hid=gcalItemsToBlocks(items,true),vis=gcalItemsToBlocks(items,false);
+      ok('GC1. המרה: אירוע רגיל מעוגל החוצה (9:30–10:15 → 9–11); יום-שלם, מבוטל, "פנוי" ודחוי לא מיובאים',hid.some(b=>b.id==='gcal_a1_2026-10-14'&&b.startH===9&&b.endH===11)&&!hid.some(b=>/a2|a3|a4|a5/.test(b.id)),JSON.stringify(hid));
+      ok('GC2. אירוע שחוצה חצות מפוצל לשני ימים (22–24 ואז 0–2)',hid.some(b=>b.id==='gcal_a6_2026-10-14'&&b.startH===22&&b.endH===24)&&hid.some(b=>b.id==='gcal_a6_2026-10-15'&&b.startH===0&&b.endH===2));
+      ok('GC3. מצב "רק זמנים תפוסים": שם האירוע לא נשמר; במצב מלא כן',hid.every(b=>b.title==='תפוס (יומן גוגל)')&&!JSON.stringify(hid).includes('רופא')&&vis.some(b=>b.title==='פגישה עם רופא'));
+      // flow with mocks
+      const prevCfg=GCAL_CONFIG.clientId,prevAsk=_gcalAskConsent,prevFetch=window.fetch,prevG=window.google;
+      try{
+        reset();_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3000,user:{id:'u-1',email:'x@y.co',name:'ד'}});
+        try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
+        GCAL_CONFIG.clientId='';renderAccountModal();
+        ok('GC4. בלי Client ID — בלוק יומן גוגל מוסתר',!document.getElementById('accGcal'));
+        GCAL_CONFIG.clientId='cid.apps.googleusercontent.com';renderAccountModal();
+        ok('GC5. עם Client ID — מוצג כפתור "חבר יומן גוגל"',!!document.getElementById('accGcal'));
+        let tokenReqs=0,gCalls=[];
+        window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>{tokenReqs++;c.callback({access_token:'g-tok'});}}),revoke:()=>{}}}};
+        window.fetch=async(u,o)=>{gCalls.push({u:String(u),h:o&&o.headers});return{ok:true,status:200,json:async()=>({items})};};
+        STATE_ACTIVE=baseState([]);
+        _gcalAskConsent=()=>({ok:false});
+        const rc=await gcalConnect();
+        ok('GC6. ביטול בחלון האישור: לא נפתח חלון גוגל, לא נקראת הרשת, לא נשמר אישור',rc.cancelled===true&&tokenReqs===0&&gCalls.length===0&&!_gcalPrefs().consent);
+        _gcalAskConsent=()=>({ok:true,hideTitles:true});
+        const rs=await gcalConnect();
+        const evs=(STATE_ACTIVE.constraintsGlobal.events||[]).filter(e=>e.id.startsWith('gcal_'));
+        ok('GC7. אחרי אישור: נקרא רק googleapis calendar עם הטוקן, האירועים נכנסו כזמן תפוס, האישור והמצב נשמרו',rs.ok&&tokenReqs===1&&gCalls.length===1&&gCalls[0].u.startsWith('https://www.googleapis.com/calendar/v3/calendars/primary/events')&&gCalls[0].h.Authorization==='Bearer g-tok'&&evs.length===hid.length&&_gcalPrefs().consent&&_gcalPrefs().on===true,JSON.stringify(rs));
+        STATE_ACTIVE=commitState({...STATE_ACTIVE,constraintsGlobal:{...STATE_ACTIVE.constraintsGlobal,events:[...STATE_ACTIVE.constraintsGlobal.events,{id:'mine1',title:'שלי',date:'2026-10-20',startH:10,endH:11}]}},'test-own-event',{save:false,render:false});
+        window.fetch=async()=>({ok:true,status:200,json:async()=>({items:[items[0]]})});
+        await gcalSync();
+        const after=STATE_ACTIVE.constraintsGlobal.events;
+        ok('GC8. סנכרון חוזר מחליף רק אירועי gcal_; אירוע ידני של המשתמש נשאר',after.filter(e=>e.id.startsWith('gcal_')).length===1&&after.some(e=>e.id==='mine1'));
+        window.fetch=async()=>({ok:false,status:401,json:async()=>({})});
+        const re=await gcalSync();
+        ok('GC9. הרשאה פגה (401) → הודעה בעברית ואירועים קיימים לא נמחקים',!re.ok&&re.error.includes('ההרשאה')&&STATE_ACTIVE.constraintsGlobal.events.some(e=>e.id.startsWith('gcal_')));
+        gcalDisconnect();
+        ok('GC10. ניתוק: כל אירועי gcal_ נמחקים, האישור נמחק, אירוע ידני נשאר',!STATE_ACTIVE.constraintsGlobal.events.some(e=>e.id.startsWith('gcal_'))&&STATE_ACTIVE.constraintsGlobal.events.some(e=>e.id==='mine1')&&!_gcalPrefs().consent);
+        ok('GC11. התנתקות מהחשבון מוחקת גם את מצב היומן המקומי',(()=>{_gcalSavePrefs({consent:'x',on:true});return true;})()&&(await (async()=>{await _cloudWipeLocal(false);return Object.keys(_gcalPrefs()).length===0;})()));
+      }finally{GCAL_CONFIG.clientId=prevCfg;_gcalAskConsent=prevAsk;window.fetch=prevFetch;if(prevG)window.google=prevG;else delete window.google;_cloudStoreSession(null);}
+      // microphone
+      const inp=document.getElementById('aiChatInput');const _iv=inp.value;inp.value='';
+      const prevSR=window.SpeechRecognition,prevAsk2=_micAskConsent;let recs=[];
+      try{localStorage.removeItem(MIC_CONSENT_KEY);}catch(_e){}
+      delete window.SpeechRecognition;delete window.webkitSpeechRecognition;
+      micToggle();const unsup=document.getElementById('aiHint').textContent.includes('לא תומך');
+      window.SpeechRecognition=function(){recs.push(this);this.start=()=>{this.started=true;};this.stop=()=>{this.onend&&this.onend();};};
+      let asked=0;_micAskConsent=()=>{asked++;return false;};
+      micToggle();const declined=asked===1&&recs.length===0;
+      _micAskConsent=()=>{asked++;return true;};
+      micToggle();const r0=recs[0];
+      r0.onresult({results:[[{transcript:'יש לי מבחן '}],[{transcript:'ביום חמישי'}]]});
+      ok('MIC1. בלי תמיכה — הודעה; בלי אישור — לא מקליטים; באישור ההקלטה מתחילה בעברית ומסומנת',unsup&&declined&&!!r0&&r0.started===true&&r0.lang==='he-IL'&&document.getElementById('aiMicBtn').classList.contains('rec'));
+      ok('MIC2. הדיבור הופך לטקסט בתיבה (לא נשלח אוטומטית — המשתמש מאשר)',inp.value==='יש לי מבחן ביום חמישי'&&AI_CHAT_HISTORY.every(m=>m.content!=='יש לי מבחן ביום חמישי'));
+      micToggle();
+      ok('MIC3. לחיצה נוספת עוצרת; האישור נשמר ולא נשאלים שוב',!document.getElementById('aiMicBtn').classList.contains('rec')&&localStorage.getItem(MIC_CONSENT_KEY)==='1'&&(()=>{asked=0;micToggle();const again=asked===0&&recs.length===2;recs[1].stop();return again;})());
+      inp.value=_iv;_micAskConsent=prevAsk2;if(prevSR)window.SpeechRecognition=prevSR;else delete window.SpeechRecognition;try{localStorage.removeItem(MIC_CONSENT_KEY);}catch(_e){}
     }
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
