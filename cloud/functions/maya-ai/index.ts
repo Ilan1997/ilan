@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     if (r.ok && !data?.error) break;
     lastDetail = `${model}: ${r.status} ${String(data?.error?.message ?? "").slice(0, 200)}`;
     console.error("gemini error", lastDetail); // visible in Supabase → Edge Functions → Logs
-    if (r.status === 429 || r.status === 401 || r.status === 403) break; // quota/key problems: other models won't help
+    if (r.status === 401 || r.status === 403) break; // bad key/permission: other models won't help. 429 is per-model quota, so the next model may still work
   }
   if (!r || !r.ok || data?.error) {
     const busy = r?.status === 429;
