@@ -618,6 +618,107 @@ button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{
 @media (prefers-reduced-motion:reduce){#aiGreeting::before,#aiMicBtn.rec{animation:none!important;}}
 @media (max-width:640px){.hn{margin:6px 6px 0;border-radius:22px;}.ai-wrap{padding:12px 12px 10px;}}
 </style>
+<style id="themeV2">
+/* V2: Google-Calendar clarity (white grid, hairlines, today pill, red now-line) + Canva-like motion (springy sheets, lift on hover, confetti). CSS only. */
+:root{--ink:#1f2340;--hair:#e6e8f1;--hair2:#eef0f7;--gblue:#1a73e8;--spring:cubic-bezier(.34,1.56,.64,1);--ease:cubic-bezier(.2,.8,.2,1);}
+.tab-pane.active{animation:paneIn .3s var(--ease);}
+@keyframes paneIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ── calendar grid ── */
+.tbl-wrap{background:#fff;border:1px solid var(--hair);border-radius:18px;box-shadow:0 1px 2px rgba(31,35,64,.05),0 12px 32px -18px rgba(31,35,64,.25);}
+table{font-size:.8em;}
+thead th{background:#fff;color:#5f6684;font-weight:500;font-size:.8em;padding:10px 4px 8px;border-bottom:1px solid var(--hair);border-right:1px solid var(--hair2);}
+thead th .dh,thead th span{font-variant-numeric:tabular-nums;}
+thead th span{display:inline-block;margin-top:3px;padding:3px 9px;border-radius:999px;font-size:1.25em;font-weight:500;color:var(--ink)!important;transition:background .2s,transform .2s var(--spring);}
+thead th:hover span{background:#f0f2f9;transform:scale(1.06);}
+thead th.today-col{background:#fff;color:var(--gblue);border-bottom:1px solid var(--hair);}
+thead th.today-col span{background:var(--gblue);color:#fff!important;}
+thead th.exam-day-col span{color:#fff!important;}
+tbody td{border-right:1px solid var(--hair2);border-bottom:1px solid var(--hair2);height:58px;}
+tbody td.td-hour-label{background:#fff;color:#8a90aa;font-weight:400;font-size:.72em;text-align:center;vertical-align:top;padding-top:4px;border-bottom-color:transparent;}
+.td-today{background:#f6f9ff!important;}
+tr.tr-now td{background:inherit!important;}
+tr.tr-now td.td-today{box-shadow:inset 0 2px 0 #d93025;}
+tr.tr-now td.td-hour-label{background:#fff!important;color:#d93025;font-weight:700;}
+.now-indicator{display:inline-block;width:8px;height:8px;padding:0;border-radius:50%;background:#d93025;font-size:0;vertical-align:middle;margin-inline-end:4px;}
+.blk{border-radius:10px;border-right-width:4px;box-shadow:0 1px 2px rgba(31,35,64,.1);transition:transform .18s var(--spring),box-shadow .18s var(--ease),filter .12s;}
+.blk:hover{filter:brightness(1.03);box-shadow:0 8px 20px -8px rgba(31,35,64,.35);z-index:3;}
+.blk-name{font-weight:600;}
+tbody td:has(>:empty):hover,tbody td[onclick]:hover{background:#eef3ff!important;}
+.blk-event{border-radius:10px;}
+.blk-event-min:hover{transform:translateY(-1px);box-shadow:0 8px 18px -8px rgba(60,40,140,.45);}
+.blk-event-g:hover{box-shadow:0 8px 18px -8px rgba(26,115,232,.5);}
+/* ── buttons: tactile ── */
+.hn-btn,.hn-wbtn,.hn-date,.qa-c,.tk-chip,.btn{transition:transform .15s var(--spring),background .15s,border-color .15s,box-shadow .15s;}
+.hn-btn:active,.hn-wbtn:active,.qa-c:active,.tk-chip:active,.btn:active{transform:scale(.94);}
+#quickAddFab{border-radius:50%;box-shadow:0 10px 24px -8px rgba(91,75,219,.65);transition:transform .2s var(--spring);}
+#quickAddFab:hover{transform:scale(1.1) rotate(90deg);}
+/* ── Maya orb (shared) ── */
+.maya-orb{flex:none;width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff 0 12%,#b9a6ff 30%,#6a52ee 62%,#33c9b8 100%);box-shadow:0 0 18px #7a4df066;animation:orbBreath 4.5s ease-in-out infinite;}
+/* ── add-task sheet: a conversation with Maya ── */
+#qaModal{background:rgba(24,20,60,.42);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);align-items:center;padding:16px;}
+#qaModal.open .qa-sheet{animation:sheetPop .42s var(--spring);}
+@keyframes sheetPop{from{transform:translateY(40px) scale(.94);opacity:0}to{transform:none;opacity:1}}
+.qa-sheet{border-radius:26px;padding:20px 20px 22px;max-width:480px;max-height:calc(100vh - 32px);overflow:auto;background:linear-gradient(180deg,#fff 0,#faf9ff 100%);box-shadow:0 30px 70px -20px rgba(40,30,120,.5);}
+.qa-notch{display:none;}
+.qa-maya{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.qa-bubble{background:#fff;border:1px solid var(--hair);border-radius:18px 18px 18px 6px;padding:9px 14px;font-size:.92em;font-weight:600;color:var(--ink);box-shadow:0 4px 14px -8px rgba(40,30,120,.3);animation:bubbleIn .35s var(--spring);}
+.qa-q{display:inline-block;margin:14px 0 8px;}
+@keyframes bubbleIn{from{transform:scale(.85) translateY(6px);opacity:0}to{transform:none;opacity:1}}
+.qa-f{border-radius:14px;border:1.5px solid var(--hair);background:#fff;font-size:1em;padding:12px 14px;}
+.qa-f:focus{border-color:#7a4df0;box-shadow:0 0 0 4px #7a4df022;}
+.qa-sm{font-size:.86em;padding:9px 12px;margin-top:8px;}
+.qa-catchip{display:inline-flex;margin-top:8px;border:0;border-radius:999px;padding:5px 12px;font-family:inherit;font-size:.78em;font-weight:600;cursor:pointer;background:#efeaff;color:#5b3fd0;animation:bubbleIn .3s var(--spring);}
+.qa-step{display:none;}
+.qa-sheet[data-step="2"] #qaStepDur,.qa-sheet[data-step="3"] #qaStepDur,.qa-sheet[data-step="3"] #qaStepDl{display:block;animation:bubbleIn .4s var(--spring);}
+.qa-chips{gap:7px;}
+.qa-c{border-radius:999px;padding:7px 14px;font-size:.82em;border:1.5px solid var(--hair);background:#fff;}
+.qa-c:hover{border-color:#b9a6ff;}
+.qa-c.on{background:linear-gradient(135deg,#7a4df0,#5b4bdb);border-color:transparent;box-shadow:0 6px 14px -6px rgba(91,75,219,.7);}
+.qa-est{border-style:dashed;color:#5b3fd0;background:#f6f2ff;}
+.qa-note{min-height:1.2em;margin-top:6px;font-size:.8em;color:#5f6684;}
+.qa-core-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.qa-go{border-radius:16px;padding:14px;margin-top:14px;background:linear-gradient(135deg,#7a4df0,#33c9b8 160%);box-shadow:0 12px 26px -12px rgba(91,75,219,.8);transition:transform .2s var(--spring),box-shadow .2s;}
+.qa-go:hover{transform:translateY(-2px) scale(1.01);}
+.qa-go:active{transform:scale(.97);}
+.qa-more-btn{color:#6a52ee;}
+/* ── tasks page ── */
+#paneBoard .board{max-width:760px;margin:0 auto;padding:6px 16px 90px;}
+.board-head{margin:10px 0 6px;}
+.board-controls .input{border-radius:999px;border:1.5px solid var(--hair);padding:10px 16px;background:#fff;width:100%;font-family:inherit;}
+.tk-chips{display:flex;gap:8px;overflow-x:auto;padding:6px 0 10px;scrollbar-width:none;}
+.tk-chips::-webkit-scrollbar{display:none;}
+.tk-chip{flex:none;border:1.5px solid var(--hair);background:#fff;border-radius:999px;padding:6px 14px;font-family:inherit;font-size:.82em;font-weight:600;color:var(--text2);cursor:pointer;}
+.tk-chip.on{background:var(--cat,#5b4bdb);border-color:var(--cat,#5b4bdb);color:#fff;box-shadow:0 6px 14px -8px var(--cat,#5b4bdb);}
+.tk-list{display:flex;flex-direction:column;gap:10px;}
+.tk-group{margin:14px 2px 2px;font-size:.8em;font-weight:700;color:#7b8199;letter-spacing:.01em;}
+.tk-group-urgent{color:#d93025;}
+.tk-card{position:relative;display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid var(--hair);border-radius:18px;padding:14px 14px 14px 12px;box-shadow:0 1px 2px rgba(31,35,64,.05);animation:cardIn .4s var(--spring) both;transition:transform .2s var(--spring),box-shadow .2s;}
+.tk-card:hover{transform:translateY(-2px);box-shadow:0 14px 28px -16px rgba(31,35,64,.35);}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+.tk-bar{flex:none;width:5px;align-self:stretch;border-radius:5px;background:var(--cat,#7b8199);}
+.tk-main{flex:1;min-width:0;}
+.tk-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.tk-title{font-size:1em;font-weight:600;color:var(--ink);margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tk-cat{flex:none;font-size:.72em;font-weight:600;padding:3px 10px;border-radius:999px;color:var(--cat);background:color-mix(in srgb,var(--cat) 12%,#fff);}
+.tk-meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:5px;font-size:.8em;color:#6b7190;}
+.tk-due-hot{color:#d93025;font-weight:600;}
+.tk-prog{height:6px;border-radius:6px;background:#eef0f7;margin-top:9px;overflow:hidden;}
+.tk-prog i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cat),color-mix(in srgb,var(--cat) 55%,#fff));transition:width .6s var(--ease);}
+.tk-status{margin-top:7px;font-size:.78em;font-weight:600;}
+.tk-st-critical{color:#d93025;}.tk-st-warning{color:#b26205;}
+.tk-done{opacity:.6;}.tk-done .tk-title{text-decoration:line-through;}
+.tk-x{flex:none;border:0;background:transparent;color:#9aa0b8;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.9em;opacity:0;transition:opacity .15s,background .15s,color .15s;}
+.tk-card:hover .tk-x,.tk-x:focus-visible{opacity:1;}
+.tk-x:hover{background:#fdecea;color:#d93025;}
+@media (hover:none){.tk-x{opacity:.7;}}
+.tk-empty{display:flex;align-items:center;gap:12px;justify-content:center;text-align:center;padding:26px 12px;color:#5f6684;font-size:.92em;line-height:1.7;}
+/* ── confetti ── */
+.confetti{position:fixed;left:50%;bottom:90px;z-index:10050;pointer-events:none;}
+.confetti i{position:absolute;width:8px;height:12px;border-radius:2px;opacity:0;animation:confetti .9s var(--ease) forwards;}
+@keyframes confetti{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--x),-220px) rotate(var(--r));opacity:0}}
+@media (prefers-reduced-motion:reduce){.tab-pane.active,.tk-card,.qa-bubble,.qa-catchip,#qaModal.open .qa-sheet,.maya-orb{animation:none!important;}.blk,.tk-card,.qa-go,#quickAddFab{transition:none!important;}}
+@media (max-width:640px){.qa-core-row{grid-template-columns:1fr;}.qa-sheet{border-radius:22px;}#qaModal{align-items:flex-end;padding:0;}.qa-sheet{border-radius:24px 24px 0 0;}}
+</style>
 
 </head>
 <body>
@@ -677,31 +778,42 @@ button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{
 
 <!-- ══ QUICK ADD ══════════════════════════════════════════ -->
 <div id="qaModal">
-  <div class="qa-sheet">
+  <div class="qa-sheet" data-step="1" role="dialog" aria-label="משימה חדשה">
     <div class="qa-notch"></div>
-    <div class="qa-title">⚡ משימה חדשה</div>
+    <div class="qa-maya"><span class="maya-orb" aria-hidden="true"></span><div class="qa-bubble" id="qaBubble">מה צריך לעשות?</div></div>
+    <input class="qa-f" id="qaName" placeholder="למשל: להתקשר לרואה החשבון" type="text" autocomplete="off"
+      oninput="qaNameInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();qaNext();}"/>
+    <button class="qa-catchip" id="qaCat" type="button" onclick="qaCycleCat()" style="display:none" title="לחץ כדי לשנות סוג"></button>
 
-    <!-- ── שלושת השדות הראשיים ── -->
-    <input class="qa-f" id="qaName" placeholder="מה צריך לעשות?" type="text"
-      onkeydown="if(event.key==='Enter')document.getElementById('qaDeadline').focus();"/>
+    <div class="qa-step" id="qaStepDur">
+      <div class="qa-bubble qa-q">כמה זמן זה ייקח לדעתך?</div>
+      <div class="qa-chips" id="qaDurC">
+        <button class="qa-c on" data-v="60"  onclick="qaDur(this)">שעה</button>
+        <button class="qa-c"    data-v="120" onclick="qaDur(this)">שעתיים</button>
+        <button class="qa-c"    data-v="180" onclick="qaDur(this)">3 שעות</button>
+        <button class="qa-c"    data-v="240" onclick="qaDur(this)">חצי יום</button>
+        <button class="qa-c"    data-v="360" onclick="qaDur(this)">יום שלם</button>
+        <button class="qa-c qa-est" type="button" onclick="qaEstimate()">✨ תעריכי בשבילי</button>
+      </div>
+      <input class="qa-f qa-sm" id="qaDurText" placeholder="או כתוב בחופשיות: שעתיים, חצי יום, 90 דקות…" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();qaDurFromText();}" onblur="qaDurFromText(true)"/>
+      <div class="qa-note" id="qaDurNote" aria-live="polite"></div>
+    </div>
 
-    <div class="qa-core-row">
-      <div class="qa-field">
-        <div class="qa-field-label">📅 דדליין</div>
-        <input class="qa-f" id="qaDeadline" type="date"
-          onkeydown="if(event.key==='Enter')qaGo();"/>
+    <div class="qa-step" id="qaStepDl">
+      <div class="qa-bubble qa-q">ועד מתי צריך להיות מוכן?</div>
+      <div class="qa-chips" id="qaDlC">
+        <button class="qa-c" data-w="היום" onclick="qaDl(this)">היום</button>
+        <button class="qa-c" data-w="מחר" onclick="qaDl(this)">מחר</button>
+        <button class="qa-c" data-w="סוף השבוע" onclick="qaDl(this)">סוף השבוע</button>
+        <button class="qa-c on" data-w="שבוע הבא" onclick="qaDl(this)">עוד שבוע</button>
       </div>
-      <div class="qa-field">
-        <div class="qa-field-label">⏱ כמה שעות?</div>
-        <div class="qa-chips" id="qaDurC" style="flex-wrap:wrap;gap:5px;margin-top:2px;">
-          <button class="qa-c on" data-v="60"  onclick="qaDur(this)">1</button>
-          <button class="qa-c"    data-v="120" onclick="qaDur(this)">2</button>
-          <button class="qa-c"    data-v="180" onclick="qaDur(this)">3</button>
-          <button class="qa-c"    data-v="240" onclick="qaDur(this)">4</button>
-          <button class="qa-c"    data-v="300" onclick="qaDur(this)">5</button>
-          <button class="qa-c"    data-v="360" onclick="qaDur(this)">6</button>
-        </div>
+      <div class="qa-core-row">
+        <input class="qa-f qa-sm" id="qaDeadline" type="date" onchange="qaDlFromDate()" onkeydown="if(event.key==='Enter')qaGo();"/>
+        <input class="qa-f qa-sm" id="qaDlText" placeholder="או כתוב: יום רביעי, 25/10…" autocomplete="off"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();qaDlFromText();}" onblur="qaDlFromText(true)"/>
       </div>
+      <div class="qa-note" id="qaDlNote" aria-live="polite"></div>
     </div>
 
     <!-- ── כפתור "עוד אפשרויות" ── -->
@@ -726,7 +838,7 @@ button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{
       </div></div>
     </div>
 
-    <button class="qa-go" onclick="qaGo()">הוסף ←</button>
+    <button class="qa-go" id="qaGoBtn" onclick="qaGo()">הוסף ✓</button>
     <button class="qa-cancel" onclick="closeQA()">ביטול</button>
   </div>
 </div>
@@ -861,33 +973,13 @@ button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{
 <!-- TASK BOARD PANE -->
 <div class="tab-pane" id="paneBoard"><div style="max-width:1100px;margin:14px auto 0;padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div style="font-weight:800;font-size:1.1em;">📋 המשימות שלי</div><button id="boardAddBtn" class="hn-btn hn-btn-wide" onclick="openQA()" style="background:var(--blue);color:#fff;border-color:var(--blue);">➕ משימה חדשה</button></div><div class="board">
 <div class="board-head">
-
 <div class="board-controls">
-<input class="input" id="boardSearch" placeholder="חיפוש לפי שם או תגית"/>
-<select class="select" id="boardFilter">
-<option value="all">הכל</option>
-<option value="red">אדום</option>
-<option value="orange">כתום</option>
-<option value="green">ירוק</option>
-</select>
-
+<input class="input" id="boardSearch" placeholder="חיפוש משימה" oninput="renderTaskBoard()" aria-label="חיפוש משימה"/>
 </div>
 </div>
-<div class="board-section">
-<div class="board-section-title">👤 אישי <span class="board-section-count" id="countPersonal">0</span></div>
-<table class="board-table">
-<thead><tr><th>שם משימה</th><th>דדליין</th><th>מצב</th><th>תגיות</th><th style="text-align:center;">פעולה</th></tr></thead>
-<tbody id="tbPersonal"></tbody>
-</table>
-</div>
-<div class="board-section">
-<div class="board-section-title">💼 עבודה <span class="board-section-count" id="countWork">0</span></div>
-<table class="board-table">
-<thead><tr><th>שם משימה</th><th>דדליין</th><th>מצב</th><th>תגיות</th><th style="text-align:center;">פעולה</th></tr></thead>
-<tbody id="tbWork"></tbody>
-</table>
-</div>
-<div id="boardEmpty" style="display:none;text-align:center;padding:26px 12px;color:var(--text2);font-size:.92em;">עוד אין משימות. לחץ על ➕ משימה חדשה, או פשוט ספר למאיה מה צריך לקרות.</div>
+<div id="boardChips" class="tk-chips" role="tablist" aria-label="סינון לפי סוג"></div>
+<div id="boardCards" class="tk-list"></div>
+<div id="boardEmpty" style="display:none;" class="tk-empty"><span class="maya-orb" aria-hidden="true"></span><div><b>עוד אין משימות</b><br>לחץ על ➕ משימה חדשה, או פשוט ספר למאיה מה צריך לקרות.</div></div>
 <details id="boardMore" style="margin-top:6px;"><summary style="cursor:pointer;font-size:.88em;color:var(--muted);padding:8px 2px;">עוד: עתודות, משימות קטנות, התראות ואירועים</summary><div class="sidebar" style="overflow-y:visible;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 0 20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:4px 28px;">
 <div class="sec-title" id="taskCardsTitle">📊 מצב משימות</div>
 <div id="examCards"></div>
@@ -1292,6 +1384,7 @@ let _gcalTokenExp=0,_gcalAskWrite=null; // test hook: replaces the per-action wr
 let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken='';
 const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
 let _micSpeakNext=false;
+let _boardCat='all';
 let _accForced=false;
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
 let _reloadApp=()=>{try{location.reload();}catch(_e){}};
@@ -5513,7 +5606,7 @@ const SEMANTIC_PLAN_SUPPORTED_VERSIONS=[1];
 const TASK_CATS={work:'עבודה',study:'לימודים',family:'משפחה',health:'בריאות',finance:'כספים',errands:'סידורים',rest:'מנוחה ופנאי',other:'אחר'};
 const _CAT_RULES=[
   ['health',/רופא|שיניים|תרופ|חיסון|פיזיותרפ|ריצה|אימון|כושר|התעמל|יוגה|ספורט|בדיקת דם|בדיקה רפואית|(?<![א-ת])תור לרופא/],
-  ['finance',/חשבון בנק|בנק|ארנונה|תשלום|החזר מס|הלוואה|משכנתא|ביטוח|חשבונית|דוח שנתי|(?<![א-ת])מס(?![א-ת])|חשמל|מים/],
+  ['finance',/רואה חשבון|הנהלת חשבונות|חשבון בנק|בנק|ארנונה|תשלום|החזר מס|הלוואה|משכנתא|ביטוח|חשבונית|דוח שנתי|(?<![א-ת])מס(?![א-ת])|חשמל|מים/],
   ['family',/משפחה|ילד|בית ספר|גן ילדים|(?<![א-ת])גן(?![א-ת])|אמא|אבא|סבתא|סבא|הורים|חתונה|יום הולדת|בן זוג|בת זוג|חברים/],
   ['study',/מבחן|בוחן|שיעור|תרגיל|סמינר|מטלה|קורס|ללמוד|לימוד|הרצאה|אוניברסיטה|בגרות|מבחן/],
   ['errands',/סידור|קנייה|קניות|סופר|דואר|מוסך|רכב|תיקון|איסוף|משלוח|ניקיון|כביסה|בישול|לבשל/],
@@ -6206,70 +6299,72 @@ function levelLabel(level){
     default:     return '—';
   }
 }
+function boardSetCat(c){_boardCat=c;renderTaskBoard();}
+const _CAT_COLORS={work:'#4a6cf7',study:'#7c4dff',family:'#ec4899',health:'#16a34a',finance:'#d97706',errands:'#f97316',rest:'#0d9488',other:'#7b8199'};
 function renderTaskBoard(){
   if(!RESULT_P||!RESULT_W)return;
   const q=(document.getElementById('boardSearch')?.value||'').trim().toLowerCase();
-  const filter=document.getElementById('boardFilter')?.value||'all';
-
-  // Build quick risk lookup per calendar
-  const riskByCal={
-    personal: RESULT_P?.risk||{},
-    work: RESULT_W?.risk||{}
-  };
-
-  function taskRows(calId,tbodyId,countId){
-    const cal=STATE_ACTIVE.calendars[calId];
-    if(!cal){document.getElementById(tbodyId).innerHTML='';document.getElementById(countId).textContent='0';return;}
-    let tasks=[...(cal.tasks||[])];
-
-    // Sort by deadline then title
-    tasks.sort((a,b)=>{
-      const da=a.deadline?new Date(a.deadline).getTime():Infinity;
-      const db=b.deadline?new Date(b.deadline).getTime():Infinity;
-      if(da!==db)return da-db;
-      return (a.title||'').localeCompare(b.title||'');
+  const today=STATE_ACTIVE.meta.today;
+  const items=[];
+  ['personal','work'].forEach(calId=>{
+    const R=calId==='work'?RESULT_W:RESULT_P;
+    (STATE_ACTIVE.calendars[calId]?.tasks||[]).forEach(task=>{
+      const r=(R&&R.risk&&R.risk[task.id])||{};
+      items.push({task,calId,r,cat:taskCategory(task,calId),rp:getRiskPresentation(r)});
     });
-
-    let rows='';
-    let count=0;
-    for(const task of tasks){
-      const r=(riskByCal[calId]||{})[task.id]||{};
-      if(filter!=='all'&&r.level!==filter)continue;
-
-      const titleLc=(task.title||'').toLowerCase();
-      const tagsStr=(task.tags||[]).join(',').toLowerCase();
-      if(q && !titleLc.includes(q) && !tagsStr.includes(q)) continue;
-
-      const dl=task.deadline?fmt(task.deadline):'';
-      const tStart=task.deadlineTimeStart||'';
-      const tEnd=task.deadlineTimeEnd||'';
-      const dlTime=(tStart||tEnd)?`<div class="task-deadline-time">${escapeHTML(tStart||'')}–${escapeHTML(tEnd||'')}</div>`:'';
-
-      const chip=r.level?`<span class="chip chip-${r.level}">${levelLabel(r.level)}</span>`:'';
-      const _cat=taskCategory(task,calId);
-      const tags=`<span class="tag tag-cat" data-cat="${_cat}">${TASK_CATS[_cat]}</span> `+(task.tags?.length?task.tags.map(t=>`<span class="tag">${escapeHTML(t)}</span>`).join(' '):'');
-      const locHtml=task.location?`<div style="font-size:.78em;color:var(--muted2);">📍 ${escapeHTML(task.location)}</div>`:'';
-      rows+=`<tr>
-        <td>${escapeHTML(task.title||'')}${locHtml}${dlTime}</td>
-        <td>${dl}</td>
-        <td>${chip}</td>
-        <td>${tags}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="removeTask('${calId}','${task.id}')">בטל</button></td>
-      </tr>`;
-      count++;
-    }
-    document.getElementById(tbodyId).innerHTML=rows||`<tr><td colspan="5" class="muted">אין משימות</td></tr>`;
-    document.getElementById(countId).textContent=String(count);
+  });
+  const box=document.getElementById('boardCards'),chips=document.getElementById('boardChips');
+  if(!box)return;
+  // category chips (only categories that exist) with counts
+  const counts={};items.forEach(i=>{counts[i.cat]=(counts[i.cat]||0)+1;});
+  if(_boardCat!=='all'&&!counts[_boardCat])_boardCat='all';
+  if(chips){
+    chips.textContent='';
+    const mk=(key,label,n)=>{const b=document.createElement('button');b.type='button';b.className='tk-chip'+(_boardCat===key?' on':'');b.setAttribute('role','tab');b.setAttribute('aria-selected',_boardCat===key?'true':'false');
+      if(key!=='all')b.style.setProperty('--cat',_CAT_COLORS[key]||'#7b8199');b.textContent=label+' '+n;b.onclick=()=>boardSetCat(key);chips.appendChild(b);};
+    if(items.length>1&&Object.keys(counts).length>0){mk('all','הכל',items.length);Object.keys(TASK_CATS).filter(k=>counts[k]).forEach(k=>mk(k,TASK_CATS[k],counts[k]));}
   }
-
-  taskRows('personal','tbPersonal','countPersonal');
-  taskRows('work','tbWork','countWork');
-  // Simple board: hide a section with no tasks; when both are empty show one friendly line
-  const _np=(STATE_ACTIVE.calendars.personal?.tasks||[]).length,_nw=(STATE_ACTIVE.calendars.work?.tasks||[]).length;
-  const _sec=(id,show)=>{const el=document.getElementById(id);const sec=el&&el.closest('.board-section');if(sec)sec.style.display=show?'':'none';};
-  const _filtering=!!(q||filter!=='all');
-  _sec('tbPersonal',_np>0||_filtering);_sec('tbWork',_nw>0||_filtering);
-  const _be=document.getElementById('boardEmpty');if(_be)_be.style.display=(_np+_nw===0)?'block':'none';
+  let list=items.filter(i=>(_boardCat==='all'||i.cat===_boardCat)&&(!q||String(i.task.title||'').toLowerCase().includes(q)||TASK_CATS[i.cat].includes(q)));
+  list.sort((a,b)=>String(a.task.deadline||'9999').localeCompare(String(b.task.deadline||'9999'))||String(a.task.title||'').localeCompare(String(b.task.title||'')));
+  const group=i=>{
+    if(i.rp.level==='done')return 3;
+    const dl=i.task.deadline;const days=dl?Math.round((new Date(dl+'T12:00:00Z')-new Date(today+'T12:00:00Z'))/86400000):999;
+    if(i.rp.level==='critical'||i.rp.level==='warning'||days<=2)return 0;
+    if(days<=7)return 1;return 2;
+  };
+  const G=[{t:'דחוף',items:[]},{t:'השבוע',items:[]},{t:'בהמשך',items:[]},{t:'הושלמו',items:[]}];
+  list.forEach(i=>G[group(i)].items.push(i));
+  box.textContent='';
+  const fmtD=d=>d?d.split('-').reverse().slice(0,2).join('/'):'';
+  G.forEach((g,gi)=>{
+    if(!g.items.length)return;
+    const h=document.createElement('div');h.className='tk-group'+(gi===0?' tk-group-urgent':'');h.textContent=g.t+' · '+g.items.length;box.appendChild(h);
+    g.items.forEach((i,idx)=>{
+      const t=i.task,r=i.r,needed=t.requiredUnits||r.needed||0,done=Math.min(needed,r.done||0);
+      const c=document.createElement('article');c.className='tk-card'+(i.rp.level==='done'?' tk-done':'');c.dataset.cat=i.cat;c.style.setProperty('--cat',_CAT_COLORS[i.cat]||'#7b8199');c.style.animationDelay=Math.min(idx,8)*35+'ms';
+      const bar=document.createElement('span');bar.className='tk-bar';c.appendChild(bar);
+      const main=document.createElement('div');main.className='tk-main';
+      const top=document.createElement('div');top.className='tk-top';
+      const ti=document.createElement('h3');ti.className='tk-title';ti.textContent=t.title||'';
+      const ct=document.createElement('span');ct.className='tk-cat';ct.textContent=TASK_CATS[i.cat];
+      top.appendChild(ti);top.appendChild(ct);main.appendChild(top);
+      const meta=document.createElement('div');meta.className='tk-meta';
+      const due=document.createElement('span');due.className='tk-due'+(gi===0?' tk-due-hot':'');
+      due.textContent=t.deadline?`עד ${fmtD(t.deadline)} · ${dlRelativeHe(t.deadline,today)}`:'בלי דדליין';meta.appendChild(due);
+      if(needed){const hh=document.createElement('span');hh.textContent=`${done}/${needed} שעות`;meta.appendChild(hh);}
+      if(t.location){const l=document.createElement('span');l.textContent='📍 '+t.location;meta.appendChild(l);}
+      main.appendChild(meta);
+      if(needed){const pg=document.createElement('div');pg.className='tk-prog';pg.setAttribute('role','progressbar');pg.setAttribute('aria-valuenow',String(Math.round(done/needed*100)));const fill=document.createElement('i');fill.style.width=Math.round(done/needed*100)+'%';pg.appendChild(fill);main.appendChild(pg);}
+      if(i.rp.level==='critical'||i.rp.level==='warning'){const st=document.createElement('div');st.className='tk-status tk-st-'+i.rp.level;st.textContent=`${i.rp.icon} ${i.rp.level==='critical'?'בסיכון':'שים לב'}${r.remainingUnits?` · נותרו ${r.remainingUnits} שעות`:''}`;main.appendChild(st);}
+      c.appendChild(main);
+      const x=document.createElement('button');x.type='button';x.className='tk-x';x.title='הסר משימה';x.setAttribute('aria-label','הסר משימה '+(t.title||''));x.textContent='✕';
+      x.onclick=()=>removeTask(i.calId,t.id);c.appendChild(x);
+      box.appendChild(c);
+    });
+  });
+  const empty=document.getElementById('boardEmpty');
+  if(empty)empty.style.display=items.length===0?'flex':'none';
+  if(items.length>0&&list.length===0){const n=document.createElement('div');n.className='tk-empty';n.textContent='לא נמצאו משימות מתאימות.';box.appendChild(n);}
 }
 
 function toggleBoardDetail(id){
@@ -7613,7 +7708,7 @@ function setMode(m){
 /* ═══════════════════════════════════════════════════════
    QUICK ADD
    ═══════════════════════════════════════════════════════ */
-let _qd=60,_qt='regular',_qu='normal',_qCal=null,_qSid=null; // _qCal=null means use ACTIVE_CALENDAR
+let _qd=60,_qt='regular',_qu='normal',_qCal=null,_qSid=null,_qCat=null; // _qCal=null means use ACTIVE_CALENDAR
 
 /* ═══════════════════════════════════════════════════════
    RESERVE MODAL — assign task from reserves to board
@@ -7936,6 +8031,80 @@ function saveExamDayMode(){
   showToast(_toastMsg);
 }
 
+// ── Hebrew free-text understanding for the add-task conversation (pure, deterministic) ──
+const _HE_NUM={'אחת':1,'אחד':1,'שתי':2,'שתיים':2,'שניים':2,'שלוש':3,'שלושה':3,'ארבע':4,'ארבעה':4,'חמש':5,'חמישה':5,'שש':6,'שישה':6,'שבע':7,'שבעה':7,'שמונה':8,'תשע':9,'תשעה':9,'עשר':10,'עשרה':10};
+// → {hours,rounded} (the engine plans whole hours, so anything shorter than an hour is rounded up) or null
+function parseDurationHe(text){
+  const t=String(text||'').replace(/[,!?״"']/g,' ').replace(/\.(?!\d)/g,' ').replace(/\s+/g,' ').trim();
+  if(!t)return null;
+  const cap=h=>Math.max(1,Math.min(20,Math.ceil(h-1e-9)));
+  let m;
+  if(/(^|\s)שעתיים(\s|$)/.test(t))return{hours:2,rounded:false};
+  if(/שעה וחצי|שעה ו ?חצי/.test(t))return{hours:2,rounded:true};
+  if(/חצי יום/.test(t))return{hours:4,rounded:false};
+  if(/יומיים/.test(t))return{hours:12,rounded:false};
+  if(/יום שלם|יום עבודה|כל היום/.test(t)||/^יום$/.test(t))return{hours:6,rounded:false};
+  if(/חצי שעה|רבע שעה|שלושת רבעי שעה|שלושה רבעי שעה/.test(t))return{hours:1,rounded:true};
+  if((m=/(\d+(?:\.\d+)?)\s*(?:דקות|דק|דקה)/.exec(t))){const mins=parseFloat(m[1]);return{hours:cap(mins/60),rounded:mins%60!==0};}
+  if((m=/(\d+(?:\.\d+)?)\s*(?:שעות|שעה|שע|ש|h|hours?|hr)/i.exec(t))){const h=parseFloat(m[1]);return{hours:cap(h),rounded:h!==Math.round(h)};}
+  for(const w of Object.keys(_HE_NUM)){if(new RegExp('(^|\\s)'+w+'\\s+שעות?(\\s|$)').test(t))return{hours:_HE_NUM[w],rounded:false};}
+  if(/^שעה( אחת)?$/.test(t))return{hours:1,rounded:false};
+  if((m=/^(\d+(?:\.\d+)?)$/.exec(t))){const h=parseFloat(m[1]);if(h>0)return{hours:cap(h),rounded:h!==Math.round(h)};}
+  return null;
+}
+// → 'YYYY-MM-DD' or null. `today` is the planning anchor (never the clock).
+function parseDeadlineHe(text,today){
+  const t=String(text||'').replace(/[,!?״"']/g,' ').replace(/\.(?!\d)/g,' ').replace(/\s+/g,' ').trim();
+  if(!t||!/^\d{4}-\d{2}-\d{2}$/.test(today||''))return null;
+  const base=new Date(today+'T12:00:00Z');
+  const iso=d=>d.toISOString().slice(0,10);
+  const plus=n=>{const d=new Date(base);d.setUTCDate(d.getUTCDate()+n);return iso(d);};
+  let m;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(t))return isNaN(new Date(t+'T12:00:00Z'))?null:t;
+  if(/^היום$/.test(t))return today;
+  if(/^מחר$/.test(t))return plus(1);
+  if(/^מחרתיים$/.test(t))return plus(2);
+  if((m=/^בעוד (\d{1,3}) (?:ימים|יום)$/.exec(t)))return plus(+m[1]);
+  if(/^בעוד שבוע$/.test(t)||/^שבוע הבא$/.test(t))return plus(7);
+  if(/^בעוד שבועיים$/.test(t))return plus(14);
+  if(/^בעוד חודש$/.test(t))return plus(30);
+  if(/^סוף השבוע$/.test(t)){const dow=base.getUTCDay();const gap=dow===6?6:(5-dow);return plus(gap);}
+  if(/^סוף החודש$/.test(t)){const d=new Date(Date.UTC(base.getUTCFullYear(),base.getUTCMonth()+1,0,12));return iso(d);}
+  const days=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  if((m=/^(?:ביום |יום )(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)$/.exec(t))){const want=days.indexOf(m[1]);let gap=(want-base.getUTCDay()+7)%7;if(gap===0)gap=7;return plus(gap);}
+  if((m=/^(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?$/.exec(t))){
+    const d=+m[1],mo=+m[2];let y=m[3]?+m[3]:base.getUTCFullYear();if(y<100)y+=2000;
+    const cand=new Date(Date.UTC(y,mo-1,d,12));
+    if(cand.getUTCMonth()!==mo-1||cand.getUTCDate()!==d)return null;
+    if(!m[3]&&iso(cand)<today)cand.setUTCFullYear(y+1);
+    return iso(cand);
+  }
+  return null;
+}
+// Heuristic time estimate (hours) from the task text and its category. Maya's "I'd guess…" — always editable by the user.
+function estimateTaskHours(title,cat){
+  const t=String(title||'');
+  const R=[
+    [/מבחן|בחינה|סמינר|פרויקט|עבודה סמינריונית|מצגת גדולה/,6,'מבחן או פרויקט דורשים הכנה ארוכה'],
+    [/ללמוד|לימוד|תרגיל|מטלה|לקרוא|קריאה|סיכום/,3,'עבודה מרוכזת אחת של לימוד'],
+    [/טלפון|שיחה|להתקשר|לקבוע|מייל|לשלוח|לשלם|תשלום|להזמין|הזמנה/,1,'משימה קצרה'],
+    [/קניות|סופר|דואר|מוסך|ניקיון|בישול|לבשל|כביסה/,2,'סידור עם נסיעה והמתנה'],
+    [/רופא|בדיקה|תור|טיפול|שיניים/,2,'כולל נסיעה והמתנה'],
+    [/ישיבה|פגישה|הרצאה|סדנה|ראיון/,2,'מפגש קבוע']
+  ];
+  for(const[re,h,why]of R)if(re.test(t))return{hours:h,why};
+  const byCat={work:[2,'משימת עבודה ממוצעת'],study:[3,'בלוק לימוד אחד'],family:[2,'זמן איכות או סידור משפחתי'],health:[2,'כולל הגעה'],finance:[1,'בירוקרטיה קצרה'],errands:[2,'סידור ממוצע'],rest:[2,'זמן מנוחה סביר'],other:[2,'הערכה כללית']};
+  const[h,why]=byCat[cat]||byCat.other;return{hours:h,why};
+}
+function hoursLabelHe(h){return h===1?'שעה':(h===2?'שעתיים':(h===4?'חצי יום (4 שעות)':(h===6?'יום עבודה (6 שעות)':h+' שעות')));}
+function dlRelativeHe(deadline,today){
+  if(!deadline||!today)return'';
+  const n=Math.round((new Date(deadline+'T12:00:00Z')-new Date(today+'T12:00:00Z'))/86400000);
+  if(n<0)return`עבר לפני ${-n} ${-n===1?'יום':'ימים'}`;
+  if(n===0)return'היום';if(n===1)return'מחר';if(n===2)return'מחרתיים';
+  if(n<=14)return`בעוד ${n} ימים`;
+  return`בעוד ${Math.round(n/7)} שבועות`;
+}
 function openQA(opts){
   opts=opts||{};
   // Default deadline = 7 days from today
@@ -7949,10 +8118,96 @@ function openQA(opts){
   const qcc=document.querySelectorAll('#qaCalC .qa-c');
   qcc.forEach(b=>b.classList.toggle('on',b.dataset.v===(opts.calId||ACTIVE_CALENDAR)));
   document.getElementById('qaModal').classList.add('open');
-  setTimeout(()=>{const f=document.getElementById('qaName');if(f){f.value=opts.title||'';f.focus();}},70);
+  _qd=60;_qCat=null;_qaHighlightDur(60);
+  ['qaDurText','qaDlText'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['qaDurNote','qaDlNote'].forEach(id=>{const e=document.getElementById(id);if(e)e.textContent='';});
+  document.querySelectorAll('#qaDlC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.w==='שבוע הבא'));
+  _qaSetDeadline((document.getElementById('qaDeadline')||{}).value,'');
+  { const n=document.getElementById('qaDlNote');if(n&&opts.deadline)n.textContent=''; }
+  setTimeout(()=>{const f=document.getElementById('qaName');if(f){f.value=opts.title||'';f.focus();}qaNameInput();qaSetStep(opts.title?2:1);},70);
 }
-function closeQA(){document.getElementById('qaModal').classList.remove('open');const f=document.getElementById('qaName');if(f)f.value='';_qt='regular';_qu='normal';_qCal=null;_qSid=null;_finalizeReservePromotion();const adv=document.getElementById('qaAdvanced');const btn=document.getElementById('qaMoreBtn');if(adv)adv.classList.remove('open');if(btn)btn.classList.remove('open');document.querySelectorAll('#qaTypeC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='regular'));document.querySelectorAll('#qaUrgC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='normal'));}
-function qaDur(btn){_qd=parseInt(btn.dataset.v);document.querySelectorAll('#qaDurC .qa-c').forEach(b=>b.classList.toggle('on',b===btn));}
+function closeQA(){document.getElementById('qaModal').classList.remove('open');const f=document.getElementById('qaName');if(f)f.value='';_qt='regular';_qu='normal';_qCal=null;_qSid=null;_qCat=null;qaSetStep(1);_finalizeReservePromotion();const adv=document.getElementById('qaAdvanced');const btn=document.getElementById('qaMoreBtn');if(adv)adv.classList.remove('open');if(btn)btn.classList.remove('open');document.querySelectorAll('#qaTypeC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='regular'));document.querySelectorAll('#qaUrgC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='normal'));}
+function qaSetStep(n){
+  const sh=document.querySelector('#qaModal .qa-sheet');if(!sh)return;
+  sh.dataset.step=String(n);
+  const bub=document.getElementById('qaBubble'),nm=((document.getElementById('qaName')||{}).value||'').trim();
+  if(bub)bub.textContent=n<=1?'מה צריך לעשות?':(n===2?`הבנתי — "${nm.length>40?nm.slice(0,40)+'…':nm}". כמה זמן זה ייקח?`:'כמעט סיימנו. אפשר להוסיף עכשיו.');
+}
+function qaEffCat(){const nm=((document.getElementById('qaName')||{}).value||'').trim();return _qCat||taskCategory({title:nm},_qCal||ACTIVE_CALENDAR);}
+function qaNameInput(){
+  const nm=((document.getElementById('qaName')||{}).value||'').trim();const chip=document.getElementById('qaCat');if(!chip)return;
+  if(nm.length<2){chip.style.display='none';return;}
+  const c=qaEffCat();chip.style.display='';chip.dataset.cat=c;chip.textContent='🏷️ '+TASK_CATS[c];
+}
+function qaCycleCat(){
+  const order=['work','study','family','health','finance','errands','rest','other'];
+  const cur=qaEffCat();_qCat=order[(order.indexOf(cur)+1)%order.length];
+  if(_qCat==='work'){_qCal='work';}else if((_qCal||ACTIVE_CALENDAR)==='work'){_qCal='personal';}
+  document.querySelectorAll('#qaCalC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v===(_qCal||ACTIVE_CALENDAR)));
+  qaNameInput();
+}
+function qaNext(){
+  const nm=((document.getElementById('qaName')||{}).value||'').trim();
+  if(!nm){const f=document.getElementById('qaName');if(f)f.focus();return;}
+  const sh=document.querySelector('#qaModal .qa-sheet');const step=sh?+sh.dataset.step:1;
+  if(step<2){qaSetStep(2);const d=document.getElementById('qaDurText');if(d)setTimeout(()=>d.focus(),120);}
+  else if(step<3){qaSetStep(3);}
+  else qaGo();
+}
+function _qaHighlightDur(mins){document.querySelectorAll('#qaDurC .qa-c[data-v]').forEach(b=>b.classList.toggle('on',+b.dataset.v===mins));}
+function qaDur(btn){
+  _qd=parseInt(btn.dataset.v);_qaHighlightDur(_qd);
+  const n=document.getElementById('qaDurNote');if(n)n.textContent='';
+  const sh=document.querySelector('#qaModal .qa-sheet');if(sh&&+sh.dataset.step<3)qaSetStep(3);
+}
+function qaDurFromText(quiet){
+  const inp=document.getElementById('qaDurText'),n=document.getElementById('qaDurNote');if(!inp)return;
+  const v=inp.value.trim();if(!v){if(!quiet&&n)n.textContent='';return;}
+  const r=parseDurationHe(v);
+  if(!r){if(n)n.textContent='לא הבנתי. נסה למשל: שעתיים, חצי יום או 3 שעות.';return;}
+  _qd=r.hours*60;_qaHighlightDur(_qd);
+  if(n)n.textContent=`מעולה: ${hoursLabelHe(r.hours)}${r.rounded?' (מעגלת לשעות שלמות)':''}.`;
+  const sh=document.querySelector('#qaModal .qa-sheet');if(sh&&+sh.dataset.step<3)qaSetStep(3);
+}
+function qaEstimate(){
+  const nm=((document.getElementById('qaName')||{}).value||'').trim();
+  const e=estimateTaskHours(nm,qaEffCat());_qd=e.hours*60;_qaHighlightDur(_qd);
+  const n=document.getElementById('qaDurNote');if(n)n.textContent=`✨ לדעתי ${hoursLabelHe(e.hours)} — ${e.why}. אפשר לשנות.`;
+  const sh=document.querySelector('#qaModal .qa-sheet');if(sh&&+sh.dataset.step<3)qaSetStep(3);
+}
+function _qaSetDeadline(iso,label){
+  const d=document.getElementById('qaDeadline');if(d)d.value=iso;
+  const n=document.getElementById('qaDlNote');if(n)n.textContent=iso?`עד ${label||iso.split('-').reverse().slice(0,2).join('/')} (${dlRelativeHe(iso,STATE_ACTIVE.meta.today)}).`:'';
+}
+function qaDl(btn){
+  const iso=parseDeadlineHe(btn.dataset.w,STATE_ACTIVE.meta.today);
+  document.querySelectorAll('#qaDlC .qa-c').forEach(b=>b.classList.toggle('on',b===btn));
+  const t=document.getElementById('qaDlText');if(t)t.value='';
+  if(iso)_qaSetDeadline(iso,iso.split('-').reverse().slice(0,2).join('/'));
+}
+function qaDlFromText(quiet){
+  const t=document.getElementById('qaDlText'),n=document.getElementById('qaDlNote');if(!t)return;
+  const v=t.value.trim();if(!v){return;}
+  const iso=parseDeadlineHe(v,STATE_ACTIVE.meta.today);
+  if(!iso){if(n&&!quiet)n.textContent='לא הבנתי את התאריך. נסה: מחר, יום רביעי, בעוד 3 ימים או 25/10.';else if(n)n.textContent='לא הבנתי את התאריך. נסה: מחר, יום רביעי, בעוד 3 ימים או 25/10.';return;}
+  document.querySelectorAll('#qaDlC .qa-c').forEach(b=>b.classList.remove('on'));
+  _qaSetDeadline(iso,iso.split('-').reverse().slice(0,2).join('/'));
+}
+function qaDlFromDate(){
+  const d=document.getElementById('qaDeadline');if(!d||!d.value)return;
+  document.querySelectorAll('#qaDlC .qa-c').forEach(b=>b.classList.remove('on'));
+  _qaSetDeadline(d.value,d.value.split('-').reverse().slice(0,2).join('/'));
+}
+// small celebration (respects reduced motion)
+function celebrate(){
+  try{
+    if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+    const box=document.createElement('div');box.className='confetti';box.setAttribute('aria-hidden','true');
+    const cols=['#7a4df0','#33c9b8','#f59e0b','#ec4899','#3b82f6'];
+    for(let i=0;i<16;i++){const p=document.createElement('i');p.style.setProperty('--x',(Math.random()*160-80).toFixed(0)+'px');p.style.setProperty('--r',(Math.random()*540-270).toFixed(0)+'deg');p.style.background=cols[i%cols.length];p.style.animationDelay=(Math.random()*.12).toFixed(2)+'s';box.appendChild(p);}
+    document.body.appendChild(box);setTimeout(()=>box.remove(),1100);
+  }catch(_e){}
+}
 function qaToggleMore(){
   const adv=document.getElementById('qaAdvanced');
   const btn=document.getElementById('qaMoreBtn');
@@ -8006,7 +8261,8 @@ function qaGo(){
     const units2=Math.max(1,Math.round(_qd/60)),id2='qa'+Date.now();
     const payload2={id:id2,title:name,requiredUnits:units2,deadline:deadline2,
       priority:1,type:'exam',calendarId:calId,urgency:'thisweek',
-      policy:{enforceFinishBeforeDeadline:true,blockOnDeadlineDay:true}};
+      policy:{enforceFinishBeforeDeadline:true,blockOnDeadlineDay:true},
+      ...(qaEffCat()!=='other'?{cat:qaEffCat()}:{})};
     try{dispatchEvent(calId,{type:'ADD_TASK',payload:payload2});}catch(e){console.warn('qaGo exam:',e);}
 
   } else {
@@ -8028,7 +8284,8 @@ function qaGo(){
     const units=Math.max(1,Math.round(_qd/60)),id='qa'+Date.now();
     const payload={id,title:name,requiredUnits:units,deadline,
       priorityWeight:_qu==='thisweek'?1:_qu==='later'?4:3,
-      type:'assignment',calendarId:calId,urgency:_qu};
+      type:'assignment',calendarId:calId,urgency:_qu,
+      ...(qaEffCat()!=='other'?{cat:qaEffCat()}:{})};
     try{dispatchEvent(calId,{type:'ADD_TASK',payload});}catch(e){console.warn('qaGo:',e);}
     // If opened from a cell click, anchor the new task to that exact slot
     if(_qSid){
@@ -8036,7 +8293,7 @@ function qaGo(){
       _qSid=null;
     }
   }
-  saveState();recalcAndRender();closeQA();
+  saveState();recalcAndRender();closeQA();celebrate();
   showToast(_qt==='small'?'משימה קטנה נוספה ✓':_qt==='blocker'?'חסימת יום נוספה ✓':_qt==='exam'?'📝 יום מבחן נוסף ✓ — לחץ על התא לשינוי מצב חסימה':'משימה נוספה ✓');
 }
 
@@ -11135,6 +11392,47 @@ async function runAccountTests(){
         const card=document.getElementById('mayaWeekCard');const nl=card?card.querySelectorAll('.maya-ev-line').length:-1;const head=card?card.firstChild.textContent:'';
         try{renderMayaScreen();}catch(_e){}
         return !!card&&nl<=3&&nl>=1&&!/שעות מתוכננות/.test(head);})());
+    }
+    // QA/TK. Hebrew understanding + conversational add-task + task cards
+    {
+      const D=parseDurationHe;
+      ok('QA1. parseDurationHe: שעתיים/חצי יום/3 שעות/שלוש שעות/90 דקות/יום שלם; חצי שעה מעוגל לשעה; גיבריש → null',D('שעתיים').hours===2&&D('חצי יום').hours===4&&D('3 שעות').hours===3&&D('שלוש שעות').hours===3&&D('90 דקות').hours===2&&D('יום שלם').hours===6&&D('חצי שעה').hours===1&&D('חצי שעה').rounded===true&&D('2.5 שעות').hours===3&&D('בלה בלה')===null&&D('')===null&&D('500 שעות').hours===20);
+      const T='2026-10-12'; // Monday
+      const P=x=>parseDeadlineHe(x,T);
+      ok('QA2. parseDeadlineHe: היום/מחר/סוף השבוע/שבוע הבא/יום רביעי/בעוד 3 ימים/25.10/סוף החודש/ISO; תאריך שעבר בלי שנה → שנה הבאה; שגוי → null',P('היום')===T&&P('מחר')==='2026-10-13'&&P('סוף השבוע')==='2026-10-16'&&P('שבוע הבא')==='2026-10-19'&&P('יום רביעי')==='2026-10-14'&&P('בעוד 3 ימים')==='2026-10-15'&&P('25.10')==='2026-10-25'&&P('5/10')==='2027-10-05'&&P('סוף החודש')==='2026-10-31'&&P('2026-11-01')==='2026-11-01'&&P('31/2')===null&&P('בלה')===null&&parseDeadlineHe('מחר','bad')===null);
+      ok('QA3. estimateTaskHours: מבחן 6, שיחה/תשלום 1, לימוד 3, ברירת מחדל לפי סוג; dlRelativeHe',estimateTaskHours('מבחן באלגברה','study').hours===6&&estimateTaskHours('להתקשר לרואה חשבון','finance').hours===1&&estimateTaskHours('ללמוד לסטטיסטיקה','study').hours===3&&estimateTaskHours('משהו','health').hours===2&&dlRelativeHe('2026-10-14',T)==='מחרתיים'&&dlRelativeHe('2026-10-18',T)==='בעוד 6 ימים'&&dlRelativeHe('2026-10-10',T).includes('עבר'));
+      const _sa=STATE_ACTIVE,_st=ACTIVE_TAB;
+      try{
+        const b0=baseState([]);b0.meta.today='2026-10-12';b0.meta.startDate='2026-10-04';b0.meta.endDate='2027-01-01';STATE_ACTIVE=commitState(b0,'t',{save:false,render:false});
+        openQA();await new Promise(r=>setTimeout(r,120));
+        const sh=document.querySelector('#qaModal .qa-sheet');
+        ok('QA4. הוספת משימה נפתחת כשיחה: שלב 1 (שם בלבד), השלבים הבאים מוסתרים',sh.dataset.step==='1'&&getComputedStyle(document.getElementById('qaStepDur')).display==='none'&&document.getElementById('qaBubble').textContent.includes('מה צריך לעשות'));
+        const nm=document.getElementById('qaName');nm.value='להתקשר לרואה חשבון';qaNameInput();
+        ok('QA5. כותבים שם → מוצג סוג מזוהה אוטומטית (כספים)',document.getElementById('qaCat').style.display!=='none'&&document.getElementById('qaCat').textContent.includes('כספים'));
+        qaNext();
+        ok('QA6. Enter → שלב 2: מאיה שואלת כמה זמן, ושואלת לפי שם המשימה',sh.dataset.step==='2'&&getComputedStyle(document.getElementById('qaStepDur')).display!=='none'&&document.getElementById('qaBubble').textContent.includes('להתקשר לרואה חשבון'));
+        qaEstimate();
+        ok('QA7. "תעריכי בשבילי": נקבעת הערכה (שעה למשימה קצרה) עם הסבר, ועוברים לשלב 3',_qd===60&&document.getElementById('qaDurNote').textContent.includes('לדעתי')&&sh.dataset.step==='3');
+        document.getElementById('qaDurText').value='שעתיים';qaDurFromText();
+        ok('QA8. תשובה חופשית "שעתיים" מעדכנת את המשך (120) ומסמנת את הכפתור',_qd===120&&document.querySelector('#qaDurC .qa-c.on').dataset.v==='120');
+        document.getElementById('qaDlText').value='יום רביעי';qaDlFromText();
+        ok('QA9. דדליין חופשי "יום רביעי" → 14/10 בשדה התאריך, עם הסבר יחסי',document.getElementById('qaDeadline').value==='2026-10-14'&&document.getElementById('qaDlNote').textContent.includes('מחרתיים'));
+        document.querySelector('#qaDlC .qa-c[data-w="מחר"]').click();
+        ok('QA10. כפתור "מחר" קובע את הדדליין ל-13/10',document.getElementById('qaDeadline').value==='2026-10-13');
+        qaGo();
+        const added=(STATE_ACTIVE.calendars.personal.tasks||[]).find(t=>t.title==='להתקשר לרואה חשבון');
+        ok('QA11. qaGo יוצרת משימה: 2 שעות, דדליין מחר, וסוג כספים נשמר',!!added&&added.requiredUnits===2&&added.deadline==='2026-10-13'&&added.cat==='finance'&&!document.getElementById('qaModal').classList.contains('open'));
+        ok('QA12. חזרה לפתיחה: השיחה מתאפסת לשלב 1',(()=>{openQA();const r=document.querySelector('#qaModal .qa-sheet').dataset.step==='1'&&_qd===60;closeQA();return r;})());
+        // task board cards
+        const st2=JSON.parse(JSON.stringify(STATE_ACTIVE));
+        st2.calendars.personal.tasks.push({id:'z2',title:'תור לרופא',requiredUnits:2,deadline:'2026-10-25',priorityWeight:3,type:'assignment',policy:{enforceFinishBeforeDeadline:true,blockOnDeadlineDay:false}});
+        STATE_ACTIVE=commitState(st2,'t',{save:false,render:false});
+        recalcAndRender();switchTab('board');renderTaskBoard();
+        const cards=[...document.querySelectorAll('#boardCards .tk-card')];
+        ok('QA13. עמוד המשימות: כרטיס לכל משימה, עם שם, סוג (תג) וכפתור הסרה נגיש',cards.length===2&&cards.some(c=>c.textContent.includes('להתקשר לרואה חשבון')&&c.querySelector('.tk-cat').textContent==='כספים')&&cards.some(c=>c.dataset.cat==='health')&&cards.every(c=>c.querySelector('.tk-x')&&c.querySelector('.tk-x').getAttribute('aria-label').includes('הסר')));
+        ok('QA14. סינון לפי סוג: צ׳יפים לפי הסוגים הקיימים; בחירה מסננת',(()=>{const ch=[...document.querySelectorAll('#boardChips .tk-chip')];const fin=ch.find(c=>c.textContent.startsWith('כספים'));if(!fin)return false;fin.click();const n=document.querySelectorAll('#boardCards .tk-card').length;boardSetCat('all');return ch.length===3&&n===1;})());
+        ok('QA15. בלי משימות — מוצג מצב ריק ידידותי',(()=>{const e=JSON.parse(JSON.stringify(STATE_ACTIVE));e.calendars.personal.tasks=[];e.calendars.work.tasks=[];STATE_ACTIVE=commitState(e,'t',{save:false,render:false});recalcAndRender();renderTaskBoard();return getComputedStyle(document.getElementById('boardEmpty')).display!=='none'&&document.querySelectorAll('#boardCards .tk-card').length===0;})());
+      }finally{STATE_ACTIVE=_sa;try{closeQA();}catch(_e){}switchTab(_st||'study');recalcAndRender();}
     }
     // MIC4-5. voice prefs
     {

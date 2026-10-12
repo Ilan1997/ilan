@@ -61,3 +61,5 @@ The user sees a consent window first (risk + responsibility; "busy times only" i
 - Run `cloud/delete_account.sql` once in Supabase → SQL Editor. It creates `delete_my_account()` (a signed-in user deletes only their own account + data). Until then "🗑 מחק חשבון" shows an explanatory error and deletes nothing.
 - `privacy.html` (served at `/ilan/privacy.html`) is a plain-language terms + privacy page linked from the sign-in window and the account window. **Fill in the contact line before going public and have it reviewed** — it is not legal advice. Google verification needs this URL.
 - "⬇ הורד גיבוי" downloads the user's data as JSON (works on the public site; browser downloads are blocked inside claude.ai).
+
+- **הוספת משימה שיחתית** – מאיה שואלת שם, משך ודדליין (עם הערכה אוטומטית וניתוח עברית חופשית), דף משימות בכרטיסים לפי דחיפות וקטגוריה, ועיצוב יומן בסגנון Google Calendar עם אנימציות עדינות.

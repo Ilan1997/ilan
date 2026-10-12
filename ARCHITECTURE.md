@@ -456,3 +456,11 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - **כללי מזכירה (`MAYA_CORE_RULES`, 13):** כללים רגילים לכל דבר — נזרעים פעם אחת ל-`AI_RULES` (דגל `ai:rules_seeded`, נמחק באיפוס חשבון ונקבע בשחזור מהענן), נשלחים מחדש בכל הודעה, ומאיה יכולה להחליף/להסיר/לחדד אותם דרך `LEARN_RULE` כמו כל כלל. "אפס מה שנלמד" מחזיר לברירת המחדל ולא מרוקן.
 - **סיווג:** `taskCategory(task,calId)` (טהורה): `task.cat` מאיה → יומן עבודה = עבודה → הסקה ממילות מפתח → "אחר". קטגוריות: עבודה, לימודים, משפחה, בריאות, כספים, סידורים, מנוחה ופנאי. `category` ב-intent של `create_task` אופציונלי; ערך לא חוקי נזרק בשקט. תג הסוג מוצג בעמוד המשימות ונשלח למאיה בהקשר.
 - **מסך מאיה:** נתונים פנימיים (שעות פנויות, "למדתי N העדפות") לא מוצגים. הסקירה = כותרת, משפט סיכום אחד, ועד 3 שורות (תזכורות קודם, אחר כך אירועים קרובים). בדיקות CR1–8.
+
+## §36 Conversational add-task, task cards, themeV2
+
+- **Add-task sheet** (`#qaModal .qa-sheet[data-step]`): Maya-persona flow in 3 steps (name → duration → deadline). Category is auto-inferred (`taskCategory`) and cyclable by chip; `_qCat` overrides. Payload gets `cat` only when not `other`.
+- **Deterministic Hebrew parsers**: `parseDurationHe`, `parseDeadlineHe`, `estimateTaskHours` (keyword/category heuristic — *not* a live AI call), `hoursLabelHe`, `dlRelativeHe`. The engine is hour-granular, so sub-hour durations round up to 1h.
+- **Tasks page**: `renderTaskBoard()` builds `.tk-card` articles grouped by urgency, with category chips (`_boardCat`, declared at script top for TDZ safety), progress derived from engine state, and a remove button.
+- **themeV2** (`<style id="themeV2">`): Google-Calendar-like grid (hairlines, today pill, red now-line) and springy motion/confetti; respects `prefers-reduced-motion`. `.blk:hover` must not use `transform` (guarded by BlockRender test 11).
+- Tests: QA1–QA15 in `runAccountTests`.
