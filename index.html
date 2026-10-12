@@ -605,7 +605,12 @@ body{font-family:'Rubik','Heebo',sans-serif;background:
 @keyframes orbBreath{0%,100%{transform:scale(1);box-shadow:0 0 14px #7a4df055}50%{transform:scale(1.1);box-shadow:0 0 26px #33c9b866}}
 .blk-event{border-radius:10px;border-right:0;background:linear-gradient(135deg,#ece6ff,#e2f6f3);box-shadow:inset 0 0 0 1px #cfc5f5;}
 .blk-event-name{color:#44309e;}
-.blk-event-min{box-shadow:inset 0 0 0 1px #b9a6ff,0 2px 8px -3px #7a4df088;}
+.blk-event-min{box-shadow:inset 0 0 0 1px #b9a6ff,0 2px 8px -3px #7a4df088;z-index:2;overflow:hidden;display:flex;flex-direction:column;gap:1px;margin-bottom:0;}
+.blk-event-min .blk-event-time{margin:0;font-size:.82em;font-weight:600;color:#6a55c9;opacity:1;}
+.blk-event-min.blk-event-short{flex-direction:row;align-items:center;gap:6px;padding:2px 7px;}
+.blk-event-g{background:linear-gradient(135deg,#dcebff,#d3f4ec);box-shadow:inset 0 0 0 1px #8fb9f0,0 2px 8px -3px #3b82f688;border-inline-start:4px solid #3b82f6;}
+.blk-event-g .blk-event-name{color:#1e4f95;}
+.blk-event-g .blk-event-time{color:#2f6bb8;}
 #mayaWeekCard{border-radius:22px;background:#ffffffd9;backdrop-filter:blur(10px);}
 .ai-inputrow textarea:focus-visible{outline:none;}
 button:focus-visible,a:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid #7a4df0aa;outline-offset:2px;}
@@ -3970,9 +3975,14 @@ function renderEngine(){
       const _evs=(gEvents&&gEvents.get(dId))||[];
       const _ev=_evs.find(e=>e.title===evTitle&&h>=e.startH&&h<e.endH&&Number.isInteger(e.startMin)&&Number.isInteger(e.endMin));
       if(_ev){
-        const cs=Math.max(_ev.startMin,h*60)-h*60,ce=Math.min(_ev.endMin,(h+1)*60)-h*60;
+        // one merged block per event: drawn from its first hour cell, spanning the whole duration (later hour cells stay empty)
         const first=(h===_ev.startH);
-        return`<td style="pointer-events:none;position:relative;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event blk-event-min" style="position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${((ce-cs)/60*100).toFixed(2)}%;"><div class="blk-event-name">${first?`📅 ${evTitle} <span class="blk-event-time">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</span>`:''}</div></div></td>`;
+        const _tdA=`style="pointer-events:none;position:relative;overflow:visible;"${_todayClass?` class="${_todayClass.trim()}"`:``}`;
+        if(!first)return`<td ${_tdA}></td>`;
+        const cs=_ev.startMin-h*60,dur=_ev.endMin-_ev.startMin;
+        const isG=String(_ev.id||'').indexOf('gcal_')===0;
+        const _tt=`${evTitle} · ${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}`;
+        return`<td ${_tdA}><div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45?' blk-event-short':''}" title="${escapeHTML(_tt)}" style="position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${evTitle}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</bdi></div></div></td>`;
       }
       return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event"><div class="blk-event-name">📅 ${evTitle}</div></div></td>`;
     }
@@ -4233,7 +4243,7 @@ function renderEngine(){
             <div class="event-card-name">📅 ${ev.title}</div>
             <button class="ex-remove-btn" onclick="removeGlobalEvent('${ev.id}')" title="הסר אירוע" aria-label="הסר אירוע">✕</button>
           </div>
-          <div class="event-card-meta">${ev.date} · ${_evTimeText(ev)}</div>
+          <div class="event-card-meta">${ev.date} · <bdi dir="ltr">${_evTimeText(ev)}</bdi></div>
         </div>`).join('');
     }
   }
@@ -7286,10 +7296,11 @@ function _gcalBlockHTML(btn){
   const pr=_gcalPrefs();
   if(!pr.on)return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">📅 יומן גוגל</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">ייבוא אירועים כזמן תפוס, כדי שמאיה לא תשבץ עליהם. קריאה בלבד.</div><button id="accGcal" onclick="_accGcalConnect()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">חבר יומן גוגל</button></div>';
   const t=pr.last?new Date(pr.last).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-  return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:4px;">📅 יומן גוגל — מחובר</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">'+(pr.hideTitles!==false?'רק זמנים תפוסים · ':'')+(pr.count||0)+' אירועים'+(t?' · סונכרן '+escapeHTML(t):'')+'</div><div style="display:flex;gap:8px;"><button id="accGcalSync" onclick="_accGcalSync()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accGcalOff" onclick="_accGcalOff()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">נתק ומחק</button></div></div>';
+  return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:4px;">📅 יומן גוגל — מחובר</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">'+(pr.hideTitles!==false?'רק זמנים תפוסים · ':'')+(pr.count||0)+' אירועים'+(t?' · סונכרן '+escapeHTML(t):'')+'</div><label style="display:flex;gap:6px;align-items:flex-start;font-size:.78em;color:var(--text2);margin-bottom:8px;cursor:pointer;"><input type="checkbox" id="accGcalTitles" '+(pr.hideTitles===false?'checked ':'')+'onchange="_accGcalTitles(this.checked)"> הצג את שמות האירועים (ולא רק "תפוס"). השמות יישלחו גם ל-AI כשאתה מדבר איתה.</label><div style="display:flex;gap:8px;"><button id="accGcalSync" onclick="_accGcalSync()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accGcalOff" onclick="_accGcalOff()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">נתק ומחק</button></div></div>';
 }
 async function _accGcalConnect(){_cloudMsg('מחבר…');const r=await gcalConnect();renderAccountModal();if(r.cancelled){_cloudMsg('');return;}_cloudMsg(r.ok?'היומן סונכרן ✓ ('+r.count+' אירועים)':r.error,!r.ok);}
 async function _accGcalSync(){_cloudMsg('מסנכרן יומן…');const r=await gcalSync();renderAccountModal();_cloudMsg(r.ok?'היומן סונכרן ✓ ('+r.count+' אירועים)':r.error,!r.ok);}
+async function _accGcalTitles(show){const pr=_gcalPrefs();_gcalSavePrefs({...pr,hideTitles:!show});await _accGcalSync();}
 function _accGcalOff(){gcalDisconnect();renderAccountModal();_cloudMsg('היומן נותק והאירועים שיובאו נמחקו');}
 
 // ── Microphone → text (browser speech recognition, Hebrew). The text lands in the input box for the user to review and send. ──
@@ -10702,7 +10713,7 @@ async function runAccountTests(){
         STATE_ACTIVE=withEv;switchTab('study');goToToday();recalcAndRender();
         const mins=[...document.querySelectorAll('.blk-event-min')];
         const tops=mins.map(e=>e.style.top+'/'+e.style.height);
-        ok('ME4. בלוח: האירוע מצויר בדיוק — שעה ראשונה מ-50% בגובה 50%, שעה שנייה 0 בגובה 25%, והזמן 09:30–10:15 מוצג',mins.length===2&&tops[0]==='50%/50%'&&tops[1]==='0%/25%'&&mins[0].textContent.includes('09:30–10:15'),tops.join(' | '));
+        ok('ME4. בלוח: בלוק אחד מאוחד — מתחיל ב-50% מהשעה הראשונה ובגובה 75% (45 דקות), הזמן 09:30–10:15 מוצג בכיוון נכון (LTR), ובלי בלוק כפול בשעה השנייה',mins.length===1&&tops[0]==='50%/75%'&&mins[0].textContent.includes('09:30–10:15')&&!!mins[0].querySelector('bdi[dir=ltr]'),tops.join(' | '));
       }finally{STATE_ACTIVE=_sa;switchTab(_st||'study');recalcAndRender();}
       // form
       document.getElementById('evTitle').value='ידני';document.getElementById('evDate').value='2027-01-05';
