@@ -719,6 +719,23 @@ tbody td:has(>:empty):hover,tbody td[onclick]:hover{background:#eef3ff!important
 @media (prefers-reduced-motion:reduce){.tab-pane.active,.tk-card,.qa-bubble,.qa-catchip,#qaModal.open .qa-sheet,.maya-orb{animation:none!important;}.blk,.tk-card,.qa-go,#quickAddFab{transition:none!important;}}
 @media (max-width:640px){.qa-core-row{grid-template-columns:1fr;}.qa-sheet{border-radius:22px;}#qaModal{align-items:flex-end;padding:0;}.qa-sheet{border-radius:24px 24px 0 0;}}
 </style>
+<style id="themeV3">
+:root{--ink:#1f2340;--soft:#667085;--line:#e6e8f0;--brand:#6d4aff;--brand2:#2bb8a8}
+body{background:linear-gradient(180deg,#f7f8fd 0%,#eef1fb 100%) fixed;}
+header,.app-header,#topBar{backdrop-filter:saturate(1.4) blur(10px);}
+.btn,button.btn{border-radius:12px;font-weight:700;letter-spacing:.1px;transition:transform .18s var(--spring,cubic-bezier(.34,1.56,.64,1)),box-shadow .18s,filter .18s;}
+.btn:hover{filter:brightness(1.05);box-shadow:0 6px 16px -6px rgba(109,74,255,.45);}
+.btn-primary,.btn.primary{background:linear-gradient(135deg,#6d4aff,#4f7cff);color:#fff;border:none;}
+.tk-card{border-radius:16px;border:1px solid var(--line);box-shadow:0 1px 2px rgba(31,35,64,.05),0 8px 24px -14px rgba(31,35,64,.25);transition:transform .2s var(--spring,ease),box-shadow .2s;}
+.tk-card:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(31,35,64,.06),0 14px 30px -14px rgba(31,35,64,.35);}
+.qa-sheet{border-radius:22px;box-shadow:0 24px 60px -20px rgba(31,35,64,.45);}
+.qa-sheet input:focus,.qa-sheet textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(109,74,255,.25);border-color:var(--brand);}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px;}
+.blk{border-radius:8px;}
+::selection{background:#6d4aff33}
+@media (prefers-reduced-motion:reduce){.tk-card,.btn{transition:none!important;}.tk-card:hover{transform:none;}}
+</style>
+
 
 </head>
 <body>
@@ -7453,6 +7470,7 @@ function _gcalConsentDialog(){
       +'• <b>אל תחבר יומן שיש בו מידע אישי או רגיש שאינך רוצה לשתף.</b> מומלץ להשאיר את האפשרות "רק זמנים תפוסים" מסומנת — אז שמות האירועים, המשתתפים והמיקומים לא נכנסים בכלל.<br>'
       +'• האחריות על המידע שביומן ועל ההחלטה לחבר אותו היא שלך בלבד. אפשר לנתק בכל רגע, וזה ימחק את האירועים שיובאו.'
       +'</div>'
+      +'<div id="gcalWarnNote" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:10px;padding:9px 11px;margin-top:10px;font-size:.82em;line-height:1.6;">ℹ️ <b>גוגל עשויה להציג אזהרה</b> "Google לא אימתה את האפליקציה", כי האימות שלה עדיין בתהליך. זה צפוי: לחץ <b>"מתקדם"</b> ואז <b>"המשך"</b> ואשר את הגישה.</div>'
       +'<label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 6px;font-size:.88em;"><input type="checkbox" id="gcalHide" checked style="margin-top:3px;"/><span>ייבא רק זמנים תפוסים, בלי שמות אירועים (מומלץ)</span></label>'
       +'<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px;font-size:.88em;"><input type="checkbox" id="gcalOk" style="margin-top:3px;"/><span>קראתי והבנתי את הסיכון, אין ביומן מידע שאני לא מוכן לחשוף, והכול באחריותי.</span></label>'
       +'<div style="display:flex;gap:8px;"><button id="gcalGo" disabled style="flex:1;padding:10px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;opacity:.5;cursor:pointer;font-family:inherit;">אישור והמשך לגוגל</button><button id="gcalNo" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;">ביטול</button></div>';
