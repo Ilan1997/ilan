@@ -4825,8 +4825,9 @@ function _aiAppendBubble(text,who){
    own message that names each day. Soft context only: the profile is fed
    to Maya as guidance and never changes buildEngine.
    ═══════════════════════════════════════════════════════ */
-const AI_PROFILE_TOPICS=['work','freeDays','peak','sacred','routines'];
+const AI_PROFILE_TOPICS=['role','work','freeDays','peak','sacred','routines'];
 const AI_PROFILE_TOPIC_HINT={
+  role:'המקצוע/העיסוק (למשל סטודנט, מנהל פרויקטים) — במילים של המשתמש/ת עצמו/ה',
   work:'שעות ומימי העבודה הקבועים (ימים + שעת התחלה וסיום)',
   freeDays:'ימים שהוא/היא חופשי/ת לגמרי מעבודה',
   peak:'שעות שיא — מתי הוא/היא הכי חד/ה וממוקד/ת (טווח שעות)',
@@ -4835,7 +4836,7 @@ const AI_PROFILE_TOPIC_HINT={
 };
 const AI_DAY_NAMES_HE=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
 const AI_MIN_FREE_HOURS_PER_WEEK=2;
-function emptyAIProfile(){return{v:1,topics:{work:null,freeDays:null,peak:null,sacred:null,routines:null}};}
+function emptyAIProfile(){return{v:1,topics:{role:null,work:null,freeDays:null,peak:null,sacred:null,routines:null}};}
 function normalizeAIProfile(p){
   const e=emptyAIProfile();
   if(!p||typeof p!=='object'||!p.topics)return e;
@@ -4868,7 +4869,11 @@ function applyProfileUpdate(profile,update,userText,gridStart,gridEnd){
     if(v==='none'){next.topics[t]={none:true};accepted.push(t);return;}
     if(!v||typeof v!=='object'){rej(t,'bad_shape');return;}
     let cand=null;
-    if(t==='work'){
+    if(t==='role'){
+      const rt=typeof v.text==='string'?v.text.trim().replace(/\s+/g,' ').slice(0,80):'';
+      if(rt.length<2){rej(t,'bad_value');return;}
+      cand={text:rt};
+    }else if(t==='work'){
       if(!_validDays(v.days)||!_validRange(v.start,v.end)){rej(t,'bad_value');return;}
       cand={days:[...v.days].sort((a,b)=>a-b),start:v.start,end:v.end};
     }else if(t==='freeDays'){
@@ -4923,6 +4928,7 @@ function nextIntakeTopic(profile){
 function _aiProfileSummary(profile){
   const p=normalizeAIProfile(profile),dn=d=>d.map(x=>AI_DAY_NAMES_HE[x]).join(', ');
   const parts=[];const T=p.topics;
+  if(T.role&&!T.role.none)parts.push(`מקצוע/עיסוק: ${T.role.text}`);
   if(T.work&&!T.work.none)parts.push(`עבודה: ${dn(T.work.days)} ${T.work.start}:00–${T.work.end}:00`);
   if(T.freeDays&&!T.freeDays.none)parts.push(`ימים חופשיים: ${dn(T.freeDays.days)}`);
   if(T.peak&&!T.peak.none)parts.push(`שעות שיא: ${T.peak.start}:00–${T.peak.end}:00`);
@@ -4930,10 +4936,39 @@ function _aiProfileSummary(profile){
   if(T.routines&&!T.routines.none)parts.push(`שגרות: ${T.routines.notes}`);
   return parts.join(' | ');
 }
+// Profession → time-management character. PURE + deterministic: the model may refine these through LEARN_RULE,
+// but a known profession always yields sensible starter rules. Each rule is prefixed "מקצוע" so a changed profession replaces them.
+const ROLE_PROFILES=[
+  {re:/סטודנט|תלמיד|לומד|אוניברסיט|מכללה|תואר|בגרויות/,rules:['מקצוע סטודנט: העומס מתפרץ לפני מבחנים והגשות. לפזר למידה מוקדם בבלוקים קצרים ולהתריע מוקדם על חפיפות.','מקצוע סטודנט: לשמור יום לפני מבחן לחזרה ולמנוחה, ולא לצבור הכול ללילה האחרון.']},
+  {re:/מנהל\S*\s+פרויקט|מנהלת\s+פרויקט|ניהול\s+פרויקט|\bPM\b|מנהל\S*\s+מוצר|product\s*manager|project\s*manager/i,rules:['מקצוע ניהול פרויקטים: היום מקוטע בפגישות. להגן על בלוקי עבודה ממוקדת ולהשאיר מרווח בין פגישות.','מקצוע ניהול פרויקטים: לעקוב אחרי דדליינים ותלויות, ולסכם תמיד לפי סדר עדיפויות.']},
+  {re:/מפתח|מתכנת|מהנדס\s+תוכנה|מהנדסת\s+תוכנה|developer|programmer|software/i,rules:['מקצוע פיתוח: עבודה עמוקה דורשת בלוקים ארוכים רצופים. לא לפצל אותם בפגישות קטנות.','מקצוע פיתוח: לשמור זמן קבוע לתיקוני באגים וסקירות קוד, ולא להשאיר אותם לרגע האחרון.']},
+  {re:/מורה|מרצה|מחנכ|גננ|מדריכ/,rules:['מקצוע הוראה: שעות ההוראה קבועות. הכנת שיעורים ובדיקת עבודות מתוזמנות סביבן.','מקצוע הוראה: לצפות לעומס בתקופות בחינות וציונים ולפזר אותו מראש.']},
+  {re:/רופא|אח\s|אחות|אחים|רפוא|פרמדיק|מטפל/,rules:['מקצוע רפואה: שעות משמרות לא קבועות. לתכנן סביב המשמרות ולשמור זמן התאוששות אחריהן.']},
+  {re:/עצמאי|פרילנס|בעל\s+עסק|בעלת\s+עסק|freelanc|סטארטאפ/i,rules:['מקצוע עצמאי: להפריד בין שעות עבודה לחיים ולשמור בלוק קבוע לחשבוניות ולניהול.','מקצוע עצמאי: לוודא שלקוחות ודדליינים מקבלים עדיפות ושיש מרווח ביטחון לפני מועדי מסירה.']},
+  {re:/מנהל|מנהלת|ראש\s+צוות|מנכ|סמנכ/,rules:['מקצוע ניהול: הרבה קטיעות ופגישות. לשמור בלוק קבוע לחשיבה ולהחלטות, ולא למלא כל שעה.']}
+];
+function roleTimeRules(roleText){
+  const t=String(roleText||'');
+  const hit=ROLE_PROFILES.find(r=>r.re.test(t));
+  return hit?hit.rules.map(x=>x.slice(0,AI_MAX_RULE_LEN)):[];
+}
+// Replace the previous profession's rules with the current ones. PURE (returns the new rule list).
+function applyRoleRules(rules,roleText){
+  const kept=normalizeAIRules(rules).filter(r=>!r.startsWith('מקצוע'));
+  return normalizeAIRules([...kept,...roleTimeRules(roleText)]);
+}
+// What Maya tells the user right after they give work hours: exactly what was recorded + a promise to respect it.
+function workHoursAck(profile){
+  const T=normalizeAIProfile(profile).topics;
+  if(!T.work||T.work.none||!T.work.days)return null;
+  const dn=T.work.days.map(x=>AI_DAY_NAMES_HE[x]).join(', ');
+  return `רשמתי את שעות העבודה שכתבת: ${dn}, ${T.work.start}:00–${T.work.end}:00. אשתדל לא לחרוג מהן, ואם אצטרך חריגה אשאל אותך קודם.`;
+}
 // Context block appended to Maya's system prompt: what is known, and the ONE topic to ask about next.
 function _aiProfileContext(profile){
   const sum=_aiProfileSummary(profile),nt=nextIntakeTopic(profile);
   let c='';
+  { const T=normalizeAIProfile(profile).topics; if(T.work&&!T.work.none)c+=`\nשעות העבודה שהמשתמש/ת קבע/ה: ${T.work.days.map(x=>AI_DAY_NAMES_HE[x]).join(', ')} ${T.work.start}:00–${T.work.end}:00. התחייבת לכבד אותן: אל תציע/י ואל תתכנן/י עבודה מחוץ להן; אם נדרשת חריגה — שאל/י ובקש/י אישור מפורש לפני.`; }
   if(sum)c+=`\nפרופיל מה שכבר ידוע על המשתמש/ת (אל תשאל/י שוב על זה): ${sum}.`;
   if(nt)c+=`\nשלב היכרות פעיל: אחרי שענית על מה שהמשתמש/ת ביקש/ה, שאל/י שאלה אחת קצרה בלבד, על הנושא הבא: ${AI_PROFILE_TOPIC_HINT[nt]}. לעולם לא יותר משאלה אחת בהודעה. אם המשתמש/ת אמר/ה שאין כזה — החזר/י "none" לנושא.`;
   else c+='\nההיכרות הסתיימה — אל תשאל/י שאלות היכרות נוספות.';
@@ -5126,6 +5161,7 @@ function computeMayaInsights(state){
    ═══════════════════════════════════════════════════════ */
 const AI_GREETING_BASE='היי, אני מאיה 👋 המזכירה האישית שלך. ספר לי איך אתה רוצה שהשבוע ייראה — למשל "יש לי מבחן בסטטיסטיקה ביום חמישי, ורציתי גם להתאמן פעמיים השבוע" — ואני אהפוך את זה למשימות מתוזמנות בלוח. ככל שתתקן אותי (למשל תגרור משימה למקום אחר), כך אלמד את ההעדפות שלך.';
 const AI_INTAKE_QUESTION={
+  role:'כדי להכיר אותך: מה אתה עושה — סטודנט, מנהל פרויקטים, משהו אחר?',
   work:'כדי להכיר אותך: מה ימי ושעות העבודה הקבועים שלך?',
   freeDays:'באילו ימים אתה חופשי לגמרי מעבודה?',
   peak:'מתי בשעות היום אתה הכי חד וממוקד?',
@@ -5234,7 +5270,7 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
    ד. גמישות דינמית מול שינויים — ביטול/שינוי בזמן אמת הוא לא "פגיעה בתוכנית"; אפשר להציע לאזן מחדש את הזמן שהתפנה (מנוחה או הקדמת בלוק אחר) במקום להשאיר את זה ריק.
    ה. הפרדת תכנון-ארוך-טווח מביצוע שוטף — עדיף לא לערבב משימות של החלטות/תכנון קדימה עם משימות ביצוע רגילות באותו בלוק.
    ו. עוגני יום קבועים ומקטעי למידה — כשרלוונטי, שים/י לב לחשיבות של זמן קבוע לפעילות גופנית/עוגן אישי יומי, ולפיצול בלוקי למידה ארוכים למקטעים של כ-45–50 דקות (durationHours קטן יותר, schedulingPreference=flexible) במקום בלוק ענק אחד. חוק זה תמיד כפוף לכלל ה-schedulingPreference הקריטי שבסעיף 2 — פעילות חד-פעמית לא מתפצלת, גם אם היא קצרה.
-4. היכרות (פרופיל): כשהמשתמש/ת מוסר/ת מידע אישי קבוע, צרף/י בסוף בלוק \`\`\`PROFILE_UPDATE עם JSON בלבד של הנושאים שנאמרו, למשל {"work":{"days":[1,2,3],"start":9,"end":13},"peak":{"start":9,"end":12},"freeDays":{"days":[0]},"routines":{"notes":"..."},"sacred":{"items":[{"days":[5],"start":17,"end":23,"quote":"ציטוט מדויק מהודעת המשתמש/ת שמזכיר את היום"}]},"routines":"none"}. ימים: 0=ראשון…6=שבת, שעות 0–24. שעות קדושות (שהמנוע יחסום באמת) רק אם המשתמש/ת אמר/ה במפורש יום ושעות, וה-quote חייב להיות העתקה מילה במילה מההודעה שלו/ה שמכילה את שם היום — אחרת אל תכלול/י. אם נאמר שאין כזה לנושא — "none". אל תמציא/י מידע שלא נאמר. תשובות קצרות: 2-3 משפטים.
+4. היכרות (פרופיל): כשהמשתמש/ת מוסר/ת מידע אישי קבוע, צרף/י בסוף בלוק \`\`\`PROFILE_UPDATE עם JSON בלבד של הנושאים שנאמרו, למשל {"role":{"text":"סטודנט"},"work":{"days":[1,2,3],"start":9,"end":13},"peak":{"start":9,"end":12},"freeDays":{"days":[0]},"routines":{"notes":"..."},"sacred":{"items":[{"days":[5],"start":17,"end":23,"quote":"ציטוט מדויק מהודעת המשתמש/ת שמזכיר את היום"}]},"routines":"none"}. ימים: 0=ראשון…6=שבת, שעות 0–24. שעות קדושות (שהמנוע יחסום באמת) רק אם המשתמש/ת אמר/ה במפורש יום ושעות, וה-quote חייב להיות העתקה מילה במילה מההודעה שלו/ה שמכילה את שם היום — אחרת אל תכלול/י. אם נאמר שאין כזה לנושא — "none". אל תמציא/י מידע שלא נאמר. מקצוע (role): ציין/י במילות המשתמש/ת. כשנאמר מקצוע — הבן/י מה זה אומר על אופי ניהול הזמן שלו/ה (קצבי עומס, סוג הריכוז הנדרש, קטיעות, עונתיות) והוסף/י בבלוק LEARN_RULE עד שני כללים קצרים שמתחילים במילה \"מקצוע\" (למשל \"מקצוע סטודנט: …\"). אין לך גישה לחיפוש באינטרנט — הסק/י מהידע הכללי שלך ואל תמציא/י עובדות על המשתמש/ת. כשנמסרו שעות עבודה — אשר/י אותן בקצרה כפי שנאמרו והבטח/י לא לחרוג מהן. תשובות קצרות: 2-3 משפטים.
 5. למידה מתמשכת: בכל הודעה את/ה מקבל/ת מחדש את כל מה שלמדת — נתוני הלוח העדכניים, הפרופיל, כל הכללים וההעדפות מהגרירות — ותשובתך צריכה להתבסס על כולם יחד, לא רק על ההודעה האחרונה. כשהמשתמש/ת מגלה העדפה או הרגל חדשים (למשל "אני לא יכול ללמוד בערב"), צרף/י בסוף בלוק \`\`\`LEARN_RULE עם JSON: {"add":["כלל קצר וברור, עד 140 תווים"],"remove":["קטע מדויק מכלל ישן שהכלל החדש מחליף או סותר"]}. אל תוסיף/י כלל שכבר קיים, אל תנסח/י כללים על דברים חד-פעמיים, ושפר/י כללים קיימים (החלף/י ניסוח לא מדויק) במקום לצבור כפילויות. כשתשובה נוגעת למשימות בסיכון או לשעות פנויות — השתמש/י במספרים מנתוני הלוח העדכניים בלבד, אל תמציא/י.
 6. תהליך נסתר בכל הודעה (המשתמש/ת לא רואה אותו): לפני שאת/ה כותב/ת תשובה — (א) עבור/י על כל הכללים שקיבלת, (ב) הסק/י מההודעה, מהתגובות האחרונות של המשתמש/ת להצעות שלך ומנתוני הלוח מה חדש, מה השתנה ומה כבר לא נכון, (ג) עדכן/י את הכללים בבלוק LEARN_RULE — הוסף/י כלל חדש, החלף/י כלל שהתברר כלא מדויק, הסר/י כלל שנסתר. אם לא נלמד דבר חדש — אל תצרף/י בלוק. הבלוקים הנסתרים (LEARN_RULE, PROFILE_UPDATE) נמחקים אוטומטית לפני שהמשתמש/ת רואה את התשובה.
 7א. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
@@ -5363,6 +5399,11 @@ async function sendAIMessage(){
           const sc=AI_PROFILE.topics.sacred;
           dispatchEvent('personal',{type:'SET_SACRED_HOURS',items:sc&&sc.items?sc.items:[]});
         }
+        if(r.accepted.includes('role')&&AI_PROFILE.topics.role&&AI_PROFILE.topics.role.text){ // profession → starter time-management rules (model may refine via LEARN_RULE)
+          const nr=applyRoleRules(AI_RULES,AI_PROFILE.topics.role.text);
+          if(JSON.stringify(nr)!==JSON.stringify(AI_RULES)){AI_RULES=nr;_aiSaveRules();}
+        }
+        if(r.accepted.includes('work')){const ack=workHoursAck(AI_PROFILE);if(ack)_aiAppendBubble(ack,'bot');}
         if(r.rejected.length>0)console.warn('PROFILE_UPDATE rejected',r.rejected);
       }
     }
@@ -10573,9 +10614,9 @@ function runMayaScreenTests(){
     // proactive intake opener
     AI_PROFILE=emptyAIProfile();renderMayaScreen();
     const g=document.getElementById('aiGreetingTxt').textContent;
-    ok('7. היכרות פתוחה: הפתיחה כוללת את שאלת ההיכרות הראשונה (עבודה)',g.includes('אני מאיה')&&g.includes(AI_INTAKE_QUESTION.work));
-    AI_PROFILE=applyProfileUpdate(AI_PROFILE,{work:'none'},'x',8,24).profile;renderMayaScreen();
-    ok('8. אחרי תשובה — הפתיחה מתקדמת לשאלה הבאה בלבד (אחת)',(()=>{const t=document.getElementById('aiGreetingTxt').textContent;return t.includes(AI_INTAKE_QUESTION.freeDays)&&!t.includes(AI_INTAKE_QUESTION.work);})());
+    ok('7. היכרות פתוחה: הפתיחה כוללת את שאלת ההיכרות הראשונה (מקצוע)',g.includes('אני מאיה')&&g.includes(AI_INTAKE_QUESTION.role));
+    AI_PROFILE=applyProfileUpdate(AI_PROFILE,{role:'none'},'x',8,24).profile;renderMayaScreen();
+    ok('8. אחרי תשובה — הפתיחה מתקדמת לשאלה הבאה בלבד (אחת)',(()=>{const t=document.getElementById('aiGreetingTxt').textContent;return t.includes(AI_INTAKE_QUESTION.work)&&!t.includes(AI_INTAKE_QUESTION.role);})());
     let pr=AI_PROFILE;for(const t of AI_PROFILE_TOPICS)pr=applyProfileUpdate(pr,{[t]:'none'},'x',8,24).profile;AI_PROFILE=pr;renderMayaScreen();
     ok('9. היכרות סגורה: אין שאלת היכרות בפתיחה',!Object.values(AI_INTAKE_QUESTION).some(q=>document.getElementById('aiGreetingTxt').textContent.includes(q)));
     _aiRenderHistory();_aiRenderHistory();
@@ -10624,9 +10665,29 @@ function runAIProfileTests(){
   // intake closes after five topics, one at a time
   let p=E,order=[];
   for(let k=0;k<7;k++){const nt=nextIntakeTopic(p);if(!nt)break;order.push(nt);p=applyProfileUpdate(p,{[nt]:'none'},'x',8,23).profile;}
-  ok('9. ההיכרות נסגרת אחרי חמשת הנושאים, אחד בכל פעם',order.length===5&&nextIntakeTopic(p)===null,order.join(','));
+  ok('9. ההיכרות נסגרת אחרי ששת הנושאים (מקצוע ראשון), אחד בכל פעם',order.length===6&&order[0]==='role'&&nextIntakeTopic(p)===null,order.join(','));
   ok('10. בהיכרות סגורה ההקשר אוסר שאלות נוספות',_aiProfileContext(p).includes('ההיכרות הסתיימה'));
   ok('11. בהיכרות פתוחה ההקשר מבקש שאלה אחת בלבד',_aiProfileContext(E).includes('שאלה אחת קצרה בלבד'));
+  // ── Profession → time-management rules; work-hours acknowledgement ──
+  {
+    const rr=A({role:{text:'סטודנט לתואר שני'}},'אני סטודנט לתואר שני');
+    ok('R1. מקצוע בטקסט חופשי מתקבל ונשמר במילים של המשתמש',rr.accepted.includes('role')&&rr.profile.topics.role.text==='סטודנט לתואר שני');
+    ok('R2. מקצוע ריק/קצר מדי נדחה',A({role:{text:' '}},'x').rejected.length===1&&A({role:'bad'},'x').rejected.length===1);
+    ok('R3. סטודנט → כללי עומס מבחנים (מתחילים ב"מקצוע")',roleTimeRules('סטודנט').length===2&&roleTimeRules('סטודנט').every(x=>x.startsWith('מקצוע')&&x.length<=AI_MAX_RULE_LEN));
+    ok('R4. מנהל פרויקטים → כללי פגישות/בלוקי ריכוז, ולא כללי סטודנט',/פגישות/.test(roleTimeRules('מנהל פרויקטים').join(' '))&&!/מבחנ/.test(roleTimeRules('מנהל פרויקטים').join(' ')));
+    ok('R5. מקצוע לא מוכר → אין כללים מומצאים',roleTimeRules('חוקר דבורים').length===0);
+    const base=['כלל אישי אחד','מקצוע סטודנט: ישן'];
+    const a1=applyRoleRules(base,'מנהל פרויקטים');
+    ok('R6. החלפת מקצוע מחליפה את כללי המקצוע הישנים ושומרת כללים אחרים',a1.includes('כלל אישי אחד')&&!a1.some(x=>x.includes('סטודנט'))&&a1.some(x=>x.includes('ניהול פרויקטים')));
+    ok('R7. applyRoleRules טהורה ובלי כפילויות בהחלה חוזרת',JSON.stringify(applyRoleRules(a1,'מנהל פרויקטים'))===JSON.stringify(a1)&&JSON.stringify(base)==='["כלל אישי אחד","מקצוע סטודנט: ישן"]');
+    const wp=applyProfileUpdate(E,{work:{days:[0,1,2,3,4],start:9,end:17}},'עובד א-ה 9-17',8,23).profile;
+    const ack=workHoursAck(wp);
+    ok('R8. אישור שעות עבודה: מצטט את מה שנרשם ומתחייב לא לחרוג',ack&&ack.includes('9:00–17:00')&&ack.includes('ראשון')&&ack.includes('אשתדל לא לחרוג'),ack);
+    ok('R9. אין אישור כשאין שעות עבודה (ריק / none)',workHoursAck(E)===null&&workHoursAck(applyProfileUpdate(E,{work:'none'},'x',8,23).profile)===null);
+    ok('R10. הקשר ה-AI כולל את שעות העבודה והתחייבות לא לתכנן מחוץ להן',_aiProfileContext(wp).includes('9:00–17:00')&&_aiProfileContext(wp).includes('מחוץ להן'));
+    ok('R11. הקשר ה-AI כולל את המקצוע בפרופיל',_aiProfileContext(rr.profile).includes('סטודנט לתואר שני'));
+    ok('R12. הנחיית המערכת: מקצוע → כללי LEARN_RULE + אין חיפוש + אישור שעות עבודה',AI_SYSTEM_PROMPT_BASE.includes('"role"')&&AI_SYSTEM_PROMPT_BASE.includes('אין לך גישה לחיפוש')&&AI_SYSTEM_PROMPT_BASE.includes('לא לחרוג'));
+  }
   // sacred conflict guard
   const pr=A({sacred:{items:[{days:[5],start:17,end:23,quote:'ביום שישי אחרי 17'}]}},t1).profile;
   const fri=new Date('2026-02-20T12:00:00Z').getUTCDay();

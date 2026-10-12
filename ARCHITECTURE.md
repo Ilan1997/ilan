@@ -464,3 +464,10 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - **Tasks page**: `renderTaskBoard()` builds `.tk-card` articles grouped by urgency, with category chips (`_boardCat`, declared at script top for TDZ safety), progress derived from engine state, and a remove button.
 - **themeV2** (`<style id="themeV2">`): Google-Calendar-like grid (hairlines, today pill, red now-line) and springy motion/confetti; respects `prefers-reduced-motion`. `.blk:hover` must not use `transform` (guarded by BlockRender test 11).
 - Tests: QA1–QA15 in `runAccountTests`.
+
+## §37 Profession-aware rules and work-hours commitment
+
+- New intake topic `role` (first in `AI_PROFILE_TOPICS`): free text in the user's own words (2–80 chars). Soft context only.
+- `ROLE_PROFILES` / `roleTimeRules` / `applyRoleRules`: deterministic starter rules per profession (student, project manager, developer, teacher, medical, freelancer, manager). Rules start with "מקצוע", so a changed profession replaces them. Unknown professions yield no invented rules; the model may add up to two via `LEARN_RULE` from general knowledge (no web search is available).
+- `workHoursAck(profile)`: when work hours are accepted, Maya posts a deterministic confirmation of exactly what was recorded plus a commitment not to exceed it. `_aiProfileContext` re-sends the hours with the same commitment on every message. Enforcement for scheduling remains the engine's work windows (`SET_DEFAULT_WORK_WINDOWS`).
+- Tests: R1–R12 in `runAIProfileTests`.
