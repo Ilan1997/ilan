@@ -4650,6 +4650,14 @@ async function _aiLoadState(){
   // AI_CHAT_HISTORY is session-only and always starts empty on boot.
   try{ const p=await window.storage.get('ai:prefs'); AI_PREFS=p.value||''; }catch(_e){ AI_PREFS=''; }
   try{ const rl=await window.storage.get('ai:rules'); AI_RULES=normalizeAIRules(JSON.parse(rl.value)); }catch(_e){ AI_RULES=[]; }
+  // one-time seeding of the built-in rules (never re-added after Maya/the user removed or rewrote them)
+  try{
+    let seeded=false;try{seeded=!!(await window.storage.get('ai:rules_seeded'));}catch(_e){}
+    if(!seeded){
+      AI_RULES=normalizeAIRules([...MAYA_CORE_RULES,...AI_RULES]);
+      await window.storage.set('ai:rules_seeded','1');await _aiSaveRules();
+    }
+  }catch(_e){}
   try{ const pr=await window.storage.get('ai:profile'); AI_PROFILE=normalizeAIProfile(JSON.parse(pr.value)); }catch(_e){ AI_PROFILE=emptyAIProfile(); }
   try{ const ids=await window.storage.get('ai:addedTaskIds'); AI_ADDED_TASK_IDS=JSON.parse(ids.value)||[]; }catch(_e){ AI_ADDED_TASK_IDS=[]; }
   AI_CHAT_HISTORY=[];
@@ -4850,6 +4858,22 @@ function _aiExtractProfileUpdate(fullText){
    composed from everything she knows rather than from the last message only.
    ═══════════════════════════════════════════════════════ */
 const AI_MAX_RULES=40,AI_MAX_RULE_LEN=140;
+// Maya's built-in "secretary" rules. They are ordinary rules: re-sent on every message, and Maya may replace/remove/refine them via LEARN_RULE like any other.
+const MAYA_CORE_RULES=[
+  'להיות מזכירה עניינית: תשובות קצרות (עד 3 משפטים), בלי פירוט שלא ביקשו, ורק מה שמשנה החלטה או פעולה.',
+  'מספרים פנימיים (שעות פנויות, קיבולת, אחוזים) נשארים אצלי. לדווח עליהם רק אם הם משנים החלטה של המשתמש.',
+  'לשאול שאלה אחת בכל פעם, ורק כשאי אפשר להמשיך בלעדיה. אם אפשר — להניח הנחה סבירה ולציין אותה במשפט.',
+  'להציע ולא לשאול "מה תרצה": הצעה אחת ברורה לאישור, לא תפריט אפשרויות.',
+  'לפרק משימה גדולה לצעד הבא הקטן והברור (מתי, כמה זמן, מה בדיוק), במקום משימה ענקית וכללית.',
+  'לסווג כל משימה: עבודה או חיים; ובחיים: לימודים, משפחה, בריאות, כספים, סידורים, מנוחה ופנאי. לציין category ב-SEMANTIC_PLAN.',
+  'לא להזכיר ולא להתריע על כל שינוי קטן. להתריע רק על התנגשות, דדליין קרוב או משימה בסיכון.',
+  'תזכורת אחת בזמן הנכון. אחרי שהמשתמש אישר או טיפל בנושא — לשתוק עליו.',
+  'בסקירה: לכל היותר שלושה דברים — מה הכי חשוב, מה מתקרב, מה דורש החלטה. בלי רשימות ארוכות.',
+  'לכבד שעות קדושות, שבת, משפחה ומנוחה: לא לתכנן בהם ולא להציע לפרוץ אותם.',
+  'בלי שיפוטיות. אם משהו נדחה — להציע מועד חדש, בלי "שוב לא עשית".',
+  'כשהמשתמש מבולגן או מציף בהכול: לבקש "זרוק הכול", לארגן לבד לפי סוג ודחיפות, ולהחזיר סדר קצר.',
+  'משימה פתוחה בלי מענה: להזכיר פעם אחת בשקט. משימה שכבר לא רלוונטית — להציע להסיר.'
+];
 function normalizeAIRules(a){
   if(!Array.isArray(a))return[];
   const out=[],seen=new Set();
@@ -5022,9 +5046,12 @@ function renderMayaScreen(){
     if(B&&!B.empty){
       const card=mk('maya-card maya-week','background:var(--purple-lt,#f3e8ff);border:1px solid #c4b5fd;border-radius:12px;padding:10px 14px;');
       card.id='mayaWeekCard';
-      const h=document.createElement('div');h.style.cssText='font-weight:700;margin-bottom:4px;';h.textContent='📅 '+B.title+(B.totalHours?` · ${B.totalHours} שעות מתוכננות`:'');card.appendChild(h);
-      B.lines.concat(B.reminders).forEach((t,i)=>{const d=document.createElement('div');d.style.cssText='font-size:.86em;line-height:1.6;'+(i>=B.lines.length?'color:var(--text);font-weight:600;':'');d.textContent=(i>=B.lines.length?'':'• ')+t;card.appendChild(d);});
-      if(B.events&&B.events.length){const eh=document.createElement('div');eh.style.cssText='font-weight:700;font-size:.84em;margin-top:6px;';eh.textContent='🗓️ בקרוב ביומן';card.appendChild(eh);B.events.forEach(t=>{const d=document.createElement('div');d.className='maya-ev-line';d.style.cssText='font-size:.84em;line-height:1.55;';d.textContent='• '+t;card.appendChild(d);});}
+      const h=document.createElement('div');h.style.cssText='font-weight:700;margin-bottom:4px;';h.textContent='📅 '+B.title;card.appendChild(h);
+      // short and orderly: one overview sentence + at most 3 things that matter (reminders first, then upcoming events)
+      const ovr=B.lines.slice(0,2).join(' · ');
+      if(ovr){const d=document.createElement('div');d.className='maya-overview';d.style.cssText='font-size:.86em;line-height:1.6;color:var(--text2);';d.textContent=ovr;card.appendChild(d);}
+      const evs=(B.events||[]).filter(e=>{const t=e.split(' — ').slice(1).join(' — ');return !t||!B.reminders.some(r=>r.includes(t));}).map(e=>'🗓️ '+e);
+      B.reminders.concat(evs).slice(0,3).forEach(t=>{const d=document.createElement('div');d.className='maya-ev-line';d.style.cssText='font-size:.86em;line-height:1.6;font-weight:600;';d.textContent=t;card.appendChild(d);});
       if(B.hint){const d=document.createElement('div');d.className='maya-ev-hint';d.style.cssText='font-size:.78em;color:var(--muted);margin-top:6px;';d.textContent='ℹ️ '+B.hint;card.appendChild(d);}
       box.appendChild(card);
     }
@@ -5039,10 +5066,7 @@ function renderMayaScreen(){
   });
   const line=(txt)=>{const d=mk('maya-card maya-line','background:var(--bg2);border-radius:12px;padding:8px 14px;font-size:.84em;');d.textContent='💡 '+txt;box.appendChild(d);};
   const others=I.atRisk.length-Math.min(crit.length,3);
-  if(I.atRisk.length>0)line(I.atRisk.length===1?'יש משימה אחת בסיכון השבוע — כדאי להתחיל מהדחופות ולפנות זמן.':`יש ${I.atRisk.length} משימות בסיכון השבוע — כדאי להתחיל מהדחופות ולפנות זמן.`);
-  line(`נשארו לך כ-${I.freeHours.personal} שעות פנויות בעולם החיים וכ-${I.freeHours.work} בעולם העבודה השבוע (אחרי קיבולת יומית).`);
-  const nPrefs=I.learned.length,nRules=AI_RULES.length;
-  if(nPrefs+nRules>0)line(`למדתי ${nPrefs+nRules} העדפות עליך${nPrefs?` (${nPrefs} מהגרירות שלך)`:''} — אני מתחשבת בהן בכל תכנון.`);
+  if(others>0)line(others===1?'יש עוד משימה אחת שדורשת תשומת לב השבוע.':`יש עוד ${others} משימות שדורשות תשומת לב השבוע.`);
 }
 // ── Hidden channel helpers ──
 // Blocks the user must NEVER see. Pure. Removes closed fenced blocks of the given names
@@ -5076,7 +5100,7 @@ function _aiInsightsContext(state,rules,signals){
   return'\n'+L.join('\n');
 }
 async function resetAILearned(){
-  AI_PROFILE=emptyAIProfile();AI_PREFS='';AI_RULES=[];AI_SIGNALS=[];
+  AI_PROFILE=emptyAIProfile();AI_PREFS='';AI_RULES=normalizeAIRules(MAYA_CORE_RULES);AI_SIGNALS=[];
   if((STATE_ACTIVE?.constraintsGlobal?.weeklyClosed||[]).some(w=>w.sacred))dispatchEvent('personal',{type:'SET_SACRED_HOURS',items:[]});
   await _aiSaveProfile();await _aiSavePrefs();await _aiSaveRules();
 }
@@ -5088,7 +5112,7 @@ const AI_SYSTEM_PROMPT_BASE=`את/ה מאיה, המזכירה האישית של 
 {"semanticVersion":1,"intents":[{"action":"create_task","title":"...","calendar":"personal","durationHours":3,"deadline":"YYYY-MM-DD","importance":"normal","schedulingPreference":"flexible"}]}
 \`\`\`
 **זהו הפורמט היחיד שעליך להחזיר.** אל תחזיר/י אף פעם שדות פנימיים של המנוע — לא id, לא priorityWeight, לא planningDeadlineOffset, לא splitMode, לא lockedAssignments, לא slotId, לא policy, לא meta. רק את שדות החוזה הסמנטי שמופיעים כאן.
-כללים ל-intents מסוג create_task: calendar הוא personal (לימודים/חיים) או work — אם לא ברור, פשוט השמט/י את השדה (ברירת המחדל האוטומטית היא personal). importance: urgent/high/normal/low/background (ברירת מחדל normal אם לא ברור). durationHours ו-deadline הם **חובה** — אם המשתמש/ת לא ציין/ה דדליין בשום צורה (גם לא "עד סוף השבוע" או רמז דומה שאפשר לחשב ממנו תאריך), אל תמציא/י תאריך — שאל/י בקצרה "עד מתי צריך להשלים את זה?" בלי לצרף SEMANTIC_PLAN כלל.
+כללים ל-intents מסוג create_task: calendar הוא personal (לימודים/חיים) או work — אם לא ברור, פשוט השמט/י את השדה (ברירת המחדל האוטומטית היא personal). importance: urgent/high/normal/low/background (ברירת מחדל normal אם לא ברור). category (מומלץ): work/study/family/health/finance/errands/rest — סיווג המשימה; משימת עבודה = calendar work. durationHours ו-deadline הם **חובה** — אם המשתמש/ת לא ציין/ה דדליין בשום צורה (גם לא "עד סוף השבוע" או רמז דומה שאפשר לחשב ממנו תאריך), אל תמציא/י תאריך — שאל/י בקצרה "עד מתי צריך להשלים את זה?" בלי לצרף SEMANTIC_PLAN כלל.
 **schedulingPreference — קריטי לבחור נכון, זו סיבה נפוצה לתזמון שבור:** strict_contiguous (כל השעות ברצף אחד, בלי פיצול בכלל) הוא הבחירה הנכונה לכל דבר שהוא מפגש/אירוע חד-פעמי אחד במציאות ולא יכול "להתחלק" — דייט, פגישה, אימון בודד, ביקור אצל רופא, שיחת טלפון, סידור. **לעולם אל תיתן/י schedulingPreference=flexible לדבר כזה** — תוצאה כמו "חצי שעה לפני העבודה וחצי שעה אחריה" היא שגיאה, לא תזמון תקין. flexible (מפוזר, מותר בכל שעה בנפרד) מתאים רק לעבודה שבאמת אפשר לחלק לנתחים בלתי-תלויים — למידה, כתיבה, פרויקט מתמשך. prefer_contiguous הוא פשרה כשעדיף רצוף אבל לא קריטי. chunked הוא למקרה של "בבלוקים של עד X שעות עם הפסקת חובה של Y שעות ביניהם". בכל ספק בין flexible ל-strict_contiguous — עדיף strict_contiguous.
 intents מסוג create_event (דברים עם שעה קבועה בלו"ז — בחינה, פגישה עם שעה ידועה): {"action":"create_event","title":"...","date":"YYYY-MM-DD","startHour":9,"endHour":12}.
 מחיקת פריט קיים או שינוי שעות זמינות שבועיות קבועות: עדיין דרך הפורמט הישן \`\`\`PLAN_JSON — {"deletes":[{"type":"task","id":"..."}]} למחיקה, {"capacity":{"days":[0-6],"startHour":9,"endHour":17}} לשינוי שעות עבודה קבועות (days הם 0=ראשון עד 6=שבת; קובע את חלון "שעות עבודה" — חוסם אוטומטית את הלוח האישי באותן שעות, ומאפשר ללוח העבודה לתזמן רק בתוכן). id למחיקה הוא המזהה המדויק מרשימת "המשימות והאירועים הקיימים" שמופיעה למטה, **לעולם אל תמציא/י id**. אם המשתמש/ת מבקש/ת למחוק **הכל** — כלול/י ב-deletes את **כל** הפריטים מהרשימה, לא לשאול הבהרה. מחיקה פותחת אצל המשתמש/ת חלון אישור (לא נמחק מיידית) — נסח/י בהתאם ("פתחתי אישור מחיקה"), לא "מחקתי".
@@ -5103,7 +5127,7 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 4. היכרות (פרופיל): כשהמשתמש/ת מוסר/ת מידע אישי קבוע, צרף/י בסוף בלוק \`\`\`PROFILE_UPDATE עם JSON בלבד של הנושאים שנאמרו, למשל {"work":{"days":[1,2,3],"start":9,"end":13},"peak":{"start":9,"end":12},"freeDays":{"days":[0]},"routines":{"notes":"..."},"sacred":{"items":[{"days":[5],"start":17,"end":23,"quote":"ציטוט מדויק מהודעת המשתמש/ת שמזכיר את היום"}]},"routines":"none"}. ימים: 0=ראשון…6=שבת, שעות 0–24. שעות קדושות (שהמנוע יחסום באמת) רק אם המשתמש/ת אמר/ה במפורש יום ושעות, וה-quote חייב להיות העתקה מילה במילה מההודעה שלו/ה שמכילה את שם היום — אחרת אל תכלול/י. אם נאמר שאין כזה לנושא — "none". אל תמציא/י מידע שלא נאמר. תשובות קצרות: 2-3 משפטים.
 5. למידה מתמשכת: בכל הודעה את/ה מקבל/ת מחדש את כל מה שלמדת — נתוני הלוח העדכניים, הפרופיל, כל הכללים וההעדפות מהגרירות — ותשובתך צריכה להתבסס על כולם יחד, לא רק על ההודעה האחרונה. כשהמשתמש/ת מגלה העדפה או הרגל חדשים (למשל "אני לא יכול ללמוד בערב"), צרף/י בסוף בלוק \`\`\`LEARN_RULE עם JSON: {"add":["כלל קצר וברור, עד 140 תווים"],"remove":["קטע מדויק מכלל ישן שהכלל החדש מחליף או סותר"]}. אל תוסיף/י כלל שכבר קיים, אל תנסח/י כללים על דברים חד-פעמיים, ושפר/י כללים קיימים (החלף/י ניסוח לא מדויק) במקום לצבור כפילויות. כשתשובה נוגעת למשימות בסיכון או לשעות פנויות — השתמש/י במספרים מנתוני הלוח העדכניים בלבד, אל תמציא/י.
 6. תהליך נסתר בכל הודעה (המשתמש/ת לא רואה אותו): לפני שאת/ה כותב/ת תשובה — (א) עבור/י על כל הכללים שקיבלת, (ב) הסק/י מההודעה, מהתגובות האחרונות של המשתמש/ת להצעות שלך ומנתוני הלוח מה חדש, מה השתנה ומה כבר לא נכון, (ג) עדכן/י את הכללים בבלוק LEARN_RULE — הוסף/י כלל חדש, החלף/י כלל שהתברר כלא מדויק, הסר/י כלל שנסתר. אם לא נלמד דבר חדש — אל תצרף/י בלוק. הבלוקים הנסתרים (LEARN_RULE, PROFILE_UPDATE) נמחקים אוטומטית לפני שהמשתמש/ת רואה את התשובה.
-7. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
+7א. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
 7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
 let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting explicit user approval
@@ -5409,7 +5433,7 @@ function _aiCurrentItemsSummary(){
           id:t.id,title:t.title,label,deadline:t.deadline,
           remaining:r?.remainingUnits??t.requiredUnits,
           deadlineSort:t.deadline||'9999-99-99',
-          timesPerWeek:t.timesPerWeek,maxPerWeek:t.maxPerWeek,
+          timesPerWeek:t.timesPerWeek,maxPerWeek:t.maxPerWeek,cat:TASK_CATS[taskCategory(t,calId)],
         });
       });
     });
@@ -5427,7 +5451,7 @@ function _aiCurrentItemsSummary(){
         if(t.maxPerWeek)extra+=`, עד ${t.maxPerWeek} שעות בשבוע`;
         const remainingTxt=t.remaining!=null?`, נותרו ${t.remaining} שעות`:'';
         const dlTxt=t.deadline?`, דדליין ${t.deadline}`:'';
-        return `- [task ${t.id}] "${t.title}" (${t.label}${dlTxt}${remainingTxt}${extra})`;
+        return `- [task ${t.id}] "${t.title}" (${t.label}${t.cat?', סוג: '+t.cat:''}${dlTxt}${remainingTxt}${extra})`;
       });
       if(omitted>0)taskLines.push(`... ועוד ${omitted} משימות נוספות (לא מוצגות, כדי לשמור על תקציר תמציתי)`);
       sections.push('Current planning state (id מדויק לכל משימה — לשימוש רק אם צריך להתייחס/למחוק, לא לנחש):\n'+taskLines.join('\n'));
@@ -5485,6 +5509,24 @@ const SEMANTIC_PLAN_SUPPORTED_VERSIONS=[1];
 
 // Explicit, deterministic mappings — the ONLY allowed translation from
 // semantic vocabulary to engine vocabulary. Never inferred, never guessed.
+// ── Task categories: work vs life, and kinds of life. Pure. Maya's label (task.cat) wins; otherwise inferred from calendar + title keywords. ──
+const TASK_CATS={work:'עבודה',study:'לימודים',family:'משפחה',health:'בריאות',finance:'כספים',errands:'סידורים',rest:'מנוחה ופנאי',other:'אחר'};
+const _CAT_RULES=[
+  ['health',/רופא|שיניים|תרופ|חיסון|פיזיותרפ|ריצה|אימון|כושר|התעמל|יוגה|ספורט|בדיקת דם|בדיקה רפואית|(?<![א-ת])תור לרופא/],
+  ['finance',/חשבון בנק|בנק|ארנונה|תשלום|החזר מס|הלוואה|משכנתא|ביטוח|חשבונית|דוח שנתי|(?<![א-ת])מס(?![א-ת])|חשמל|מים/],
+  ['family',/משפחה|ילד|בית ספר|גן ילדים|(?<![א-ת])גן(?![א-ת])|אמא|אבא|סבתא|סבא|הורים|חתונה|יום הולדת|בן זוג|בת זוג|חברים/],
+  ['study',/מבחן|בוחן|שיעור|תרגיל|סמינר|מטלה|קורס|ללמוד|לימוד|הרצאה|אוניברסיטה|בגרות|מבחן/],
+  ['errands',/סידור|קנייה|קניות|סופר|דואר|מוסך|רכב|תיקון|איסוף|משלוח|ניקיון|כביסה|בישול|לבשל/],
+  ['rest',/מנוחה|שינה|סרט|סדרה|טיול|חופשה|פנאי|בילוי|קפה|מסעדה|מוזיקה|לקרוא ספר/]
+];
+function taskCategory(task,calId){
+  if(task&&typeof task.cat==='string'&&Object.prototype.hasOwnProperty.call(TASK_CATS,task.cat))return task.cat;
+  if(calId==='work'||(task&&task.calendar==='work'))return'work';
+  const t=String(task&&task.title||'');
+  for(const[c,re]of _CAT_RULES)if(re.test(t))return c;
+  return task&&task.type==='exam'?'study':'other';
+}
+const _validCat=c=>typeof c==='string'&&Object.prototype.hasOwnProperty.call(TASK_CATS,c)&&c!=='other';
 const IMPORTANCE_TO_PRIORITY={urgent:1,high:2,normal:3,low:4,background:5};
 const SCHEDULING_PREF_TO_SPLIT={flexible:'allowed',prefer_contiguous:'prefer_contiguous',strict_contiguous:'strict_contiguous',chunked:'chunked'};
 
@@ -5568,6 +5610,7 @@ function compileSemanticPlan(state,semanticPlan){
         id,calendar,title:intent.title.trim(),location:intent.location||'',deadline:intent.deadline,
         hours:intent.durationHours,priority:IMPORTANCE_TO_PRIORITY[importance],
         type:'generic',split:SCHEDULING_PREF_TO_SPLIT[schedulingPreference],
+        ...(_validCat(intent.category)?{cat:intent.category}:{}),
       });
     }
     else if(action==='create_event'){
@@ -5906,7 +5949,7 @@ function approveAIPlanProposal(proposal){
   for(const t of compiledTasks){
     const calId=t.calendar==='work'?'work':'personal';
     const payload={id:t.id,title:t.title,requiredUnits:t.hours,deadline:t.deadline,
-      priorityWeight:t.priority,splitMode:t.split,type:t.type||'generic',calendarId:calId,location:t.location||''};
+      priorityWeight:t.priority,splitMode:t.split,type:t.type||'generic',calendarId:calId,location:t.location||'',...(_validCat(t.cat)?{cat:t.cat}:{})};
     working=applyEvent(working,calId,{type:'ADD_TASK',payload});
   }
   const compiledEvents=proposal.compiledPlan.events||[];
@@ -6203,7 +6246,8 @@ function renderTaskBoard(){
       const dlTime=(tStart||tEnd)?`<div class="task-deadline-time">${escapeHTML(tStart||'')}–${escapeHTML(tEnd||'')}</div>`:'';
 
       const chip=r.level?`<span class="chip chip-${r.level}">${levelLabel(r.level)}</span>`:'';
-      const tags=task.tags?.length?task.tags.map(t=>`<span class="tag">${escapeHTML(t)}</span>`).join(' '):'';
+      const _cat=taskCategory(task,calId);
+      const tags=`<span class="tag tag-cat" data-cat="${_cat}">${TASK_CATS[_cat]}</span> `+(task.tags?.length?task.tags.map(t=>`<span class="tag">${escapeHTML(t)}</span>`).join(' '):'');
       const locHtml=task.location?`<div style="font-size:.78em;color:var(--muted2);">📍 ${escapeHTML(task.location)}</div>`:'';
       rows+=`<tr>
         <td>${escapeHTML(task.title||'')}${locHtml}${dlTime}</td>
@@ -6775,7 +6819,7 @@ function _checkOnboarding(){
    public by design; row-level security (cloud/setup.sql) protects the data.
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
-const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
+const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:rules_seeded','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
 function _inClaudeHost(){try{return !!(window.claude&&typeof window.claude.use==='function');}catch(_e){return false;}}
 
@@ -6969,7 +7013,7 @@ async function _cloudApplyRemote(row){
     STATE_ACTIVE=commitState(next,'cloud-pull');
     const ai=row.ai||{};
     if(typeof ai.prefs==='string')await window.storage.set('ai:prefs',ai.prefs);
-    if(Array.isArray(ai.rules))await window.storage.set('ai:rules',JSON.stringify(ai.rules));
+    if(Array.isArray(ai.rules)){await window.storage.set('ai:rules',JSON.stringify(ai.rules));await window.storage.set('ai:rules_seeded','1');}
     if(ai.profile)await window.storage.set('ai:profile',JSON.stringify(ai.profile));
     await _aiLoadState();
     const ov=document.getElementById('welcomeScreen');
@@ -10241,7 +10285,7 @@ function runMayaScreenTests(){
     ok('1. משימה קריטית → כרטיס "דחוף" עם שם המשימה וכפתור "איך מסדרים?"',!!card&&card.textContent.includes('דחוף')&&!!card.querySelector('button')&&card.querySelector('button').textContent==='איך מסדרים?');
     ok('2. הכרטיס מסביר למה (טקסט הסבר קיים)',!!card&&card.querySelectorAll('div').length>=2&&card.querySelectorAll('div')[1].textContent.length>10,card?card.textContent:'');
     ok('3. כותרת משתמש לא מוזרקת כ-HTML (אין <b> אמיתי)',!!card&&card.querySelector('b')===null&&card.textContent.includes('<b>'));
-    ok('4. שורות תובנה: סיכון, שעות פנויות, למדתי N העדפות',(()=>{const t=_box.textContent;return t.includes('בסיכון השבוע')&&t.includes('שעות פנויות')&&t.includes('למדתי 2 העדפות');})(),_box.textContent);
+    ok('4. מסך מאיה ענייני: כרטיס דחוף כן; "נשארו לך X שעות פנויות" ו"למדתי N העדפות" הם מידע פנימי ולא מוצגים',(()=>{const t=_box.textContent;return t.includes('דחוף')&&!t.includes('נשארו לך כ-')&&!t.includes('למדתי');})(),_box.textContent);
     // "איך מסדרים?" hands Maya a message about THIS task (sendAIMessage itself is async — covered end-to-end separately)
     let captured=null;const _origSend=sendAIMessage;sendAIMessage=function(){captured=document.getElementById('aiChatInput').value;};
     try{ if(card)card.querySelector('button').click(); }finally{ sendAIMessage=_origSend; }
@@ -11058,6 +11102,39 @@ async function runAccountTests(){
         await openGcalEditor('gcal_h_2026-10-14');
         ok('WR22. לחיצה על "תפוס" כששמות מוסתרים: מוצעת הצגת שמות; באישור — השמות נשמרים ומסונכרנים מחדש',asked.includes('מוסתרים')&&_gcalPrefs().hideTitles===false&&STATE_ACTIVE.constraintsGlobal.events.some(e=>e.title==='ישיבה אמיתית'));
       }finally{GCAL_CONFIG.clientId=prevCfg;_gcalAskWrite=prevAskW;window.fetch=prevFetch;STATE_ACTIVE=_sa;if(prevG)window.google=prevG;else delete window.google;try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}}
+    }
+    // CR. secretary rules, categories, tidy briefing
+    {
+      ok('CR1. 13 כללי מזכירה מובנים, כל אחד עד 140 תווים, בלי כפילויות',MAYA_CORE_RULES.length===13&&MAYA_CORE_RULES.every(r=>r.length<=AI_MAX_RULE_LEN)&&new Set(MAYA_CORE_RULES).size===13&&normalizeAIRules(MAYA_CORE_RULES).length===13);
+      const _sr=AI_RULES;
+      try{
+        try{await window.storage.delete('ai:rules');await window.storage.delete('ai:rules_seeded');}catch(_e){}
+        await window.storage.set('ai:rules',JSON.stringify(['כלל אישי א']));
+        await _aiLoadState();
+        const r1=AI_RULES.slice();
+        ok('CR2. טעינה ראשונה: הכללים המובנים נזרעים ליד כללים קיימים (בלי למחוק אותם)',r1.includes('כלל אישי א')&&MAYA_CORE_RULES.every(r=>r1.includes(r)));
+        AI_RULES=applyRuleUpdate(AI_RULES,{remove:['מספרים פנימיים'],add:['מספרים פנימיים: להציג רק כשמבקשים.']});await _aiSaveRules();
+        await _aiLoadState();
+        ok('CR3. מאיה יכולה להחליף כלל מובנה, והוא לא נזרע מחדש בטעינה הבאה',AI_RULES.includes('מספרים פנימיים: להציג רק כשמבקשים.')&&!AI_RULES.some(r=>r.startsWith('מספרים פנימיים (שעות פנויות')));
+        const ctx=_aiInsightsContext(STATE_ACTIVE,AI_RULES,[]);
+        ok('CR4. כל הכללים (כולל המובנים) נשלחים למאיה בכל הודעה',ctx.includes('כל הכללים שלמדת')&&ctx.includes('להיות מזכירה עניינית'));
+        await resetAILearned();
+        ok('CR5. איפוס "מה שנלמד" מחזיר את כללי המזכירה המובנים (לא מרוקן)',MAYA_CORE_RULES.every(r=>AI_RULES.includes(r)));
+      }finally{AI_RULES=_sr;try{await _aiSaveRules();}catch(_e){}}
+      ok('CR6. taskCategory: תווית של מאיה מנצחת; יומן עבודה=עבודה; הסקה ממילים; ברירת מחדל אחר',taskCategory({cat:'health',title:'x'},'personal')==='health'&&taskCategory({title:'ישיבה'},'work')==='work'&&taskCategory({title:'תור לרופא שיניים'},'personal')==='health'&&taskCategory({title:'לשלם ארנונה'},'personal')==='finance'&&taskCategory({title:'יום הולדת לאמא'},'personal')==='family'&&taskCategory({title:'ללמוד לסטטיסטיקה'},'personal')==='study'&&taskCategory({title:'סידורים בדואר'},'personal')==='errands'&&taskCategory({title:'משהו'},'personal')==='other'&&taskCategory({cat:'bogus',title:'משהו'},'personal')==='other');
+      const b0=baseState([]);b0.meta.today='2026-10-12';
+      const pr=prepareAIPlanProposal(b0,{semanticVersion:1,intents:[{action:'create_task',title:'לשלם ארנונה',calendar:'personal',durationHours:1,deadline:'2026-10-20',category:'finance'},{action:'create_task',title:'משהו',calendar:'personal',durationHours:1,deadline:'2026-10-21',category:'hacker'}]});
+      const ap=pr.valid?approveAIPlanProposal(pr):null;
+      let tk=null;try{tk=ap&&ap.valid!==false?(STATE_ACTIVE.calendars.personal.tasks||[]):null;}catch(_e){}
+      ok('CR7. הצעת מאיה עם category תקין נשמרת בתכנון; ערך לא חוקי נזרק בשקט (בלי לפסול את התכנון)',pr.valid===true&&pr.compiledPlan.tasks[0].cat==='finance'&&pr.compiledPlan.tasks[1].cat===undefined);
+      const bx=document.createElement('div');
+      ok('CR8. מסך הסקירה: לכל היותר 3 שורות עניין + משפט סיכום, בלי מספרי שעות בכותרת',(()=>{
+        const st0=baseState([]);st0.meta.today='2026-10-12';st0.meta.onboarded=true;
+        let st=st0;for(let i=0;i<6;i++)st=applyEvent(st,'personal',{type:'ADD_GLOBAL_EVENT',payload:{id:'k'+i,title:'פגישה '+i,date:'2026-10-1'+(3+Math.min(i,3)),startH:9+i,endH:10+i}});
+        const _s=STATE_ACTIVE;STATE_ACTIVE=st;try{renderMayaScreen();}finally{STATE_ACTIVE=_s;}
+        const card=document.getElementById('mayaWeekCard');const nl=card?card.querySelectorAll('.maya-ev-line').length:-1;const head=card?card.firstChild.textContent:'';
+        try{renderMayaScreen();}catch(_e){}
+        return !!card&&nl<=3&&nl>=1&&!/שעות מתוכננות/.test(head);})());
     }
     // MIC4-5. voice prefs
     {
