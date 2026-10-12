@@ -602,6 +602,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
   <input id="todayPicker" onchange="setTodayManual(this.value)" style="display:none;" type="date"/>
   <span id="resetTodayBtn" onclick="resetToday()" style="display:none;">🔬 ↩</span>
   <div class="hn-right">
+    <button class="hn-btn" id="hnAcc" onclick="openAccount()" title="החשבון שלי" aria-label="החשבון שלי" style="width:auto;padding:6px 10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82em;">👤 התחבר</button>
     <button class="hn-btn" onclick="switchTab('home')" title="בית" aria-label="בית">🏠</button>
     <button class="hn-btn hn-btn-wide" id="hnTasksBtn" onclick="switchTab('board')" title="משימות" aria-label="משימות">📋 <span class="hn-label">משימות</span></button>
     <button class="hn-btn hn-btn-wide" id="hnAiBtn" onclick="switchTab('ai')" title="תכנון עם AI" aria-label="תכנון עם AI">🤖 <span class="hn-label">AI</span></button>
@@ -3602,7 +3603,7 @@ function switchTab(tab){
   document.body.classList.toggle('ai-mode', tab==='ai');
   if(tab==='home'){
     const g=document.getElementById('homeGreeting');
-    if(g)g.textContent=(STATE_ACTIVE?.meta?.userName?`שלום ${STATE_ACTIVE.meta.userName}, אני מאיה 👋`:'שלום, אני מאיה 👋');
+    if(g){const _n=cloudDisplayName();g.textContent=(_n?`שלום ${_n}, אני מאיה 👋`:'שלום, אני מאיה 👋');}
   }
 
   // week controls visibility
@@ -6487,7 +6488,7 @@ function _stripSeedData(st){
   return ns;
 }
 function wFinish(){
-  const name=(document.getElementById('wName').value||'').trim();
+  const name=((document.getElementById('wName').value||'')||(cloudSignedIn()?cloudDisplayName():'')).trim();
   const role=(document.getElementById('wRole').value||'').trim();
   // No date-range question any more: the planning window starts at the anchor day
   // and always reaches ~a year ahead (it also rolls forward on boot — see extendPlanningHorizon).
@@ -6564,14 +6565,26 @@ let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecove
 let _reloadApp=()=>{try{location.reload();}catch(_e){}};
 let _cloudAsk=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
 
+function cloudDisplayName(){
+  const n=(CLOUD_SESSION&&CLOUD_SESSION.user&&CLOUD_SESSION.user.name)||(STATE_ACTIVE&&STATE_ACTIVE.meta&&STATE_ACTIVE.meta.userName)||'';
+  return String(n).trim();
+}
+function _renderAccChip(){
+  const b=document.getElementById('hnAcc');if(!b)return;
+  const n=cloudDisplayName();
+  b.textContent=cloudSignedIn()?('👤 שלום'+(n?' '+n:'')):'👤 התחבר';
+  const g=document.getElementById('homeGreeting');
+  if(g&&cloudSignedIn()&&n)g.textContent='שלום '+n+', אני מאיה 👋';
+}
 function cloudConfigured(){return !!(CLOUD_CONFIG.url&&CLOUD_CONFIG.anonKey);}
 function cloudSignedIn(){return !!(CLOUD_SESSION&&CLOUD_SESSION.access_token&&CLOUD_SESSION.user&&CLOUD_SESSION.user.id);}
 function _cloudLoadSession(){try{CLOUD_SESSION=JSON.parse(localStorage.getItem(CLOUD_SESSION_KEY)||'null');}catch(_e){CLOUD_SESSION=null;}}
-function _cloudStoreSession(s){CLOUD_SESSION=s||null;try{if(s)localStorage.setItem(CLOUD_SESSION_KEY,JSON.stringify(s));else localStorage.removeItem(CLOUD_SESSION_KEY);}catch(_e){}}
+function _cloudStoreSession(s){CLOUD_SESSION=s||null;try{if(s)localStorage.setItem(CLOUD_SESSION_KEY,JSON.stringify(s));else localStorage.removeItem(CLOUD_SESSION_KEY);}catch(_e){}
+  try{_renderAccChip();const wn=document.getElementById('wName');if(wn&&!wn.value&&s&&s.user&&s.user.name)wn.value=s.user.name;}catch(_e){}}
 function _cloudSessionFrom(d){
   if(!d||!d.access_token)return null;
   const exp=d.expires_at||(Math.floor(Date.now()/1000)+(d.expires_in||3600));
-  return{access_token:d.access_token,refresh_token:d.refresh_token||'',expires_at:exp,user:{id:d.user&&d.user.id,email:d.user&&d.user.email}};
+  return{access_token:d.access_token,refresh_token:d.refresh_token||'',expires_at:exp,user:{id:d.user&&d.user.id,email:d.user&&d.user.email,name:String((d.user&&d.user.user_metadata&&d.user.user_metadata.name)||'').slice(0,40)}};
 }
 function _cloudErrText(d,status){
   const raw=String((d&&(d.msg||d.error_description||d.message||d.error))||'');
@@ -6605,17 +6618,17 @@ async function _cloudEnsureFresh(){
   return false;
 }
 
-async function cloudSignUp(email,password){
+async function cloudSignUp(email,password,name){
   if(!cloudConfigured())return{ok:false,error:'חשבונות בענן עוד לא הופעלו באתר הזה'};
   email=String(email||'').trim();
   if(!email||!password)return{ok:false,error:'צריך אימייל וסיסמה'};
   if(String(password).length<8)return{ok:false,error:'הסיסמה צריכה להיות לפחות 8 תווים'};
   let _back='';try{_back=location.origin+location.pathname;}catch(_e){}
-  const r=await _cloudFetch('/auth/v1/signup'+(_back?'?redirect_to='+encodeURIComponent(_back):''),{method:'POST',auth:false,body:{email,password}}); // confirmation link returns to THIS page (must be in Supabase Redirect URLs)
+  const r=await _cloudFetch('/auth/v1/signup'+(_back?'?redirect_to='+encodeURIComponent(_back):''),{method:'POST',auth:false,body:{email,password,data:{name:String(name||'').trim().slice(0,40)}}}); // confirmation link returns to THIS page (must be in Supabase Redirect URLs)
   if(r.network)return{ok:false,error:'אין חיבור לשרת — בדוק אינטרנט'};
   if(!r.ok)return{ok:false,error:_cloudErrText(r.data,r.status)};
   const s=_cloudSessionFrom(r.data);
-  if(s){_cloudStoreSession(s);await cloudSyncOnLogin();return{ok:true,signedIn:true};}
+  if(s){if(name&&!s.user.name)s.user.name=String(name).trim().slice(0,40);_cloudStoreSession(s);await cloudSyncOnLogin();return{ok:true,signedIn:true};}
   return{ok:true,needsConfirm:true}; // project requires e-mail confirmation first
 }
 async function cloudSignIn(email,password){
@@ -6823,11 +6836,12 @@ function renderAccountModal(){
   }else if(_cloudRecovery){
     h='<div style="font-weight:700;margin-bottom:10px;">בחר סיסמה חדשה</div><input id="accNewPass" type="password" autocomplete="new-password" placeholder="סיסמה חדשה (8 תווים לפחות)" style="'+inp+'"/><button id="accSetPass" onclick="_accSetPass()" style="'+btn+'width:100%;background:var(--blue);color:#fff;">שמור סיסמה</button>';
   }else if(cloudSignedIn()){
-    h='<div style="font-size:.92em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
+    h='<div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">שלום '+escapeHTML(cloudDisplayName()||'')+'</div><div style="font-size:.88em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
   }else{
-    h=(CLOUD_CONFIG.google?'<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div>':(_accForced?'<div style="font-size:.9em;color:var(--text2);margin-bottom:12px;line-height:1.6;">התחבר או הירשם כדי להמשיך. הנתונים שלך נשמרים בחשבון ומסונכרנים בין המכשירים.</div>':''))+'<input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+(_accForced?'':resetBlock);
+    h=(CLOUD_CONFIG.google?'<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div>':(_accForced?'<div style="font-size:.9em;color:var(--text2);margin-bottom:12px;line-height:1.6;">התחבר או הירשם כדי להמשיך. הנתונים שלך נשמרים בחשבון ומסונכרנים בין המכשירים.</div>':''))+'<input id="accName" type="text" autocomplete="name" maxlength="40" placeholder="איך לקרוא לך?" style="'+inp+'display:none;direction:rtl;text-align:right;"/><input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+(_accForced?'':resetBlock);
   }
   const ai='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">🤖 חיבור AI</div><div id="accAiRoute" style="font-size:.8em;color:var(--text2);margin-bottom:8px;"></div><div style="display:flex;gap:8px;"><button id="accAiTest" onclick="_accTestAI()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בדוק את ה-AI</button><button id="accAiKey" onclick="setupAIKey().then(()=>_accRouteLabel())" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">🔑 מפתח אישי</button></div></div>';
+  _renderAccChip();
   body.innerHTML=h+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
   _accRouteLabel();
 }
@@ -6838,13 +6852,14 @@ async function _accRouteLabel(){
 }
 async function _accTestAI(){_cloudMsg('בודק…');const r=await testAIConnection();_cloudMsg(r.ok?'ה-AI עובד ✓ ('+r.route+')':r.error,!r.ok);_accRouteLabel();}
 async function _accSignIn(){ _cloudMsg('מתחבר…'); const r=await cloudSignIn(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('מחובר ✓'); }
-async function _accSignUp(){ _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
+async function _accSignUp(){ const nm=document.getElementById('accName'); if(nm&&nm.style.display==='none'){ nm.style.display='';nm.focus();_cloudMsg('כתוב איך לקרוא לך, ואז לחץ שוב על "הרשמה".'); return; } if(nm&&!nm.value.trim()){_cloudMsg('כתוב את השם שלך',true);nm.focus();return;} _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value,nm?nm.value:''); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
 async function _accForgot(){ const r=await cloudRecover(document.getElementById('accEmail').value); _cloudMsg(r.ok?'שלחנו קישור לאיפוס סיסמה לאימייל שלך.':r.error,!r.ok); }
 async function _accSetPass(){ const r=await cloudSetNewPassword(document.getElementById('accNewPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(_accForced&&cloudSignedIn()){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('הסיסמה עודכנה ✓'); }
 async function _accSyncNow(){ _cloudMsg('מסנכרן…'); const r=await cloudPush(); _cloudMsg(r.ok?'סונכרן ✓':(r.error||'הסנכרון נכשל'),!r.ok); }
 
 function _cloudBoot(){
   _cloudLoadSession();
+  try{_renderAccChip();const wn=document.getElementById('wName');if(wn&&!wn.value&&cloudSignedIn()&&CLOUD_SESSION.user.name)wn.value=CLOUD_SESSION.user.name;}catch(_e){}
   if(cloudConfigured()&&_cloudHandleRecoveryHash()){ setTimeout(openAccount,300); return; }
   if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ setTimeout(()=>{ if(cloudSignedIn())openAccount(); else openAccount({forced:true}); if(r&&r.error)_cloudMsg(r.error,true); },300); }).catch(()=>{}); return; }
   if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); return; }
@@ -10215,6 +10230,24 @@ async function runAccountTests(){
     CLOUD_CONFIG.google=false;renderAccountModal();
     const noG=!document.getElementById('accGoogle');CLOUD_CONFIG.google=true;renderAccountModal();const withG=!!document.getElementById('accGoogle');CLOUD_CONFIG.google=false;
     ok('G8. כפתור Google מוסתר כשלא הוגדר ומוצג כשמופעל',noG&&withG);
+    // N. display name: sign-up asks for a name, sign-in remembers it, header + greeting show it
+    reset();srv.signup=()=>J(200,tokenOk({user:{...U,user_metadata:{name:'דנה'}}}));
+    const rn=await cloudSignUp('dana@example.com','secret123','דנה');
+    ok('N1. הרשמה שולחת את השם ב-data (user_metadata) ושומרת אותו בסשן',rn.ok&&calls[0].body.data&&calls[0].body.data.name==='דנה'&&CLOUD_SESSION.user.name==='דנה');
+    reset();srv.signin=()=>J(200,tokenOk({user:{...U,user_metadata:{name:'דנה'}}}));
+    await cloudSignIn('dana@example.com','secret123');
+    ok('N2. כניסה עם מייל וסיסמה בלבד מחזירה את השם מהחשבון',cloudDisplayName()==='דנה');
+    const chip=document.getElementById('hnAcc');
+    ok('N3. כפתור הכותרת מציג "שלום דנה" ופותח את החשבון',!!chip&&chip.textContent.includes('שלום')&&chip.textContent.includes('דנה')&&chip.getAttribute('onclick')==='openAccount()');
+    _cloudStoreSession(null);
+    ok('N4. מנותק: הכפתור אומר "התחבר"',chip.textContent.includes('התחבר'));
+    CLOUD_CONFIG.google=false;_accForced=true;renderAccountModal();
+    const nameEl=document.getElementById('accName');const hiddenFirst=nameEl&&nameEl.style.display==='none';
+    document.getElementById('accEmail').value='n@x.co';document.getElementById('accPass').value='secret123';
+    calls.length=0;await _accSignUp();const noCallYet=calls.length===0&&nameEl.style.display!=='none';
+    await _accSignUp();const needsName=calls.length===0;
+    ok('N5. הרשמה: שדה שם מופיע בלחיצה ראשונה, ולא נשלחת בקשה בלי שם',hiddenFirst&&noCallYet&&needsName);
+    _accForced=false;_cloudStoreSession(null);
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}

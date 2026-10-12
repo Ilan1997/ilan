@@ -415,3 +415,6 @@ If it already exists, read it before assuming it doesn't. This file (`ARCHITECTU
 - The forced modal has no close button, `closeAccount()` is ignored until signed in, reset and AI blocks are hidden; it closes itself after sign-in / sign-up / new password.
 - The Google button is shown only when `CLOUD_CONFIG.google` is true (currently false).
 - Tests: `runAccountTests` G1–G8.
+
+## 25. Display name
+Sign-up asks for a name (the "הרשמה" button first reveals the `accName` field); it is sent as `data:{name}` (Supabase `user_metadata`), kept in the session (`CLOUD_SESSION.user.name`) and returned on every sign-in, so e-mail + password is enough later. `cloudDisplayName()` feeds the header chip `#hnAcc` ("👤 שלום <שם>" / "👤 התחבר", opens the account modal), the home greeting and the wizard name prefill. Tests N1–N5.
