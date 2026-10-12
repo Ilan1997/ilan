@@ -3188,6 +3188,24 @@ function migrateState(rawState,fromVersion){
   return migrated;
 }
 
+// Demo fixture that older versions saved into real users' data (exams "שיטות מחקר מימון"…, 3 reserves, a one-off block). Removed ONCE, only when it still matches the fixture exactly.
+function _purgeDemoSeed(st){
+  if(!st||!st.meta||st.meta.demoPurged)return st;
+  const ns=structuredClone(st);const cal=ns.calendars&&ns.calendars.personal;let changed=false;
+  if(cal){
+    const seedT={methods:'שיטות מחקר מימון',finance:'ניהול פיננסי',reports:'ניתוח דוחות כספיים',invest:'השקעות וניירות ערך',seminar:'סמינריון במימון',workshop:'סדנה – טכנולוגיות מידע'};
+    const gone=new Set();
+    cal.tasks=(cal.tasks||[]).filter(t=>{const m=seedT[t.id]===t.title&&t.type==='exam';if(m){gone.add(t.id);changed=true;}return !m;});
+    const seedR=['שיווק','ניהול מערכות מידע','כלכלת עסקים'];
+    cal.reserves=(cal.reserves||[]).filter(r=>{const m=seedR.includes(r.name)&&r.note==='דחוף – ללא תאריך';if(m)changed=true;return !m;});
+    if(gone.size&&cal.lockedAssignments){for(const k of Object.keys(cal.lockedAssignments)){const v=cal.lockedAssignments[k];if(gone.has(v&&v.taskId)||[...gone].some(id=>String(k).includes(id))){delete cal.lockedAssignments[k];}}}
+    if(gone.size&&ns.examDays){for(const id of gone)delete ns.examDays[id];}
+    if(cal.constraints&&Array.isArray(cal.constraints.onceBlocked)){const b=cal.constraints.onceBlocked.length;cal.constraints.onceBlocked=cal.constraints.onceBlocked.filter(o=>!(o&&o.date==='2026-02-16'&&Array.isArray(o.freeHours)&&o.freeHours.join()==='18,19'));if(cal.constraints.onceBlocked.length!==b)changed=true;}
+  }
+  ns.meta={...ns.meta,demoPurged:true};
+  if(changed)window.__demoPurged=true;
+  return ns;
+}
 function loadState(){
   try{
     const raw=localStorage.getItem(LS_KEY);
@@ -3195,9 +3213,9 @@ function loadState(){
     const parsed=JSON.parse(raw);
     if(parsed.schemaVersion!==SCHEMA_VERSION){
       console.warn('State schema mismatch — migrating instead of discarding (from v'+parsed.schemaVersion+' to v'+SCHEMA_VERSION+').');
-      return migrateState(parsed.state,parsed.schemaVersion);
+      return _purgeDemoSeed(migrateState(parsed.state,parsed.schemaVersion));
     }
-    return migrateState(parsed.state,parsed.schemaVersion); // also fills gaps on the CURRENT version — cheap and safe
+    return _purgeDemoSeed(migrateState(parsed.state,parsed.schemaVersion)); // also fills gaps on the CURRENT version — cheap and safe
   }catch(e){console.warn('loadState failed:',e);return null;}
 }
 
@@ -6397,7 +6415,7 @@ if(!STATE_ACTIVE.meta.todayIsManual){
     _bootStateChanged=true;
   }
 }
-if(_bootStateChanged)saveState(); // persist any boot migration atomically
+if(_bootStateChanged||window.__demoPurged)saveState(); // persist any boot migration atomically
 recalcAndRender();
 renderTagSelect();
 updateStatusBar();
@@ -6712,7 +6730,7 @@ async function _cloudApplyRemote(row){
   _cloudApplying=true;
   try{
     const raw=row.state&&row.state.state?row.state.state:row.state;
-    const next=migrateState(raw,row.state&&row.state.schemaVersion);
+    const next=_purgeDemoSeed(migrateState(raw,row.state&&row.state.schemaVersion));
     // keep the planning anchor sane: a state saved on another day must not freeze "today" in the past
     if(!next.meta.todayIsManual)next.meta.today=getTodayISO();
     STATE_ACTIVE=commitState(next,'cloud-pull');
@@ -6802,7 +6820,7 @@ function renderAccountModal(){
   }else if(_cloudRecovery){
     h='<div style="font-weight:700;margin-bottom:10px;">בחר סיסמה חדשה</div><input id="accNewPass" type="password" autocomplete="new-password" placeholder="סיסמה חדשה (8 תווים לפחות)" style="'+inp+'"/><button id="accSetPass" onclick="_accSetPass()" style="'+btn+'width:100%;background:var(--blue);color:#fff;">שמור סיסמה</button>';
   }else if(cloudSignedIn()){
-    h='<div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">שלום '+escapeHTML(cloudDisplayName()||'')+'</div><div style="font-size:.88em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
+    h='<div style="font-size:1.05em;font-weight:700;margin-bottom:4px;">שלום '+escapeHTML(cloudDisplayName()||'')+'</div>'+(cloudDisplayName()?'':'<div style="display:flex;gap:6px;margin:8px 0;"><input id="accName2" type="text" maxlength="40" placeholder="איך לקרוא לך?" style="flex:1;box-sizing:border-box;padding:9px 10px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;"/><button id="accSaveName" onclick="_accSaveName()" style="'+btn+'padding:9px 14px;background:var(--blue);color:#fff;">שמור</button></div>')+'<div style="font-size:.88em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
   }else{
     h=(CLOUD_CONFIG.google?'<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div>':(_accForced?'<div style="font-size:.9em;color:var(--text2);margin-bottom:12px;line-height:1.6;">התחבר או הירשם כדי להמשיך. הנתונים שלך נשמרים בחשבון ומסונכרנים בין המכשירים.</div>':''))+'<input id="accName" type="text" autocomplete="name" maxlength="40" placeholder="איך לקרוא לך?" style="'+inp+'display:none;direction:rtl;text-align:right;"/><input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+(_accForced?'':resetBlock);
   }
@@ -6817,6 +6835,15 @@ async function _accRouteLabel(){
   el.textContent={claude:'מחובר דרך Claude — אין צורך במפתח.',proxy:'משתמש בשירות המשותף של האפליקציה (עם מכסה יומית).',none:'לא מחובר ל-AI. התחבר לחשבון.'}[r]||'';
 }
 async function _accTestAI(){_cloudMsg('בודק…');const r=await testAIConnection();_cloudMsg(r.ok?'ה-AI עובד ✓ ('+r.route+')':r.error,!r.ok);_accRouteLabel();}
+async function _accSaveName(){
+  const el=document.getElementById('accName2');const n=String(el&&el.value||'').trim().slice(0,40);
+  if(!n){_cloudMsg('כתוב את השם שלך',true);return;}
+  if(!(await _cloudEnsureFresh())){_cloudMsg('ההתחברות פגה — התחבר שוב',true);return;}
+  const r=await _cloudFetch('/auth/v1/user',{method:'PUT',body:{data:{name:n}}});
+  if(!r.ok){_cloudMsg(r.network?'אין חיבור לשרת':'לא הצלחתי לשמור את השם',true);return;}
+  _cloudStoreSession({...CLOUD_SESSION,user:{...CLOUD_SESSION.user,name:n}});
+  renderAccountModal();_cloudMsg('נשמר ✓');
+}
 async function _accSignIn(){ _cloudMsg('מתחבר…'); const r=await cloudSignIn(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('מחובר ✓'); }
 async function _accSignUp(){ const nm=document.getElementById('accName'); if(nm&&nm.style.display==='none'){ nm.style.display='';nm.focus();_cloudMsg('כתוב איך לקרוא לך, ואז לחץ שוב על "הרשמה".'); return; } if(nm&&!nm.value.trim()){_cloudMsg('כתוב את השם שלך',true);nm.focus();return;} _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value,nm?nm.value:''); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
 async function _accForgot(){ const r=await cloudRecover(document.getElementById('accEmail').value); _cloudMsg(r.ok?'שלחנו קישור לאיפוס סיסמה לאימייל שלך.':r.error,!r.ok); }
@@ -9156,7 +9183,7 @@ function auditStateMutationPaths(){
 function auditAssignmentMutationPaths(){
   const src=Array.from(document.getElementsByTagName('script')).map(s=>s.textContent||'').join('\n');
   const lines=src.split('\n');
-  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests','resetUserData'];
+  const ALLOWED_FUNCS=['_applyChangeToLocks','_applyEventInner','validateAssignmentChange','migrateState','_purgeDemoSeed','_deepDefaults','runCoreTests','runUserScenarios','importState','runBlockRenderTests','runApprovalCTATests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runAccountTests','runDayOverrideTests','resetUserData'];
   const writePattern=/\.lockedAssignments\[[^\]]+\]\s*=(?!=)/;
   const deletePattern=/delete\s+\w+\.lockedAssignments\[/;
   const validatedPlanPaths=[];
@@ -10215,6 +10242,25 @@ async function runAccountTests(){
     await _accSignUp();const needsName=calls.length===0;
     ok('N5. הרשמה: שדה שם מופיע בלחיצה ראשונה, ולא נשלחת בקשה בלי שם',hiddenFirst&&noCallYet&&needsName);
     _accForced=false;_cloudStoreSession(null);
+    // D. demo fixture saved in older users' data is removed once, exact matches only
+    {
+      const seed=structuredClone(STATE);seed.meta.onboarded=true;
+      seed.calendars.personal.tasks.push({id:'mine',type:'exam',title:'המבחן שלי',requiredUnits:4,deadline:'2026-12-01'});
+      const pr=_purgeDemoSeed(seed);const ids=pr.calendars.personal.tasks.map(t=>t.id);
+      ok('D1. משימות ההדגמה (שיטות מחקר מימון וכו\') ו-3 הרזרבות נמחקות; משימה של המשתמש נשארת',ids.join()==='mine'&&pr.calendars.personal.reserves.length===0&&pr.meta.demoPurged===true);
+      const edited=structuredClone(STATE);edited.calendars.personal.tasks[0].title='שיטות מחקר מימון — שיניתי';
+      const pe=_purgeDemoSeed(edited);
+      ok('D2. משימה שהמשתמש שינה את השם שלה לא נמחקת',pe.calendars.personal.tasks.some(t=>t.id==='methods'));
+      const pagain=structuredClone(pr);pagain.calendars.personal.tasks.push({id:'methods',type:'exam',title:'שיטות מחקר מימון'});
+      ok('D3. רץ פעם אחת בלבד (demoPurged): משימה שנוספה אחר כך באותו שם לא נמחקת',_purgeDemoSeed(pagain).calendars.personal.tasks.some(t=>t.id==='methods'));
+    }
+    // E. signed-in user without a name can add one
+    reset();_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3000,user:{id:'u-1',email:'n@x.co'}});
+    const _sn=STATE_ACTIVE.meta.userName;STATE_ACTIVE.meta.userName='';renderAccountModal();
+    const hasBox=!!document.getElementById('accName2');document.getElementById('accName2').value='נועה';
+    await _accSaveName();
+    ok('E1. מחובר בלי שם: מופיע שדה שם; שמירה שולחת PUT /auth/v1/user עם data.name ומעדכנת את השלום',hasBox&&calls.some(c=>c.m==='PUT'&&c.u.includes('/auth/v1/user')&&c.body.data.name==='נועה')&&cloudDisplayName()==='נועה'&&!document.getElementById('accName2'));
+    STATE_ACTIVE.meta.userName=_sn;_cloudStoreSession(null);
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}

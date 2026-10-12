@@ -427,3 +427,6 @@ Addendum: `CLOUD_CONFIG` also moved to the top (saveState → cloudConfigured re
 
 ## 27. AI route: proxy only
 No personal keys, no direct Anthropic/Gemini from the browser (CSP allows only Supabase). Outside claude.ai every message goes through the `maya-ai` Edge Function for signed-in users, after a one-time legal consent (`maya_ai_consent` in localStorage). Rules learning is unchanged: `AI_RULES` are re-sent on every message and the model updates them through the hidden `LEARN_RULE` block (see system prompt step 6).
+
+## 28. One-time demo-seed purge
+Older versions stored the demo fixture (6 exams, 3 reserves, a one-off block) inside real users' saved state. `_purgeDemoSeed` (called from `loadState` and the cloud pull) removes entries that still match the fixture exactly (id+title / name+note), once per state (`meta.demoPurged`), and flags `window.__demoPurged` so boot persists the cleaned state (which then syncs to the cloud). Tests D1–D3; signed-in users without a name get a name field in the account window (E1).
