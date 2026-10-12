@@ -485,3 +485,11 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - Model channel: hidden `SOFT_RULE` block (`{add, exception, soften, remove}`), stripped from the visible reply. Prompt item 6ב tells Maya to ASK first ("רוצה שאנסה לא להכניס לך דברים בשישי?"), never use "אסור/חובה", accept one-off exceptions without arguing, and offer to soften when exceptions repeat. `_aiSoftContext` re-sends the rules on every message.
 - UI: collapsible card on the Maya screen (`renderKnowCard`): groups "מה חשוב לך" / "גבולות והעדפות" / "איך אתה עובד" (profile items are shown in plain words too). Each soft rule has a strength chip (tap to soften/harden) and "✕ כבר לא נכון"; profile items can be removed (`none`, so she doesn't re-ask) or "שנה" (opens the topic in chat). The user can add their own.
 - Tests: SF1–SF13 (`runAIProfileTests`), K1–K9 (`runMayaScreenTests`), SP1–SP4 (`runAccountTests`). Not yet built: learning rules automatically from behaviour (moves/removals) without the model; the model-driven proposals are untested against real Gemini.
+
+## §40 Automatic Google sync and live briefing
+
+- Root cause of "the briefing doesn't update": Google Calendar was imported only when the user pressed sync, and the Maya screen rendered only on tab switch. Now `gcalAutoSync()` runs on open (+3s), on tab focus/visibility, and every 5 minutes while visible, throttled to once per 2 minutes (`gcalAutoSyncDue`), skipped while the login gate is up.
+- `gcalSync({auto:true})`: silent (no error UI; token failures return `{ok:false,silent:true}`), reuses a still-valid cached token, and skips the state dispatch when the imported events are identical (`_gcalSig`, declared at the top of the script). Manual sync always refreshes. A silent refresh relies on Google's own session; if Google needs interaction it fails quietly and the manual button remains.
+- `recalcAndRender` now re-renders the Maya screen when it is the active tab, so the weekly briefing follows any calendar change. The week card shows "יומן גוגל עודכן לפני …" (`agoHe`) with a "↻ סנכרן עכשיו" button.
+- Briefing polish: a leading time in an event title that repeats the displayed time is stripped; events more than 6 days away show the date (22/10) instead of "(בעוד N ימים)".
+- Tests: AS1–AS12 in `runAccountTests`. Real Google behaviour is unverified (sandbox cannot reach Google).

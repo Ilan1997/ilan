@@ -1402,6 +1402,7 @@ let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken=''
 const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
 let _micSpeakNext=false;
 let _boardCat='all';
+let _gcalSig='',_gcalLastAuto=0;   // auto-sync: signature of the last imported events + time of the last silent attempt
 let AI_SOFT=[];              // Maya's flexible, learned preferences/boundaries (persisted: ai:soft) — soft context only, never an engine rule
 let _accForced=false;
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
@@ -3768,6 +3769,7 @@ function recalcAndRender(){
   updateStatusBar(); // sync status bar immediately after any state change
   if(ACTIVE_TAB==='study'||ACTIVE_TAB==='work')renderEngine();
   else if(ACTIVE_TAB==='settings')renderSettings(); // year view replaced by settings
+  else if(ACTIVE_TAB==='ai'){try{renderMayaScreen();}catch(_me){console.warn('renderMayaScreen failed',_me);}} // keeps the briefing live when the calendar changes under it
   else if(ACTIVE_TAB==='board'){
     renderTaskBoard();
     renderEngine(); // keeps the relocated status/reserves/micro-tasks/alerts/events widgets live
@@ -5220,14 +5222,15 @@ function computeWeekBriefing(state,extra){
     (ex.allDay||[]).forEach(e=>{if(e&&e.date>=today&&e.date<=addDays(today,14)&&isKnown(e.title))all.push({date:e.date,min:-1,title:e.title,allDay:true});});
     all.sort((a,b)=>a.date.localeCompare(b.date)||a.min-b.min);
     const diffOf=d=>Math.round((new Date(d+'T12:00:00Z')-new Date(today+'T12:00:00Z'))/86400000);
-    const whenOf=d=>{const n=diffOf(d);return n===0?'היום':(n===1?'מחר':'יום '+_HE_DAYS[dowOf(d)]+(n>6?` (בעוד ${n} ימים)`:''));};
+    const whenOf=d=>{const n=diffOf(d);return n===0?'היום':(n===1?'מחר':'יום '+_HE_DAYS[dowOf(d)]+(n>6?' '+d.slice(8,10)+'/'+d.slice(5,7):''));};
+    const cleanTitle=t=>String(t||'').replace(/^\s*\d{1,2}[:.]\d{2}\s*[|\-–—:]\s*/,'').trim()||String(t||'');
     const hh=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
-    all.filter(e=>diffOf(e.date)<=7).slice(0,5).forEach(e=>out.events.push(`${whenOf(e.date)}${e.allDay?' (כל היום)':' '+hh(e.min)} — ${e.title}`));
+    all.filter(e=>diffOf(e.date)<=7).slice(0,5).forEach(e=>out.events.push(`${whenOf(e.date)}${e.allDay?' (כל היום)':' '+hh(e.min)} — ${cleanTitle(e.title)}`));
     let added=0;
     all.forEach(e=>{
       if(added>=2||!_KEY_EVENT_RE.test(e.title))return;
       if(out.reminders.some(r=>r.includes(e.title)))return;
-      out.reminders.push(`📌 ${e.title} — ${whenOf(e.date)}${e.allDay?'':' '+hh(e.min)}. כדאי להתכונן מראש`);added++;
+      out.reminders.push(`📌 ${cleanTitle(e.title)} — ${whenOf(e.date)}${e.allDay?'':' '+hh(e.min)}. כדאי להתכונן מראש`);added++;
     });
     if(ex.hiddenTitles&&ex.busyCount>0)out.hint=`ביומן גוגל יש ${ex.busyCount} בלוקים תפוסים, אבל שמות האירועים מוסתרים. כדי שאזהה אירועים חשובים ואתריע עליהם — הפעל "הצג את שמות האירועים" ב-👤 החשבון.`;
   }
@@ -5293,6 +5296,14 @@ function _aiAskAbout(title){
   const input=document.getElementById('aiChatInput');if(!input)return;
   input.value=`איך מסדרים את "${title}"? מה את מציעה?`;
   sendAIMessage();
+}
+// PURE: "לפני 3 דקות" style relative time (Hebrew). now is injectable for tests.
+function agoHe(iso,now){
+  const t=new Date(iso).getTime();if(isNaN(t))return'';
+  const m=Math.max(0,Math.round(((now==null?Date.now():now)-t)/60000));
+  if(m<1)return'ממש עכשיו';if(m===1)return'לפני דקה';if(m<60)return'לפני '+m+' דקות';
+  const h=Math.round(m/60);if(h===1)return'לפני שעה';if(h<24)return'לפני '+h+' שעות';
+  const d=Math.round(h/24);return d===1?'אתמול':'לפני '+d+' ימים';
 }
 // ── "מה מאיה יודעת עליי": one card, plain words, everything correctable ──
 function _knowItems(){
@@ -5396,6 +5407,16 @@ function renderMayaScreen(){
       const evs=(B.events||[]).filter(e=>{const t=e.split(' — ').slice(1).join(' — ');return !t||!B.reminders.some(r=>r.includes(t));}).map(e=>'🗓️ '+e);
       B.reminders.concat(evs).slice(0,3).forEach(t=>{const d=document.createElement('div');d.className='maya-ev-line';d.style.cssText='font-size:.86em;line-height:1.6;font-weight:600;';d.textContent=t;card.appendChild(d);});
       if(B.hint){const d=document.createElement('div');d.className='maya-ev-hint';d.style.cssText='font-size:.78em;color:var(--muted);margin-top:6px;';d.textContent='ℹ️ '+B.hint;card.appendChild(d);}
+      {
+        const gp=_gcalPrefs();
+        if(gcalAvailable()&&gp.on){
+          const f=document.createElement('div');f.className='maya-fresh';f.style.cssText='display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.76em;color:var(--muted);';
+          const t=document.createElement('span');t.textContent=gp.last?'יומן גוגל עודכן '+agoHe(gp.last):'יומן גוגל עוד לא סונכרן';f.appendChild(t);
+          const b=document.createElement('button');b.type='button';b.className='maya-sync';b.textContent='↻ סנכרן עכשיו';b.style.cssText='border:1px solid var(--border);background:#fff;border-radius:999px;padding:2px 9px;font-size:1em;cursor:pointer;font-family:inherit;';
+          b.onclick=async()=>{b.disabled=true;b.textContent='מסנכרן…';const r=await gcalSync();if(!r.ok){showErrorToast(r.error);}try{renderMayaScreen();}catch(_e){}};
+          f.appendChild(b);card.appendChild(f);
+        }
+      }
       box.appendChild(card);
     }
   }
@@ -7740,23 +7761,43 @@ async function gcalConnect(){
   }
   return gcalSync();
 }
-async function gcalSync(){
-  if(!gcalAvailable()||_gcalBusy)return{ok:false,error:'חיבור יומן גוגל עוד לא הופעל באתר הזה'};
-  const pr=_gcalPrefs();if(!pr.consent)return{ok:false,error:'צריך קודם לאשר את חיבור היומן'};
+// opts.auto: silent background refresh — no popups beyond Google's own silent token refresh, no error UI, skips the dispatch when nothing changed.
+async function gcalSync(opts){
+  const auto=!!(opts&&opts.auto);
+  if(!gcalAvailable()||_gcalBusy)return{ok:false,error:'חיבור יומן גוגל עוד לא הופעל באתר הזה',silent:auto};
+  const pr=_gcalPrefs();if(!pr.consent)return{ok:false,error:'צריך קודם לאשר את חיבור היומן',silent:auto};
   _gcalBusy=true;
   try{
-    const token=await _gcalRequestToken();_gcalLastToken=token;
+    const token=(auto&&_gcalLastToken&&Date.now()<_gcalTokenExp)?_gcalLastToken:await _gcalRequestToken();_gcalLastToken=token;
     const items=await _gcalFetchItems(token);
     const blocks=gcalItemsToBlocks(items,pr.hideTitles!==false);
-    dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:blocks});
-    _gcalSaveAllDay(gcalAllDayFromItems(items,pr.hideTitles!==false));
+    const sig=JSON.stringify(blocks)+'|'+JSON.stringify(gcalAllDayFromItems(items,pr.hideTitles!==false));
+    const changed=!(auto&&sig===_gcalSig);
+    if(changed){
+      dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:blocks});
+      _gcalSaveAllDay(gcalAllDayFromItems(items,pr.hideTitles!==false));
+    }
+    _gcalSig=sig;
     _gcalSavePrefs({..._gcalPrefs(),on:true,last:new Date().toISOString(),count:blocks.length});
-    return{ok:true,count:blocks.length};
+    if(changed&&ACTIVE_TAB==='ai'){try{renderMayaScreen();}catch(_e){}}
+    return{ok:true,count:blocks.length,changed};
   }catch(e){
     const m=String(e&&e.message||e);
-    return{ok:false,error:(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')?'לא אושרה גישה ליומן בגוגל':(e&&e.status?'ההרשאה ליומן פגה או נדחתה — נסה לחבר שוב':(m==='gis-load'?'לא הצלחתי לטעון את גוגל — בדוק אינטרנט':'סנכרון היומן נכשל — נסה שוב'))};
+    return{ok:false,silent:auto,error:(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')?'לא אושרה גישה ליומן בגוגל':(e&&e.status?'ההרשאה ליומן פגה או נדחתה — נסה לחבר שוב':(m==='gis-load'?'לא הצלחתי לטעון את גוגל — בדוק אינטרנט':'הסנכרון נכשל — נסה שוב'))};
   }finally{_gcalBusy=false;}
 }
+// Keeps the calendar fresh without the user pressing sync: on open, when the tab comes back, and every few minutes while visible.
+function gcalAutoSyncDue(now){const pr=_gcalPrefs();return !!(gcalAvailable()&&pr.on&&pr.consent&&!_gcalBusy&&(now-_gcalLastAuto)>=120000);}
+async function gcalAutoSync(){
+  const now=Date.now();
+  if(document.visibilityState==='hidden'||document.body.classList.contains('app-locked')||!gcalAutoSyncDue(now))return null;
+  _gcalLastAuto=now;
+  try{return await gcalSync({auto:true});}catch(_e){return null;}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')gcalAutoSync();});
+window.addEventListener('focus',()=>{gcalAutoSync();});
+setInterval(()=>{gcalAutoSync();},5*60*1000);
+setTimeout(()=>{gcalAutoSync();},3000);
 // ── Google Calendar WRITE (create / edit / delete). Opt-in (separate Google permission), primary calendar only, every action approved by the user. ──
 function gcalWriteEnabled(){const p=_gcalPrefs();return !!(p.on&&p.write);}
 function _gcalAsk(msg,needCheck){ // Promise<boolean>. Tests replace it with _gcalAskWrite(msg).
@@ -7986,7 +8027,7 @@ function _aiOfferCalCreate(list){
 }
 function gcalDisconnect(){
   try{dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:[]});}catch(_e){}
-  _gcalSaveAllDay([]);_gcalTokenExp=0;
+  _gcalSaveAllDay([]);_gcalTokenExp=0;_gcalSig='';
   try{const o2=window.google&&window.google.accounts&&window.google.accounts.oauth2;if(o2&&o2.revoke&&_gcalLastToken)o2.revoke(_gcalLastToken,()=>{});}catch(_e){}
   try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
 }
@@ -11671,6 +11712,55 @@ async function runAccountTests(){
         let gone=false;try{const v=(await window.storage.get('ai:soft')).value;gone=JSON.parse(v).length===0;}catch(_e){gone=true;}
         ok('SP4. איפוס למידה מנקה את הכללים הגמישים',AI_SOFT.length===0&&gone);
       }finally{AI_SOFT=_ss;}
+    }
+    // AS. automatic Google sync + live briefing
+    {
+      const prevCfg=GCAL_CONFIG.clientId,prevFetch=window.fetch,prevG=window.google,_sa=STATE_ACTIVE,_st=ACTIVE_TAB,prevPrefs=localStorage.getItem(GCAL_PREF_KEY),pl=_gcalLastToken,pe=_gcalTokenExp,pla=_gcalLastAuto,psig=_gcalSig;
+      try{
+        GCAL_CONFIG.clientId='cid.apps.googleusercontent.com';_gcalSavePrefs({on:true,consent:'x',hideTitles:false});_gcalSig='';_gcalLastToken='';_gcalTokenExp=0;
+        let tokenMode='ok',fetches=0;
+        window.google={accounts:{oauth2:{initTokenClient:c=>({requestAccessToken:()=>{if(tokenMode==='ok')c.callback({access_token:'as-tok',expires_in:3600});else c.callback({error:'popup_failed_to_open'});}}),revoke:()=>{}}}};
+        let items=[{id:'g1',summary:'פגישה עם לקוח',start:{dateTime:'2026-10-14T10:00:00'},end:{dateTime:'2026-10-14T11:00:00'}}];
+        window.fetch=async()=>{fetches++;return{ok:true,status:200,json:async()=>({items})};};
+        const b=baseState([]);b.meta.today='2026-10-12';b.meta.startDate='2026-10-04';b.meta.endDate='2027-01-01';b.meta.onboarded=true;
+        STATE_ACTIVE=b;ACTIVE_TAB='study';
+        ok('AS1. הסנכרון האוטומטי מתוזמן רק אם היומן מחובר, ולא יותר מפעם בשתי דקות',(()=>{_gcalLastAuto=0;const a=gcalAutoSyncDue(Date.now());_gcalLastAuto=Date.now();const c=gcalAutoSyncDue(Date.now());_gcalLastAuto=0;_gcalSavePrefs({on:false,consent:'x'});const d=gcalAutoSyncDue(Date.now());_gcalSavePrefs({on:true,consent:'x',hideTitles:false});return a&&!c&&!d;})());
+        let r=await gcalSync({auto:true});
+        const has=t=>((STATE_ACTIVE.constraintsGlobal||{}).events||[]).some(e=>e.title===t);
+        ok('AS2. סנכרון אוטומטי ראשון מייבא את האירועים',r.ok&&r.changed&&has('פגישה עם לקוח'));
+        const ref=STATE_ACTIVE;r=await gcalSync({auto:true});
+        ok('AS3. סנכרון אוטומטי בלי שינוי ביומן לא נוגע ב-state (אין רינדור ושמירה מיותרים)',r.ok&&!r.changed&&STATE_ACTIVE===ref);
+        items=[{id:'g1',summary:'פגישה עם לקוח (הוזזה)',start:{dateTime:'2026-10-14T12:00:00'},end:{dateTime:'2026-10-14T13:00:00'}}];
+        r=await gcalSync({auto:true});
+        ok('AS4. שינוי ביומן גוגל נקלט אוטומטית: השם והשעה החדשים, הישנים נעלמו',r.ok&&r.changed&&has('פגישה עם לקוח (הוזזה)')&&!has('פגישה עם לקוח'));
+        r=await gcalSync();
+        ok('AS5. סנכרון ידני תמיד מבצע רענון מלא (גם בלי שינוי ביומן)',r.ok&&r.changed===true);
+        _gcalTokenExp=0;_gcalLastToken='';tokenMode='fail';const ref3=STATE_ACTIVE;r=await gcalSync({auto:true});
+        ok('AS6. כשל שקט ברענון הטוקן: בלי הודעת שגיאה למשתמש, והלוח לא משתנה',!r.ok&&r.silent===true&&STATE_ACTIVE===ref3);
+        tokenMode='ok';_gcalLastAuto=Date.now();fetches=0;const thr=await gcalAutoSync();
+        ok('AS7. gcalAutoSync בתוך חלון ההגבלה לא פונה לרשת',thr===null&&fetches===0);
+        // live briefing: the Maya screen refreshes when the calendar changes under it
+        STATE_ACTIVE=b;ACTIVE_TAB='ai';recalcAndRender();
+        const before=(document.getElementById('mayaWeekCard')||{}).textContent||'';
+        dispatchEvent('personal',{type:'ADD_GLOBAL_EVENT',payload:{id:'lv1',title:'פגישה סגולה חדשה',date:'2026-10-14',startH:15,endH:16}});
+        const after=(document.getElementById('mayaWeekCard')||{}).textContent||'';
+        ok('AS8. מסך מאיה מתעדכן מעצמו כשהיומן משתנה (בלי מעבר לשונית)',!before.includes('פגישה סגולה חדשה')&&after.includes('פגישה סגולה חדשה'),after.slice(0,200));
+        const fr=document.getElementById('mayaWeekCard');
+        ok('AS9. בכרטיס השבוע שורת "יומן גוגל עודכן …" וכפתור סנכרון כשהיומן מחובר',!!fr&&!!fr.querySelector('.maya-fresh')&&fr.querySelector('.maya-fresh').textContent.includes('יומן גוגל')&&!!fr.querySelector('.maya-sync'));
+        const now0=Date.parse('2026-10-12T12:00:00Z');
+        ok('AS10. agoHe: ממש עכשיו / דקה / דקות / שעה / שעות / אתמול / ימים',agoHe('2026-10-12T12:00:00Z',now0)==='ממש עכשיו'&&agoHe('2026-10-12T11:59:00Z',now0)==='לפני דקה'&&agoHe('2026-10-12T11:55:00Z',now0)==='לפני 5 דקות'&&agoHe('2026-10-12T11:00:00Z',now0)==='לפני שעה'&&agoHe('2026-10-12T09:00:00Z',now0)==='לפני 3 שעות'&&agoHe('2026-10-11T12:00:00Z',now0)==='אתמול'&&agoHe('2026-10-09T12:00:00Z',now0)==='לפני 3 ימים'&&agoHe('bad',now0)==='');
+        // briefing polish
+        let b2=applyEvent(b,'personal',{type:'ADD_GLOBAL_EVENT',payload:{id:'p1',title:'05:30 | קימה והתארגנות',date:'2026-10-12',startH:5,endH:6,startMin:330,endMin:360}});
+        b2=applyEvent(b2,'personal',{type:'ADD_GLOBAL_EVENT',payload:{id:'p2',title:'פגישה עם מועצת בנימין',date:'2026-10-22',startH:13,endH:14}});
+        const B=computeWeekBriefing(b2,{});
+        ok('AS11. סקירה: שעה בראש שם האירוע לא מוצגת פעמיים',B.events.some(x=>x.includes('05:30 — קימה והתארגנות'))&&!B.events.some(x=>x.includes('05:30 — 05:30')),JSON.stringify(B.events));
+        const far=computeWeekBriefing(applyEvent(b2,'personal',{type:'ADD_GLOBAL_EVENT',payload:{id:'p3',title:'פגישה עם מועצת שומרון',date:'2026-10-15',startH:12,endH:13}}),{});
+        ok('AS12. אירוע רחוק מסומן בתאריך (22/10) ולא "יום חמישי (בעוד 10 ימים)"',far.reminders.some(x=>x.includes('22/10'))&&!far.reminders.some(x=>x.includes('בעוד 10 ימים')),JSON.stringify(far.reminders));
+      }finally{
+        window.fetch=prevFetch;window.google=prevG;GCAL_CONFIG.clientId=prevCfg;STATE_ACTIVE=_sa;ACTIVE_TAB=_st;_gcalLastToken=pl;_gcalTokenExp=pe;_gcalLastAuto=pla;_gcalSig=psig;
+        try{if(prevPrefs===null)localStorage.removeItem(GCAL_PREF_KEY);else localStorage.setItem(GCAL_PREF_KEY,prevPrefs);}catch(_e){}
+        try{recalcAndRender();}catch(_e){}
+      }
     }
     // RS. recurring Google events: scope choice for delete / edit (this one / this and following / all)
     {
