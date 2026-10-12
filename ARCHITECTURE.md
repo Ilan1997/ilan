@@ -409,3 +409,9 @@ If it already exists, read it before assuming it doesn't. This file (`ARCHITECTU
 ## 23. Real AI: routes and the shared proxy
 
 `_aiCallModel` order: Claude `sample` (inside claude.ai) → personal Gemini/Anthropic key (browser only) → **shared proxy** for signed-in users (`_aiCallProxy` → Edge Function `maya-ai`) → Anthropic direct (fails with `noKey`). The proxy keeps the Gemini key server-side, verifies the user with `auth.getUser`, caps each account per day (`bump_ai_usage`), validates sizes, and only answers the configured origins. `_aiRoute()` and `testAIConnection()` power the "🤖 חיבור AI" block in the account window. Tests: 11 mocked-fetch cases in `runAccountTests` (P1–P11), `tests/proxy.test.mjs` (function logic with mocked Supabase/Gemini), and static checks in `tests/run.js` (no key material in the repo).
+
+## 24. Mandatory login gate
+- `_cloudGate()` runs at the end of `_cloudBoot()` (and after a dead refresh token): if cloud is configured, the user is not signed in, not in password recovery and not inside the claude.ai host (`_inClaudeHost()`, where Claude supplies AI via `sample`), it calls `openAccount({forced:true})`.
+- The forced modal has no close button, `closeAccount()` is ignored until signed in, reset and AI blocks are hidden; it closes itself after sign-in / sign-up / new password.
+- The Google button is shown only when `CLOUD_CONFIG.google` is true (currently false).
+- Tests: `runAccountTests` G1–G8.

@@ -6553,11 +6553,13 @@ function _checkOnboarding(){
    public by design; row-level security (cloud/setup.sql) protects the data.
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
-const CLOUD_CONFIG={aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
+const CLOUD_CONFIG={google:false,aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
 const CLOUD_SESSION_KEY='maya_cloud_session';
 const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
 let CLOUD_SESSION=null;
+let _accForced=false;
+function _inClaudeHost(){try{return !!(window.claude&&typeof window.claude.use==='function');}catch(_e){return false;}}
 let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
 let _reloadApp=()=>{try{location.reload();}catch(_e){}};
 let _cloudAsk=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
@@ -6599,7 +6601,7 @@ async function _cloudEnsureFresh(){
   const r=await _cloudFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:CLOUD_SESSION.refresh_token}});
   const s=r.ok?_cloudSessionFrom(r.data):null;
   if(s){_cloudStoreSession(s);return true;}
-  if(!r.network&&(r.status===400||r.status===401||r.status===403))_cloudStoreSession(null); // refresh token dead → signed out
+  if(!r.network&&(r.status===400||r.status===401||r.status===403)){_cloudStoreSession(null);try{_cloudGate();}catch(_e){}} // refresh token dead → signed out → ask to log in again
   return false;
 }
 
@@ -6788,8 +6790,26 @@ async function resetUserData(){
 }
 
 /* ── account modal ── */
-function openAccount(){ const m=document.getElementById('accountModal'); if(!m)return; renderAccountModal(); m.classList.add('open'); }
-function closeAccount(){ const m=document.getElementById('accountModal'); if(m)m.classList.remove('open'); }
+function openAccount(opts){
+  const m=document.getElementById('accountModal'); if(!m)return;
+  _accForced=!!(opts&&opts.forced);
+  const x=m.querySelector('.modal-close'); if(x)x.style.display=_accForced?'none':'';
+  const t=m.querySelector('.modal-title'); if(t)t.textContent=_accForced?'👋 ברוך הבא למאיה':'👤 החשבון שלי';
+  renderAccountModal(); m.classList.add('open');
+}
+function closeAccount(){
+  if(_accForced&&!cloudSignedIn())return; // mandatory login: can't be dismissed until signed in
+  _accForced=false;
+  const m=document.getElementById('accountModal'); if(!m)return;
+  const x=m.querySelector('.modal-close'); if(x)x.style.display='';
+  const t=m.querySelector('.modal-title'); if(t)t.textContent='👤 החשבון שלי';
+  m.classList.remove('open');
+}
+// Login is the first thing a visitor sees (not inside claude.ai, where Claude itself provides the AI)
+function _cloudGate(){
+  if(!cloudConfigured()||cloudSignedIn()||_cloudRecovery||_inClaudeHost())return false;
+  openAccount({forced:true}); return true;
+}
 function _cloudMsg(text,bad){ const el=document.getElementById('accMsg'); if(!el)return; el.textContent=text||''; el.style.color=bad?'var(--red,#dc2626)':'var(--text2)'; }
 function _cloudRefreshStatus(){ const el=document.getElementById('accSyncStatus'); if(el&&_cloudLastSync)el.textContent='סונכרן לאחרונה: '+_cloudLastSync.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}); }
 function renderAccountModal(){
@@ -6805,10 +6825,10 @@ function renderAccountModal(){
   }else if(cloudSignedIn()){
     h='<div style="font-size:.92em;margin-bottom:4px;">מחובר כ-<b dir="ltr">'+escapeHTML(CLOUD_SESSION.user.email||'')+'</b></div><div id="accSyncStatus" style="font-size:.8em;color:var(--muted);margin-bottom:14px;">הנתונים מסונכרנים בין המכשירים שלך</div><div style="display:flex;gap:8px;"><button id="accSync" onclick="_accSyncNow()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accOut" onclick="cloudSignOut()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">התנתק</button></div>'+resetBlock;
   }else{
-    h='<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div><input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+resetBlock;
+    h=(CLOUD_CONFIG.google?'<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div>':(_accForced?'<div style="font-size:.9em;color:var(--text2);margin-bottom:12px;line-height:1.6;">התחבר או הירשם כדי להמשיך. הנתונים שלך נשמרים בחשבון ומסונכרנים בין המכשירים.</div>':''))+'<input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+(_accForced?'':resetBlock);
   }
   const ai='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">🤖 חיבור AI</div><div id="accAiRoute" style="font-size:.8em;color:var(--text2);margin-bottom:8px;"></div><div style="display:flex;gap:8px;"><button id="accAiTest" onclick="_accTestAI()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בדוק את ה-AI</button><button id="accAiKey" onclick="setupAIKey().then(()=>_accRouteLabel())" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">🔑 מפתח אישי</button></div></div>';
-  body.innerHTML=h+ai+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  body.innerHTML=h+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
   _accRouteLabel();
 }
 async function _accRouteLabel(){
@@ -6817,17 +6837,18 @@ async function _accRouteLabel(){
   el.textContent={claude:'מחובר דרך Claude — אין צורך במפתח.',key:'משתמש במפתח האישי שלך.',proxy:'משתמש בשירות המשותף של האפליקציה (עם מכסה יומית).',none:'לא מחובר ל-AI. התחבר לחשבון או הגדר מפתח Gemini אישי (חינמי).'}[r]||'';
 }
 async function _accTestAI(){_cloudMsg('בודק…');const r=await testAIConnection();_cloudMsg(r.ok?'ה-AI עובד ✓ ('+r.route+')':r.error,!r.ok);_accRouteLabel();}
-async function _accSignIn(){ _cloudMsg('מתחבר…'); const r=await cloudSignIn(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} renderAccountModal(); _cloudMsg('מחובר ✓'); }
-async function _accSignUp(){ _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
+async function _accSignIn(){ _cloudMsg('מתחבר…'); const r=await cloudSignIn(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('מחובר ✓'); }
+async function _accSignUp(){ _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} if(cloudSignedIn()&&_accForced){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
 async function _accForgot(){ const r=await cloudRecover(document.getElementById('accEmail').value); _cloudMsg(r.ok?'שלחנו קישור לאיפוס סיסמה לאימייל שלך.':r.error,!r.ok); }
-async function _accSetPass(){ const r=await cloudSetNewPassword(document.getElementById('accNewPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} renderAccountModal(); _cloudMsg('הסיסמה עודכנה ✓'); }
+async function _accSetPass(){ const r=await cloudSetNewPassword(document.getElementById('accNewPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(_accForced&&cloudSignedIn()){_accForced=false;closeAccount();return;} renderAccountModal(); _cloudMsg('הסיסמה עודכנה ✓'); }
 async function _accSyncNow(){ _cloudMsg('מסנכרן…'); const r=await cloudPush(); _cloudMsg(r.ok?'סונכרן ✓':(r.error||'הסנכרון נכשל'),!r.ok); }
 
 function _cloudBoot(){
   _cloudLoadSession();
   if(cloudConfigured()&&_cloudHandleRecoveryHash()){ setTimeout(openAccount,300); return; }
-  if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ if(r&&r.handled)setTimeout(()=>{openAccount();if(r.error)_cloudMsg(r.error,true);},300); }).catch(()=>{}); return; }
-  if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); }
+  if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ setTimeout(()=>{ if(cloudSignedIn())openAccount(); else openAccount({forced:!_inClaudeHost()}); if(r&&r.error)_cloudMsg(r.error,true); },300); }).catch(()=>{}); return; }
+  if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); return; }
+  _cloudGate();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -9938,6 +9959,8 @@ async function runAccountTests(){
   const _ai={prefs:AI_PREFS,rules:AI_RULES,profile:AI_PROFILE,ids:AI_ADDED_TASK_IDS,sig:AI_SIGNALS,hist:AI_CHAT_HISTORY};
   const _st={};for(const k of AI_DATA_KEYS.concat(AI_KEY_KEYS)){try{_st[k]=(await window.storage.get(k)).value;}catch(_e){_st[k]=undefined;}}
   const _hash=location.hash;
+  const _accM=document.getElementById('accountModal'),_accOpen=_accM?_accM.classList.contains('open'):false,_accF=_accForced,_accT=_accM?_accM.querySelector('.modal-title').textContent:'';
+  _accForced=false;if(_accM)_accM.classList.remove('open');
   const _wOv=document.getElementById('welcomeScreen'),_wOvD=_wOv?_wOv.style.display:'',_wLock=document.body.classList.contains('app-locked');
   let calls=[],srv={};let reloads=0;
   const J=(status,data)=>({ok:status>=200&&status<300,status,json:async()=>data});
@@ -10109,9 +10132,10 @@ async function runAccountTests(){
       const src=document.documentElement.innerHTML;const hosts=[...src.matchAll(/fetch\('https:\/\/([a-z0-9.-]+)/g)].map(x=>x[1]);
       return hosts.length>=2&&hosts.every(h=>cs.includes(h));})());
     // 38-41. Google sign-in
-    reset();renderAccountModal();
+    reset();CLOUD_CONFIG.google=true;renderAccountModal();
     let navUrl=null;const _nav=_navigate;_navigate=(u)=>{navUrl=u;};
     const gb=document.getElementById('accGoogle');if(gb)gb.click();_navigate=_nav;
+    CLOUD_CONFIG.google=false;
     ok('38. כפתור "המשך עם Google" קיים, ולחיצה מפנה ל-/auth/v1/authorize?provider=google עם redirect_to לאתר',!!gb&&!!navUrl&&navUrl.startsWith('https://x.supabase.co/auth/v1/authorize?provider=google')&&navUrl.includes('redirect_to='),String(navUrl));
     reset();STATE_ACTIVE=baseState([]);
     history.replaceState(null,'','#access_token=g-at&refresh_token=g-rt&expires_in=3600&token_type=bearer');
@@ -10166,6 +10190,31 @@ async function runAccountTests(){
     document.getElementById('accAiTest').click();await new Promise(r=>setTimeout(r,60));
     ok('P11. בחלון החשבון: מוצג איזה חיבור AI פעיל, וכפתור "בדוק את ה-AI" מריץ בדיקה אמיתית ומציג ✓',lbl.includes('שירות המשותף')&&document.getElementById('accMsg').textContent.includes('ה-AI עובד'),lbl+' | '+document.getElementById('accMsg').textContent);
     await clearKeys();
+    // ── mandatory login gate ──
+    reset();closeAccount();
+    const gOpened=_cloudGate();const gm=document.getElementById('accountModal');
+    const gHtml=document.getElementById('accountBody').innerHTML;
+    ok('G1. לא מחובר ובענן מוגדר: חלון כניסה חובה נפתח, בלי כפתור סגירה, בלי איפוס ובלי בלוק AI, עם כותרת ברוך הבא',gOpened&&gm.classList.contains('open')&&_accForced&&gm.querySelector('.modal-close').style.display==='none'&&!document.getElementById('accReset')&&!document.getElementById('accAiTest')&&!!document.getElementById('accEmail')&&gm.querySelector('.modal-title').textContent.includes('ברוך הבא'));
+    closeAccount();gm.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+    ok('G2. אי אפשר לסגור את חלון הכניסה לפני שמתחברים (closeAccount ולחיצה על הרקע)',gm.classList.contains('open'));
+    srv.signin=()=>J(200,tokenOk());srv.row=null;
+    document.getElementById('accEmail').value='dana@example.com';document.getElementById('accPass').value='secret123';
+    await _accSignIn();
+    ok('G3. אחרי התחברות מוצלחת החלון נסגר והכפתור חוזר לפעול',cloudSignedIn()&&!gm.classList.contains('open')&&!_accForced&&gm.querySelector('.modal-close').style.display==='');
+    ok('G4. כבר מחובר → אין חלון כניסה חובה',_cloudGate()===false);
+    reset();CLOUD_CONFIG.url='';CLOUD_CONFIG.anonKey='';
+    ok('G5. ענן לא מוגדר → אין חלון כניסה חובה (האפליקציה עובדת מקומית)',_cloudGate()===false);
+    CLOUD_CONFIG.url='https://x.supabase.co';CLOUD_CONFIG.anonKey='anon-key';
+    window.claude={use:async()=>null};
+    ok('G6. בתוך claude.ai אין חלון כניסה חובה (Claude עצמו מספק את ה-AI)',_cloudGate()===false);
+    delete window.claude;
+    reset();_cloudStoreSession({access_token:'old',refresh_token:'dead',expires_at:Math.floor(Date.now()/1000)-10,user:U});srv.refresh=()=>J(400,{error:'invalid_grant'});
+    await cloudPush();
+    ok('G7. הסשן פג ולא ניתן לחדש → חלון הכניסה החובה נפתח שוב',!cloudSignedIn()&&gm.classList.contains('open')&&_accForced);
+    _accForced=false;gm.classList.remove('open');
+    CLOUD_CONFIG.google=false;renderAccountModal();
+    const noG=!document.getElementById('accGoogle');CLOUD_CONFIG.google=true;renderAccountModal();const withG=!!document.getElementById('accGoogle');CLOUD_CONFIG.google=false;
+    ok('G8. כפתור Google מוסתר כשלא הוגדר ומוצג כשמופעל',noG&&withG);
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}
@@ -10177,6 +10226,7 @@ async function runAccountTests(){
     try{ if(_lsSess===null)localStorage.removeItem(CLOUD_SESSION_KEY);else localStorage.setItem(CLOUD_SESSION_KEY,_lsSess);}catch(_e){}
     AI_PREFS=_ai.prefs;AI_RULES=_ai.rules;AI_PROFILE=_ai.profile;AI_ADDED_TASK_IDS=_ai.ids;AI_SIGNALS=_ai.sig;AI_CHAT_HISTORY=_ai.hist;
     for(const k of Object.keys(_st)){try{ if(_st[k]===undefined)await window.storage.delete(k);else await window.storage.set(k,_st[k]); }catch(_e){}}
+    _accForced=_accF;if(_accM){_accM.classList.toggle('open',_accOpen);const _x=_accM.querySelector('.modal-close');if(_x)_x.style.display=_accF?'none':'';_accM.querySelector('.modal-title').textContent=_accT;}
     if(_wOv)_wOv.style.display=_wOvD;document.body.classList.toggle('app-locked',_wLock);
     try{history.replaceState(null,'',location.pathname+location.search+_hash);}catch(_e){}
     try{recalcAndRender();}catch(_e){}
