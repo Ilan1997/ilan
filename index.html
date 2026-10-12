@@ -6,6 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://accounts.google.com/gsi/client; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://*.supabase.co https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'none'; form-action 'none'; object-src 'none'"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>מאיה, המזכירה האישית</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E📅%3C/text%3E%3C/svg%3E"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&amp;family=Rubik:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
 <style>
 :root{
@@ -3990,6 +3991,8 @@ function renderEngine(){
         const _tt=`${evTitle} · ${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}`;
         return`<td ${_tdA}><div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45?' blk-event-short':''}" title="${escapeHTML(_tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(_ev.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${evTitle}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</bdi></div></div></td>`;
       }
+      const _evAny=_evs.find(e=>e.title===evTitle&&h>=e.startH&&h<e.endH&&e.gid);
+      if(_evAny)return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event blk-event-g" data-gcal="${escapeHTML(String(_evAny.id))}" onclick="openGcalEditor(this.dataset.gcal)" title="${escapeHTML(evTitle)} · לחיצה לעריכה" style="pointer-events:auto;cursor:pointer;"><div class="blk-event-name">🗓️ ${evTitle}</div></div></td>`;
       return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event"><div class="blk-event-name">📅 ${evTitle}</div></div></td>`;
     }
     if(ent){
@@ -7433,6 +7436,11 @@ async function openGcalEditor(blockId){
   const evs=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal)||{}).events||[];
   const b=evs.find(e=>e.id===blockId);if(!b||!b.gid)return;
   if(evs.filter(e=>e.gid===b.gid).length>1){showToast('אירוע שנמשך כמה ימים — אפשר לערוך אותו ישירות ביומן גוגל');return;}
+  if(_gcalPrefs().hideTitles!==false&&b.title==='תפוס (יומן גוגל)'){
+    if(await _gcalAsk('שמות האירועים מוסתרים, ולכן רואים רק "תפוס".\nלהציג את שמות האירועים מיומן גוגל? (השמות יישלחו גם ל-AI כשאתה מדבר עם מאיה.)\n\nאישור = להציג שמות. ביטול = להמשיך לעריכה בלי לשנות.')){
+      _gcalSavePrefs({..._gcalPrefs(),hideTitles:false});const r=await gcalSync();showToast(r.ok?'השמות מוצגים עכשיו ✓':r.error);return;
+    }
+  }
   if(!gcalWriteEnabled()){const r=await gcalEnableWrite();if(!r.ok){if(!r.cancelled)showErrorToast(r.error);return;}}
   let g=null;try{g=await gcalGetEvent(b.gid);}catch(e){showErrorToast(_gcalErrText(e));return;}
   if(!g||!g.start||!g.start.dateTime||!g.end||!g.end.dateTime){showToast('אירוע כל-היום — אפשר לערוך אותו ישירות ביומן גוגל');return;}
@@ -11032,6 +11040,24 @@ async function runAccountTests(){
         gcalDisconnect();
         ok('WR20. ניתוק מוחק גם את הרשאת הכתיבה',!gcalWriteEnabled()&&_gcalPrefs().write===undefined);
       }finally{GCAL_CONFIG.clientId=prevCfg;_gcalAskWrite=prevAskW;_gcalAskConsent=prevAsk;window.fetch=prevFetch;if(prevG)window.google=prevG;else delete window.google;STATE_ACTIVE=_sa;_gcalTokenExp=0;_gcalLastToken='';}
+    }
+    // WR21-22. clickable hour-only blocks; hidden-title click offers to reveal names
+    {
+      const prevCfg=GCAL_CONFIG.clientId,prevAskW=_gcalAskWrite,prevFetch=window.fetch,_sa=STATE_ACTIVE,prevG=window.google;
+      try{
+        GCAL_CONFIG.clientId='cid.apps.googleusercontent.com';
+        const b0=baseState([]);b0.meta.today='2026-10-12';b0.meta.startDate='2026-10-04';b0.meta.endDate='2027-01-01';
+        STATE_ACTIVE=commitState(applyEvent(b0,'personal',{type:'REPLACE_GCAL_EVENTS',events:[{id:'gcal_h_2026-10-14',gid:'h',title:'תפוס (יומן גוגל)',date:'2026-10-14',startH:14,endH:15}]}),'t',{save:false,render:false});
+        switchTab('study');goToToday();recalcAndRender();
+        const el=document.querySelector('[data-gcal="gcal_h_2026-10-14"]');
+        ok('WR21. בלוק גוגל בלי דקות (שעה שלמה) הוא ניתן ללחיצה לעריכה',!!el&&/openGcalEditor/.test(el.getAttribute('onclick')||''));
+        _gcalSavePrefs({on:true,consent:'x',hideTitles:true});let asked='',fetched=[];
+        _gcalAskWrite=m=>{asked=m;return true;};
+        window.google={accounts:{oauth2:{initTokenClient:c=>({requestAccessToken:()=>c.callback({access_token:'t'})}),revoke:()=>{}}}};
+        window.fetch=async(u)=>{fetched.push(String(u));return{ok:true,status:200,json:async()=>({items:[{id:'h',summary:'ישיבה אמיתית',start:{dateTime:'2026-10-14T14:00:00'},end:{dateTime:'2026-10-14T15:00:00'}}]})};};
+        await openGcalEditor('gcal_h_2026-10-14');
+        ok('WR22. לחיצה על "תפוס" כששמות מוסתרים: מוצעת הצגת שמות; באישור — השמות נשמרים ומסונכרנים מחדש',asked.includes('מוסתרים')&&_gcalPrefs().hideTitles===false&&STATE_ACTIVE.constraintsGlobal.events.some(e=>e.title==='ישיבה אמיתית'));
+      }finally{GCAL_CONFIG.clientId=prevCfg;_gcalAskWrite=prevAskW;window.fetch=prevFetch;STATE_ACTIVE=_sa;if(prevG)window.google=prevG;else delete window.google;try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}}
     }
     // MIC4-5. voice prefs
     {
