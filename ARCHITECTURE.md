@@ -418,3 +418,6 @@ If it already exists, read it before assuming it doesn't. This file (`ARCHITECTU
 
 ## 25. Display name
 Sign-up asks for a name (the "הרשמה" button first reveals the `accName` field); it is sent as `data:{name}` (Supabase `user_metadata`), kept in the session (`CLOUD_SESSION.user.name`) and returned on every sign-in, so e-mail + password is enough later. `cloudDisplayName()` feeds the header chip `#hnAcc` ("👤 שלום <שם>" / "👤 התחבר", opens the account modal), the home greeting and the wizard name prefill. Tests N1–N5.
+
+## 26. Boot-order rule (TDZ)
+Module-level `let` state used by `saveState`/`openAccount` (`_cloudResetting`, `_accForced`, `CLOUD_SESSION`, …) is declared at the very top of the script. Boot code can call `saveState()` (migrated stored state) before the ACCOUNTS section runs, and reading a `let` before its declaration throws and aborts the whole script. `tests/run.js` boots a second jsdom with an existing user whose plan needs migration and asserts no errors and a working account button.

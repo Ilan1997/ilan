@@ -1201,6 +1201,13 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
 </div>
 </div>
 <script>
+// Account-module state lives at the very top: boot code (saveState on a migrated state) runs long before the ACCOUNTS section is reached, and a `let` read before its declaration throws (TDZ) and kills the whole app.
+const CLOUD_SESSION_KEY='maya_cloud_session';
+let CLOUD_SESSION=null;
+let _accForced=false;
+let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
+let _reloadApp=()=>{try{location.reload();}catch(_e){}};
+let _cloudAsk=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
 // Hosted pages have no window.storage — back it with localStorage (per viewer), memory as a last resort.
 (function(){ if(window.storage)return; const mem={}; const ls=(()=>{try{localStorage.setItem('__t','1');localStorage.removeItem('__t');return localStorage;}catch(_e){return null;}})();
   window.storage={
@@ -6555,15 +6562,9 @@ function _checkOnboarding(){
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
 const CLOUD_CONFIG={google:false,aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
-const CLOUD_SESSION_KEY='maya_cloud_session';
 const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
-let CLOUD_SESSION=null;
-let _accForced=false;
 function _inClaudeHost(){try{return !!(window.claude&&typeof window.claude.use==='function');}catch(_e){return false;}}
-let _cloudApplying=false,_cloudResetting=false,_cloudPushTimer=null,_cloudRecovery=false,_cloudLastSync=null;
-let _reloadApp=()=>{try{location.reload();}catch(_e){}};
-let _cloudAsk=(msg)=>{try{return window.confirm(msg);}catch(_e){return false;}};
 
 function cloudDisplayName(){
   const n=(CLOUD_SESSION&&CLOUD_SESSION.user&&CLOUD_SESSION.user.name)||(STATE_ACTIVE&&STATE_ACTIVE.meta&&STATE_ACTIVE.meta.userName)||'';
