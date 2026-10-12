@@ -1,7 +1,12 @@
 {
   "name": "weekly-planner",
   "private": true,
-  "description": "מנוע תכנון — מזכירה אישית לניהול זמן (קובץ HTML יחיד)",
-  "scripts": { "test": "node tests/run.js" },
-  "devDependencies": { "jsdom": "^26.0.0" }
+  "description": "\u05de\u05e0\u05d5\u05e2 \u05ea\u05db\u05e0\u05d5\u05df \u2014 \u05de\u05d6\u05db\u05d9\u05e8\u05d4 \u05d0\u05d9\u05e9\u05d9\u05ea \u05dc\u05e0\u05d9\u05d4\u05d5\u05dc \u05d6\u05de\u05df (\u05e7\u05d5\u05d1\u05e5 HTML \u05d9\u05d7\u05d9\u05d3)",
+  "scripts": {
+    "test": "node tests/run.js",
+    "test:proxy": "node --experimental-strip-types tests/proxy.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
 }

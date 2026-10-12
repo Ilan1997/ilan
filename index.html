@@ -4891,6 +4891,8 @@ async function _aiCallModel(sys,msgs){
   // Provider = 'gemini' (free tier, Google) or 'anthropic'; defaults to whichever key exists.
   const _st=async k=>{try{return((await window.storage.get(k)).value||'').trim();}catch(_e){return'';}};
   const gKey=await _st('ai:geminikey'),aKey=await _st('ai:apikey');
+  // No personal key but signed in → the shared, rate-limited server proxy (Gemini key stays server-side)
+  if(!gKey&&!aKey&&cloudConfigured()&&cloudSignedIn())return _aiCallProxy(sys,msgs);
   let provider=await _st('ai:provider');
   if(provider!=='gemini'&&provider!=='anthropic')provider=gKey&&!aKey?'gemini':'anthropic';
   if(provider==='gemini'&&gKey){
@@ -4917,6 +4919,34 @@ async function _aiCallModel(sys,msgs){
   const data=await resp.json();
   if(resp.ok===false||data?.error){const e=new Error(data?.error?.message||('HTTP '+resp.status));e.noKey=!key;throw e;}
   return(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+}
+// Shared free AI through the Supabase Edge Function "maya-ai" (cloud/functions/maya-ai). Needs a signed-in user.
+async function _aiCallProxy(sys,msgs){
+  if(!(await _cloudEnsureFresh())){const e=new Error('login');e.userMessage='ההתחברות פגה — התחבר שוב דרך 👤 החשבון שלי.';throw e;}
+  const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))}});
+  if(r.network){const e=new Error('network');e.userMessage='אין חיבור לשרת — בדוק אינטרנט ונסה שוב.';throw e;}
+  if(r.status===404){const e=new Error('proxy-not-deployed');e.noKey=true;throw e;} // service not set up yet → offer a personal key
+  if(!r.ok){const e=new Error((r.data&&r.data.error)||('HTTP '+r.status));e.userMessage=(r.data&&r.data.message)||null;e.noKey=!!(r.data&&r.data.error==='not_configured');throw e;}
+  return String((r.data&&r.data.text)||'');
+}
+// Which route would a message take right now? 'claude' | 'key' | 'proxy' | 'none'
+async function _aiRoute(){
+  try{if(window.claude&&typeof window.claude.use==='function'){const sm=await window.claude.use('sample');if(sm)return'claude';}}catch(_e){}
+  const _st=async k=>{try{return((await window.storage.get(k)).value||'').trim();}catch(_e){return'';}};
+  if((await _st('ai:geminikey'))||(await _st('ai:apikey')))return'key';
+  if(cloudConfigured()&&cloudSignedIn())return'proxy';
+  return'none';
+}
+// Real round-trip with a tiny prompt — used by the "בדוק את ה-AI" button.
+async function testAIConnection(){
+  const route=await _aiRoute();
+  if(route==='none')return{ok:false,route,error:'אין חיבור AI: התחבר לחשבון, או הגדר מפתח Gemini אישי.'};
+  try{
+    const t=await _aiCallModel('ענה במילה אחת בלבד.',[{role:'user',content:'כתוב: מוכנה'}]);
+    return t&&t.trim()?{ok:true,route,text:t.trim().slice(0,60)}:{ok:false,route,error:'ה-AI החזיר תשובה ריקה'};
+  }catch(e){
+    return{ok:false,route,error:e.userMessage||(e.noKey?'שירות ה-AI המשותף עוד לא הופעל — הגדר מפתח Gemini אישי.':('שגיאה: '+String(e.message||e).slice(0,160)))};
+  }
 }
 // Choose provider + save/clear the personal key (browser storage only).
 async function setupAIKey(){
@@ -5040,8 +5070,10 @@ async function sendAIMessage(){
     console.error('AI chat error',err);
     typingEl?.remove();
     if(err&&err.noKey){
-      _aiAppendActionBubble('כדי לדבר איתי מחוץ ל-claude.ai צריך מפתח API אישי — Gemini של גוגל (יש שכבה חינמית) או Anthropic. הוא נשמר רק בדפדפן שלך.',
-        [{label:'🔑 הגדר מפתח',onclick:()=>{setupAIKey();}}]);
+      _aiAppendActionBubble('כדי לדבר איתי צריך להתחבר לחשבון (👤), או להגדיר מפתח API אישי — Gemini של גוגל (יש שכבה חינמית) או Anthropic. המפתח נשמר רק בדפדפן שלך.',
+        [{label:'🔑 הגדר מפתח',onclick:()=>{setupAIKey();}}].concat(cloudConfigured()&&!cloudSignedIn()?[{label:'👤 התחבר',onclick:()=>{openAccount();}}]:[]));
+    } else if(err&&err.userMessage){
+      _aiAppendBubble(err.userMessage,'bot');
     } else {
       _aiAppendBubble('משהו השתבש בחיבור ל-AI. נסה שוב בעוד רגע.','bot');
     }
@@ -6521,7 +6553,7 @@ function _checkOnboarding(){
    public by design; row-level security (cloud/setup.sql) protects the data.
    Sync NEVER touches the engine: remote state enters only through commitState.
    ═══════════════════════════════════════════════════════ */
-const CLOUD_CONFIG={url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
+const CLOUD_CONFIG={aiFunction:'maya-ai',url:'https://nlllgpjhcxzosxwnqkum.supabase.co',anonKey:'sb_publishable_71J5fLWclnsbb9memhpGjg_NW4UwrT5'}; // public by design (RLS protects data)
 const CLOUD_SESSION_KEY='maya_cloud_session';
 const AI_DATA_KEYS=['ai:prefs','ai:rules','ai:profile','ai:addedTaskIds','ai:chatHistory']; // what Maya learned — synced (prefs/rules/profile) and wiped by reset
 const AI_KEY_KEYS=['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']; // device-level BYOK settings — never synced; wiped only on sign-out
@@ -6775,8 +6807,16 @@ function renderAccountModal(){
   }else{
     h='<button id="accGoogle" onclick="cloudSignInWithGoogle()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);margin-bottom:12px;">המשך עם Google</button><div style="text-align:center;font-size:.78em;color:var(--muted);margin-bottom:10px;">או עם אימייל</div><input id="accEmail" type="email" autocomplete="email" placeholder="אימייל" style="'+inp+'"/><input id="accPass" type="password" autocomplete="current-password" placeholder="סיסמה" style="'+inp+'" onkeydown="if(event.key===\'Enter\')_accSignIn()"/><div style="display:flex;gap:8px;"><button id="accIn" onclick="_accSignIn()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">התחבר</button><button id="accUp" onclick="_accSignUp()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הרשמה</button></div><button id="accForgot" onclick="_accForgot()" style="margin-top:10px;background:none;border:none;color:var(--muted);font-size:.82em;text-decoration:underline;cursor:pointer;font-family:inherit;">שכחתי סיסמה</button>'+resetBlock;
   }
-  body.innerHTML=h+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  const ai='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">🤖 חיבור AI</div><div id="accAiRoute" style="font-size:.8em;color:var(--text2);margin-bottom:8px;"></div><div style="display:flex;gap:8px;"><button id="accAiTest" onclick="_accTestAI()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בדוק את ה-AI</button><button id="accAiKey" onclick="setupAIKey().then(()=>_accRouteLabel())" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">🔑 מפתח אישי</button></div></div>';
+  body.innerHTML=h+ai+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  _accRouteLabel();
 }
+async function _accRouteLabel(){
+  const el=document.getElementById('accAiRoute');if(!el)return;
+  const r=await _aiRoute();
+  el.textContent={claude:'מחובר דרך Claude — אין צורך במפתח.',key:'משתמש במפתח האישי שלך.',proxy:'משתמש בשירות המשותף של האפליקציה (עם מכסה יומית).',none:'לא מחובר ל-AI. התחבר לחשבון או הגדר מפתח Gemini אישי (חינמי).'}[r]||'';
+}
+async function _accTestAI(){_cloudMsg('בודק…');const r=await testAIConnection();_cloudMsg(r.ok?'ה-AI עובד ✓ ('+r.route+')':r.error,!r.ok);_accRouteLabel();}
 async function _accSignIn(){ _cloudMsg('מתחבר…'); const r=await cloudSignIn(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} renderAccountModal(); _cloudMsg('מחובר ✓'); }
 async function _accSignUp(){ _cloudMsg('יוצר חשבון…'); const r=await cloudSignUp(document.getElementById('accEmail').value,document.getElementById('accPass').value); if(!r.ok){_cloudMsg(r.error,true);return;} if(r.needsConfirm){_cloudMsg('שלחנו אליך אימייל לאישור. אחרי האישור חזור והתחבר.');return;} renderAccountModal(); _cloudMsg('החשבון נוצר ✓'); }
 async function _accForgot(){ const r=await cloudRecover(document.getElementById('accEmail').value); _cloudMsg(r.ok?'שלחנו קישור לאיפוס סיסמה לאימייל שלך.':r.error,!r.ok); }
@@ -9919,6 +9959,9 @@ async function runAccountTests(){
       if(m==='POST')return J(srv.pushStatus||201,null);
       if(m==='DELETE')return J(srv.delStatus||204,null);
     }
+    if(u.includes('/functions/v1/'))return srv.fn?srv.fn(body,init):J(404,{});
+    if(u.includes('generativelanguage.googleapis.com'))return srv.gem?srv.gem(body):J(200,{candidates:[{content:{parts:[{text:'direct-gemini'}]}}]});
+    if(u.includes('api.anthropic.com'))return J(401,{error:{message:'no key'}});
     return J(404,{});
   };};
   const reset=()=>{calls=[];srv={};reloads=0;_cloudApplying=false;_cloudResetting=false;_cloudRecovery=false;clearTimeout(_cloudPushTimer);_cloudStoreSession(null);};
@@ -10086,6 +10129,43 @@ async function runAccountTests(){
     const gx=await _cloudHandleOAuthHash();
     ok('43. קישור אימות שפג/נוצל → הודעה ברורה בעברית שמכוונת להתחבר או לשחזר סיסמה',gx.handled&&!gx.ok&&gx.error.includes('פג או כבר נוצל')&&gx.error.includes('להתחבר')&&location.hash==='');
     history.replaceState(null,'',location.pathname+location.search);
+    // ── AI proxy ──
+    const signedIn=()=>_cloudStoreSession({access_token:'at-ai',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3600,user:U});
+    const clearKeys=async()=>{for(const k of ['ai:geminikey','ai:apikey','ai:provider']){try{await window.storage.delete(k);}catch(_e){}}};
+    await clearKeys();reset();
+    ok('P1. מנותק ובלי מפתח → route=none',(await _aiRoute())==='none');
+    signedIn();
+    ok('P2. מחובר ובלי מפתח → route=proxy',(await _aiRoute())==='proxy');
+    srv.fn=(b)=>J(200,{text:'שלום מהשרת'});
+    const tp=await _aiCallModel('SYS',[{role:'user',content:'א'},{role:'assistant',content:'ב'},{role:'user',content:'ג'}]);
+    const fc=calls.find(c=>c.u.includes('/functions/v1/maya-ai'));
+    ok('P3. מחובר ובלי מפתח: ההודעה עוברת לפונקציה maya-ai עם הטוקן של המשתמש, ה-system וההיסטוריה במלואם, ובלי פנייה ישירה לגוגל/Anthropic',tp==='שלום מהשרת'&&!!fc&&fc.m==='POST'&&fc.h.Authorization==='Bearer at-ai'&&fc.body.system==='SYS'&&fc.body.messages.length===3&&fc.body.messages[1].role==='assistant'&&!calls.some(c=>c.u.includes('generativelanguage')||c.u.includes('anthropic')),calls.map(c=>c.u.slice(-30)).join(','));
+    await window.storage.set('ai:geminikey','PERSONAL');calls=[];
+    ok('P4. כשיש מפתח אישי הוא קודם: פנייה ישירה ל-Gemini ואף קריאה לפרוקסי',(await _aiRoute())==='key'&&(await _aiCallModel('S',[{role:'user',content:'x'}]))==='direct-gemini'&&!calls.some(c=>c.u.includes('/functions/v1/')));
+    ok('P5. המפתח האישי לא נשלח לפרוקסי ולא לשרת Supabase',!JSON.stringify(calls).includes('x-supabase')&&!calls.filter(c=>c.u.includes('supabase')).some(c=>JSON.stringify(c).includes('PERSONAL')));
+    await clearKeys();calls=[];signedIn();
+    srv.fn=()=>J(429,{error:'limit',message:'הגעת למכסה היומית (40 הודעות).'});
+    let e1=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e1=e;}
+    ok('P6. מכסה יומית (429): נזרקת שגיאה עם הודעה בעברית למשתמש, בלי noKey',!!e1&&e1.userMessage.includes('מכסה')&&!e1.noKey);
+    srv.fn=()=>J(404,{});
+    let e2=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e2=e;}
+    ok('P7. הפונקציה עוד לא הופעלה (404) → noKey=true (מציעים מפתח אישי)',!!e2&&e2.noKey===true);
+    srv.fn=()=>J(401,{error:'login',message:'צריך להתחבר לחשבון כדי לדבר עם מאיה.'});
+    let e3=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e3=e;}
+    ok('P8. 401 מהפרוקסי → הודעה להתחבר',!!e3&&e3.userMessage.includes('להתחבר'));
+    srv.offline=true;let e4=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e4=e;}srv.offline=false;
+    ok('P9. אין רשת → הודעה בעברית',!!e4&&e4.userMessage.includes('חיבור'));
+    srv.fn=()=>J(200,{text:'מוכנה'});
+    const t1=await testAIConnection();
+    srv.fn=()=>J(200,{text:''});const t2=await testAIConnection();
+    srv.fn=()=>J(429,{error:'limit',message:'מכסה'});const t3=await testAIConnection();
+    _cloudStoreSession(null);const t4=await testAIConnection();
+    ok('P10. testAIConnection: תקין / ריק / שגיאת מכסה / בלי חיבור — כל אחד עם תוצאה והסבר נכונים',t1.ok&&t1.route==='proxy'&&!t2.ok&&!t3.ok&&t3.error.includes('מכסה')&&!t4.ok&&t4.route==='none');
+    signedIn();srv.fn=()=>J(200,{text:'מוכנה'});renderAccountModal();await _accRouteLabel();
+    const lbl=document.getElementById('accAiRoute').textContent;
+    document.getElementById('accAiTest').click();await new Promise(r=>setTimeout(r,60));
+    ok('P11. בחלון החשבון: מוצג איזה חיבור AI פעיל, וכפתור "בדוק את ה-AI" מריץ בדיקה אמיתית ומציג ✓',lbl.includes('שירות המשותף')&&document.getElementById('accMsg').textContent.includes('ה-AI עובד'),lbl+' | '+document.getElementById('accMsg').textContent);
+    await clearKeys();
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}

@@ -28,3 +28,13 @@ Works without any setup (local only). To enable sign-up / sign-in / sync between
 Security: the page ships a Content-Security-Policy (meta tag) that only lets it talk to `*.supabase.co`, Gemini and Anthropic. If you use a custom Supabase domain, add it to `connect-src`. Minimum password length is 8; also set it to 8+ in Supabase → Authentication → Providers → Email.
 
 Google sign-in: Google Cloud Console → OAuth client (Web) with redirect URI `https://<project>.supabase.co/auth/v1/callback`; then Supabase → Authentication → Providers → Google: paste Client ID + Secret; add the site address to Redirect URLs. Keep the Secret only in Supabase.
+
+## Free AI for everyone (shared Gemini key, kept server-side)
+
+Signed-in users can talk to Maya without any key: the page calls a Supabase Edge Function (`cloud/functions/maya-ai`) that holds the Gemini key as a secret, checks the user, and limits each account to 40 messages a day. Set-up (once):
+1. Get a free key at https://aistudio.google.com/apikey.
+2. SQL Editor → run `cloud/ai_proxy.sql`.
+3. Edge Functions → *Deploy a new function* → *Via Editor* → name it exactly `maya-ai` → paste `cloud/functions/maya-ai/index.ts` → turn **Verify JWT** off (the function verifies the user itself) → Deploy.
+4. Edge Functions → Secrets → add `GEMINI_API_KEY` (your key). Optional: `DAILY_LIMIT`, `GEMINI_MODEL`, `ALLOWED_ORIGINS` (comma-separated; default `https://ilan1997.github.io`).
+5. In the app: 👤 → "בדוק את ה-AI".
+The free Gemini tier has shared limits and Google may use free-tier content to improve its products — say so to your users. Users can still add a personal key (🔑) and it takes priority.
