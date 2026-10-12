@@ -435,7 +435,10 @@ body.home-mode .hn-left,body.home-mode .hn-week,body.home-mode .hn-btn-wide,body
 .hn-btn.on{background:#7c3aed;color:#fff;border-color:#7c3aed;}
 .hn-btn.on:hover{background:#6d28d9;color:#fff;}
 @media(max-width:640px){
-  .hn{padding:0 8px;gap:3px;}
+  .hn{padding:6px 8px;gap:6px;height:auto;min-height:52px;flex-wrap:wrap;}
+  .hn-right{width:100%;justify-content:space-between;order:-1;}
+  .hn-left{width:100%;justify-content:center;}
+  #hnAcc{max-width:96px!important;}
   .hn-week{display:none;} /* secondary info, dropped first to reclaim space */
   .hn-btn.hn-btn-wide{padding:6px 9px;} /* icon-only: label span below is hidden */
   .hn-btn.hn-btn-wide .hn-label{display:none;}
@@ -483,7 +486,9 @@ body.home-mode .hn-left,body.home-mode .hn-week,body.home-mode .hn-btn-wide,body
 #quickAddFab:hover{transform:scale(1.1);box-shadow:0 8px 26px rgba(124,58,237,.6)}
 /* Desktop: show header ➕, hide FAB. Mobile: hide header ➕, show FAB */
 @media(min-width:600px){#quickAddFab{display:none!important}}
-body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB would cover the send button on mobile */
+#quickAddFab{display:none!important} /* simplified UI: tasks are added from Maya or the Tasks page */
+body.ai-mode .hn-left,body.board-mode .hn-left,body.settings-mode .hn-left,body.add-mode .hn-left,body.home-mode .hn-left{display:none!important}
+.hn-right{margin-inline-start:auto} /* on Maya's screen the FAB would cover the send button on mobile */
 @media(max-width:599px){.hn-add-desktop{display:none!important}}
 
 /* ══ QUICK ADD MODAL ══════════════════════════════════ */
@@ -602,12 +607,10 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
   <input id="todayPicker" onchange="setTodayManual(this.value)" style="display:none;" type="date"/>
   <span id="resetTodayBtn" onclick="resetToday()" style="display:none;">🔬 ↩</span>
   <div class="hn-right">
-    <button class="hn-btn" id="hnAcc" onclick="openAccount()" title="החשבון שלי" aria-label="החשבון שלי" style="width:auto;padding:6px 10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82em;">👤 התחבר</button>
-    <button class="hn-btn" onclick="switchTab('home')" title="בית" aria-label="בית">🏠</button>
+    <button class="hn-btn hn-btn-wide" id="hnCalBtn" onclick="switchTab(ACTIVE_CALENDAR==='work'?'work':'study')" title="יומן" aria-label="יומן">📅 <span class="hn-label">יומן</span></button>
+    <button class="hn-btn hn-btn-wide" id="hnAiBtn" onclick="switchTab('ai')" title="מאיה" aria-label="מאיה">🤖 <span class="hn-label">מאיה</span></button>
     <button class="hn-btn hn-btn-wide" id="hnTasksBtn" onclick="switchTab('board')" title="משימות" aria-label="משימות">📋 <span class="hn-label">משימות</span></button>
-    <button class="hn-btn hn-btn-wide" id="hnAiBtn" onclick="switchTab('ai')" title="תכנון עם AI" aria-label="תכנון עם AI">🤖 <span class="hn-label">AI</span></button>
-    <button class="hn-btn hn-add-desktop" onclick="openQA()" title="הוספה מהירה" style="background:var(--blue);color:#fff;border-color:var(--blue);font-weight:700;padding:6px 14px;width:auto;border-radius:8px;box-shadow:0 2px 8px rgba(37,99,235,.3);">➕ הוסף משימה</button>
-    <button class="hn-btn" onclick="openSettings()"    title="הגדרות" aria-label="הגדרות">⚙</button>
+    <button class="hn-btn" id="hnAcc" onclick="openAccount()" title="החשבון שלי" aria-label="החשבון שלי" style="width:auto;padding:6px 10px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82em;">👤 התחבר</button>
   </div>
 </nav>
 <!-- hidden stubs renderNav() writes into -->
@@ -804,7 +807,7 @@ body.ai-mode #quickAddFab{display:none!important} /* on Maya's screen the FAB wo
 </div>
 </div>
 <!-- TASK BOARD PANE -->
-<div class="tab-pane" id="paneBoard"><div class="board">
+<div class="tab-pane" id="paneBoard"><div style="max-width:1100px;margin:14px auto 0;padding:0 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;"><div style="font-weight:800;font-size:1.1em;">📋 המשימות שלי</div><button id="boardAddBtn" class="hn-btn hn-btn-wide" onclick="openQA()" style="background:var(--blue);color:#fff;border-color:var(--blue);">➕ משימה חדשה</button></div><div class="board">
 <div class="sidebar" style="overflow-y:visible;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:4px 28px;">
 <div class="sec-title" id="taskCardsTitle">📊 מצב משימות</div>
 <div id="examCards"></div>
@@ -3627,6 +3630,8 @@ function switchTab(tab){
   // never touch ACTIVE_CALENDAR or trigger a render — same as add/ai already do.
   document.body.classList.toggle('home-mode', tab==='home');
   document.body.classList.toggle('ai-mode', tab==='ai');
+  document.body.classList.toggle('board-mode', tab==='board');document.body.classList.toggle('settings-mode', tab==='settings');document.body.classList.toggle('add-mode', tab==='add');
+  _sc('hnCalBtn',el=>el.classList.toggle('on', tab==='study'||tab==='work'));
   if(tab==='home'){
     const g=document.getElementById('homeGreeting');
     if(g){const _n=cloudDisplayName();g.textContent=(_n?`שלום ${_n}, אני מאיה 👋`:'שלום, אני מאיה 👋');}
@@ -4756,6 +4761,54 @@ function _weekBounds(todayISO){ // Sunday-aligned week containing today, as ISO 
   const a=d.toISOString().split('T')[0];d.setUTCDate(d.getUTCDate()+6);
   return[a,d.toISOString().split('T')[0]];
 }
+// ── Weekly briefing: PURE, deterministic (no AI call) — what the rest of this week looks like + what's coming up ──
+const _HE_DAYS=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+function computeWeekBriefing(state){
+  const out={title:'',lines:[],reminders:[],totalHours:0,load:'',empty:true};
+  const today=state&&state.meta&&state.meta.today;if(!today)return out;
+  const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().split('T')[0];};
+  const dowOf=iso=>new Date(iso+'T12:00:00Z').getUTCDay();
+  let [ws,we]=_weekBounds(today),from=today,nextWeek=false;
+  if(dowOf(today)===6){ws=addDays(ws,7);we=addDays(we,7);from=ws;nextWeek=true;}
+  const days=[];for(let d=from;d<=we;d=addDays(d,1))days.push(d);
+  const per={};days.forEach(d=>per[d]={work:0,life:0,free:0,off:false});
+  const titles={};
+  ['personal','work'].forEach(calId=>{
+    let R;try{R=buildEngine(state,calId);}catch(_e){return;}
+    (state.calendars[calId]?.tasks||[]).forEach(t=>{titles[t.id]=t.title;});
+    Object.keys(R.assignments||{}).forEach(sid=>{const d=sid.split('T')[0];if(!per[d])return;per[d][calId==='work'?'work':'life']++;});
+    if(calId==='personal')(R.derived?.allFreeSlots||[]).forEach(sl=>{const d=String(sl.sid).split('T')[0];if(!per[d]||sl.isPast)return;if(R.assignments&&R.assignments[sl.sid])return;per[d].free++;});
+  });
+  days.forEach(d=>{try{if(dayWorkStatus(state,d)==='off')per[d].off=true;}catch(_e){}});
+  const kind=d=>{const x=per[d];if(x.off&&x.work+x.life===0)return'off';if(x.work+x.life===0)return x.free>=3?'free':'none';return x.work>=x.life?'work':'life';};
+  const hoursOf=d=>per[d].work+per[d].life;
+  out.totalHours=days.reduce((a,d)=>a+hoursOf(d),0);
+  const n=days.length||1,avg=out.totalHours/n;
+  out.load=out.totalHours===0?'':(avg>=4?'עמוס':(avg>=2?'סביר':'רגוע'));
+  // group consecutive days of the same kind
+  const groups=[];days.forEach(d=>{const k=kind(d);if(k==='none')return;const g=groups[groups.length-1];if(g&&g.kind===k&&addDays(g.last,1)===d){g.last=d;g.hours+=hoursOf(d);}else groups.push({kind:k,first:d,last:d,hours:hoursOf(d)});});
+  const range=g=>g.first===g.last?'יום '+_HE_DAYS[dowOf(g.first)]:_HE_DAYS[dowOf(g.first)]+'–'+_HE_DAYS[dowOf(g.last)];
+  groups.forEach(g=>{
+    const txt={work:`משימות עבודה (${g.hours} שעות)`,life:`לימודים ומשימות אישיות (${g.hours} שעות)`,free:'פנוי — מקום לסידורים ולדברים שלא תוכננו',off:'יום חופש'}[g.kind];
+    out.lines.push(range(g)+': '+txt);
+  });
+  // what's coming: deadlines / exams in the next 21 days
+  const upcoming=[];
+  ['personal','work'].forEach(calId=>{(state.calendars[calId]?.tasks||[]).forEach(t=>{
+    if(!t.deadline||t.deadline<today||t.deadline>addDays(today,21))return;
+    const diff=Math.round((new Date(t.deadline+'T12:00:00Z')-new Date(today+'T12:00:00Z'))/86400000);
+    upcoming.push({title:t.title,diff,exam:t.type==='exam',big:(t.requiredUnits||0)>=8});
+  });});
+  upcoming.sort((a,b)=>a.diff-b.diff).slice(0,3).forEach(u=>{
+    const when=u.diff===0?'היום':(u.diff===1?'מחר':`בעוד ${u.diff} ימים`);
+    out.reminders.push(`${(u.exam||u.big)?'⚠️ ':''}${u.title} — ${u.exam?'מבחן':'דדליין'} ${when}`);
+  });
+  let ins;try{ins=computeMayaInsights(state);}catch(_e){ins={atRisk:[]};}
+  ins.atRisk.filter(x=>x.level==='critical').slice(0,2).forEach(x=>{const m=`🔴 ${x.title} בסיכון — ${x.why}`;if(!out.reminders.some(r=>r.includes(x.title+' בסיכון')))out.reminders.push(m);});
+  out.title=(nextWeek?'השבוע הבא':'השבוע')+(out.load?' נראה '+out.load:'');
+  out.empty=out.totalHours===0&&out.reminders.length===0;
+  return out;
+}
 function computeMayaInsights(state){
   const today=state?.meta?.today;
   const out={atRisk:[],freeHours:{personal:0,work:0},learned:[]};
@@ -4821,6 +4874,16 @@ function renderMayaScreen(){
   if(!STATE_ACTIVE)return;
   const I=computeMayaInsights(STATE_ACTIVE);
   const mk=(cls,css)=>{const d=document.createElement('div');d.className=cls;d.style.cssText=css;return d;};
+  if(STATE_ACTIVE.meta&&STATE_ACTIVE.meta.onboarded){
+    let B=null;try{B=computeWeekBriefing(STATE_ACTIVE);}catch(_be){console.warn('week briefing failed',_be);}
+    if(B&&!B.empty){
+      const card=mk('maya-card maya-week','background:var(--purple-lt,#f3e8ff);border:1px solid #c4b5fd;border-radius:12px;padding:10px 14px;');
+      card.id='mayaWeekCard';
+      const h=document.createElement('div');h.style.cssText='font-weight:700;margin-bottom:4px;';h.textContent='📅 '+B.title+(B.totalHours?` · ${B.totalHours} שעות מתוכננות`:'');card.appendChild(h);
+      B.lines.concat(B.reminders).forEach((t,i)=>{const d=document.createElement('div');d.style.cssText='font-size:.86em;line-height:1.6;'+(i>=B.lines.length?'color:var(--text);font-weight:600;':'');d.textContent=(i>=B.lines.length?'':'• ')+t;card.appendChild(d);});
+      box.appendChild(card);
+    }
+  }
   const crit=I.atRisk.filter(x=>x.level==='critical');
   crit.slice(0,3).forEach(c=>{
     const card=mk('maya-card maya-urgent','background:var(--red-lt);border:1px solid var(--red);border-radius:12px;padding:10px 14px;');
@@ -6532,9 +6595,8 @@ function _checkOnboarding(){
     if(si)si.value=STATE_ACTIVE.meta.startDate;if(ei)ei.value=STATE_ACTIVE.meta.endDate;
     _wShow(0);
   } else {
-    // Returning (onboarded) user — Home is the calm first screen, not a
-    // straight drop into the board. Pure UI navigation; touches nothing else.
-    switchTab('home');
+    // Returning (onboarded) user lands on Maya, who opens with this week's overview. Pure UI navigation.
+    switchTab('ai');
   }
 }
 
@@ -6740,7 +6802,7 @@ async function _cloudApplyRemote(row){
     if(ai.profile)await window.storage.set('ai:profile',JSON.stringify(ai.profile));
     await _aiLoadState();
     const ov=document.getElementById('welcomeScreen');
-    if(STATE_ACTIVE.meta.onboarded){ if(ov)ov.style.display='none'; document.body.classList.remove('app-locked'); switchTab('home'); }
+    if(STATE_ACTIVE.meta.onboarded){ if(ov)ov.style.display='none'; document.body.classList.remove('app-locked'); switchTab('ai'); }
     try{_aiRefreshGreeting();}catch(_e){}
   }finally{ _cloudApplying=false; }
 }
@@ -6826,7 +6888,8 @@ function renderAccountModal(){
   }
   const ai='<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">🤖 חיבור AI</div><div id="accAiRoute" style="font-size:.8em;color:var(--text2);margin-bottom:8px;"></div><div style="display:flex;gap:8px;"><button id="accAiTest" onclick="_accTestAI()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בדוק את ה-AI</button></div></div>';
   _renderAccChip();
-  body.innerHTML=h+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  const setBtn=_accForced?'':'<div style="margin-top:14px;"><button id="accSettings" onclick="closeAccount();openSettings()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">⚙ הגדרות</button></div>';
+  body.innerHTML=h+setBtn+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
   _accRouteLabel();
 }
 async function _accRouteLabel(){
@@ -10261,6 +10324,27 @@ async function runAccountTests(){
     await _accSaveName();
     ok('E1. מחובר בלי שם: מופיע שדה שם; שמירה שולחת PUT /auth/v1/user עם data.name ומעדכנת את השלום',hasBox&&calls.some(c=>c.m==='PUT'&&c.u.includes('/auth/v1/user')&&c.body.data.name==='נועה')&&cloudDisplayName()==='נועה'&&!document.getElementById('accName2'));
     STATE_ACTIVE.meta.userName=_sn;_cloudStoreSession(null);
+    // S. simplified UI + week briefing
+    {
+      const nav=[...document.querySelectorAll('.hn-right > button')].map(b=>b.id);
+      ok('S1. כותרת מינימלית: יומן, מאיה, משימות וחשבון בלבד (אין בית / הוסף משימה / הגדרות / FAB גלוי)',nav.join()==='hnCalBtn,hnAiBtn,hnTasksBtn,hnAcc'&&getComputedStyle(document.getElementById('quickAddFab')).display==='none',nav.join());
+      const st=structuredClone(STATE);st.meta.onboarded=true;st.meta.today='2026-10-12';st.meta.startDate='2026-10-01';st.meta.endDate='2027-10-01';
+      const base=structuredClone(st);base.calendars.personal.tasks=[];base.calendars.personal.reserves=[];
+      const b0=computeWeekBriefing(base);
+      ok('S2. בלי משימות — אין סקירה (ריק), בלי קריסה',b0.empty===true);
+      const withT=structuredClone(base);
+      withT.calendars.personal.tasks=[{id:'ex1',type:'exam',title:'סטטיסטיקה',requiredUnits:6,deadline:'2026-10-15',deadlineTimeStart:'00:00',deadlineTimeEnd:'23:59',planningDeadlineOffset:0,priorityWeight:2,splitMode:'allowed',location:'',policy:{enforceFinishBeforeDeadline:true}}];
+      const b1=computeWeekBriefing(withT);
+      ok('S3. עם מבחן ב-3 ימים: הסקירה כוללת כותרת שבוע, שורות ימים, ותזכורת "מבחן בעוד 3 ימים" עם ⚠️',!b1.empty&&b1.title.startsWith('השבוע')&&b1.lines.length>0&&b1.reminders.some(r=>r.includes('סטטיסטיקה')&&r.includes('מבחן')&&r.includes('בעוד 3 ימים')&&r.includes('⚠️')),JSON.stringify(b1).slice(0,300));
+      const sat=structuredClone(withT);sat.meta.today='2026-10-17';
+      ok('S4. ביום שבת הסקירה עוברת לשבוע הבא',computeWeekBriefing(sat).title.startsWith('השבוע הבא'));
+      const _sa=STATE_ACTIVE;STATE_ACTIVE=withT;renderMayaScreen();
+      ok('S5. מסך מאיה מציג כרטיס "ככה נראה השבוע" בראש, ובלי משימות — אין כרטיס',!!document.getElementById('mayaWeekCard'));
+      STATE_ACTIVE=base;renderMayaScreen();const noCard=!document.getElementById('mayaWeekCard');
+      STATE_ACTIVE=_sa;renderMayaScreen();
+      ok('S6. מצב ריק: אין כרטיס סקירה',noCard);
+      ok('S7. בחלון החשבון יש כפתור הגדרות (כשלא כפוי), ובמשימות יש כפתור "משימה חדשה"',(()=>{_cloudStoreSession({access_token:'a',refresh_token:'r',expires_at:Math.floor(Date.now()/1000)+3000,user:{id:'u-1',email:'x@y.co',name:'ד'}});_accForced=false;renderAccountModal();const r=!!document.getElementById('accSettings');_cloudStoreSession(null);return r&&!!document.getElementById('boardAddBtn');})());
+    }
     // 35. engine untouched
     ok('35. מודול החשבונות לא נוגע במנוע: אין מופע של buildEngine/applyEvent בתוכו (source-scan)',(()=>{const src=document.documentElement.innerHTML;const a=src.indexOf('function cloudConfigured'),b=src.indexOf('function _cloudBoot');const seg=src.slice(a,b);return a>0&&b>a&&!/buildEngine\(|applyEvent\(|dispatchEvent\(/.test(seg);})());
   }catch(e){ok('runAccountTests threw',false,e.stack||e.message);}
@@ -12604,7 +12688,7 @@ function runCoreTests(){
     ok('onboarded=false: _checkOnboarding מציג welcomeScreen (app-locked)',welcomeShown&&locked,'welcomeShown='+welcomeShown+' locked='+locked);
   }catch(e){ok('onboarded=false shows welcomeScreen',false,e.message);}
 
-  // 110. onboarded=true → initial entry reaches paneHome
+  // 110. onboarded=true → initial entry lands on Maya (with the week overview)
   try{
     const _saved=STATE_ACTIVE;
     const _savedTab=ACTIVE_TAB;
@@ -12614,11 +12698,11 @@ function runCoreTests(){
     document.getElementById('welcomeScreen').style.display='none';
     document.body.classList.remove('app-locked');
     _checkOnboarding();
-    const homeActive=document.getElementById('paneHome').classList.contains('active');
-    const tabIsHome=ACTIVE_TAB==='home';
+    const homeActive=document.getElementById('paneAI').classList.contains('active');
+    const tabIsHome=ACTIVE_TAB==='ai';
     STATE_ACTIVE=_saved;
     switchTab(_savedTab||'study'); // restore UI so this test doesn't leak into the live session
-    ok('onboarded=true: הכניסה הראשונית מגיעה ל-paneHome',homeActive&&tabIsHome,'homeActive='+homeActive+' tab='+ACTIVE_TAB);
+    ok('onboarded=true: הכניסה הראשונית מגיעה למאיה (paneAI)',homeActive&&tabIsHome,'aiActive='+homeActive+' tab='+ACTIVE_TAB);
   }catch(e){ok('onboarded=true reaches Home',false,e.message);}
 
   // 111. switchTab('home') does not change ACTIVE_CALENDAR
