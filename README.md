@@ -40,4 +40,4 @@ Signed-in users can talk to Maya without any key: the page calls a Supabase Edge
 The free Gemini tier has shared limits and Google may use free-tier content to improve its products — say so to your users. Users can still add a personal key (🔑) and it takes priority.
 
 ### Mandatory login
-On the GitHub Pages site the first thing shown is a sign-in / sign-up window that cannot be closed until signed in. Inside claude.ai it is skipped. Create users via Supabase → Authentication → Users → Add user (Auto Confirm) or sign up in the app.
+On the GitHub Pages site the first thing shown is a sign-in / sign-up window that cannot be closed until signed in. Create users via Supabase → Authentication → Users → Add user (Auto Confirm) or sign up in the app.

@@ -6807,7 +6807,7 @@ function closeAccount(){
 }
 // Login is the first thing a visitor sees (not inside claude.ai, where Claude itself provides the AI)
 function _cloudGate(){
-  if(!cloudConfigured()||cloudSignedIn()||_cloudRecovery||_inClaudeHost())return false;
+  if(!cloudConfigured()||cloudSignedIn()||_cloudRecovery)return false;
   openAccount({forced:true}); return true;
 }
 function _cloudMsg(text,bad){ const el=document.getElementById('accMsg'); if(!el)return; el.textContent=text||''; el.style.color=bad?'var(--red,#dc2626)':'var(--text2)'; }
@@ -6846,7 +6846,7 @@ async function _accSyncNow(){ _cloudMsg('מסנכרן…'); const r=await cloudP
 function _cloudBoot(){
   _cloudLoadSession();
   if(cloudConfigured()&&_cloudHandleRecoveryHash()){ setTimeout(openAccount,300); return; }
-  if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ setTimeout(()=>{ if(cloudSignedIn())openAccount(); else openAccount({forced:!_inClaudeHost()}); if(r&&r.error)_cloudMsg(r.error,true); },300); }).catch(()=>{}); return; }
+  if(cloudConfigured()&&/access_token=|error_description=|error=/.test((()=>{try{return location.hash||'';}catch(_e){return '';}})())){ _cloudHandleOAuthHash().then(r=>{ setTimeout(()=>{ if(cloudSignedIn())openAccount(); else openAccount({forced:true}); if(r&&r.error)_cloudMsg(r.error,true); },300); }).catch(()=>{}); return; }
   if(cloudConfigured()&&cloudSignedIn()){ cloudSyncOnLogin().catch(()=>{}); return; }
   _cloudGate();
 }
@@ -10206,7 +10206,7 @@ async function runAccountTests(){
     ok('G5. ענן לא מוגדר → אין חלון כניסה חובה (האפליקציה עובדת מקומית)',_cloudGate()===false);
     CLOUD_CONFIG.url='https://x.supabase.co';CLOUD_CONFIG.anonKey='anon-key';
     window.claude={use:async()=>null};
-    ok('G6. בתוך claude.ai אין חלון כניסה חובה (Claude עצמו מספק את ה-AI)',_cloudGate()===false);
+    ok('G6. גם בתוך claude.ai חלון הכניסה חובה',_cloudGate()===true&&_accForced);closeAccount();_accForced=false;gm.classList.remove('open');
     delete window.claude;
     reset();_cloudStoreSession({access_token:'old',refresh_token:'dead',expires_at:Math.floor(Date.now()/1000)-10,user:U});srv.refresh=()=>J(400,{error:'invalid_grant'});
     await cloudPush();
