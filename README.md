@@ -51,3 +51,8 @@ The user sees a consent window first (risk + responsibility; "busy times only" i
 
 ### Microphone
 🎙 in Maya's input uses the browser's speech recognition (`he-IL`, Chrome/Edge; Chrome sends audio to Google). One-time consent; the text lands in the box and is **not** sent automatically.
+
+### Delete account, backup, legal
+- Run `cloud/delete_account.sql` once in Supabase → SQL Editor. It creates `delete_my_account()` (a signed-in user deletes only their own account + data). Until then "🗑 מחק חשבון" shows an explanatory error and deletes nothing.
+- `privacy.html` (served at `/ilan/privacy.html`) is a plain-language terms + privacy page linked from the sign-in window and the account window. **Fill in the contact line before going public and have it reviewed** — it is not legal advice. Google verification needs this URL.
+- "⬇ הורד גיבוי" downloads the user's data as JSON (works on the public site; browser downloads are blocked inside claude.ai).
