@@ -6825,6 +6825,29 @@ function computeDayOverride(state,iso,mode,startH,endH){
   if(wins.length===0)return{weekId:w.wk,windows:[{dow:6,startH:0,endH:1}]}; // whole week off: sentinel on Saturday 00–01 (outside the grid; [] would mean "default")
   return{weekId:w.wk,windows:wins};
 }
+// PURE: apply one day-mode ('off' | 'short' | 'regular') to every WORK day from startIso to endIso (inclusive).
+// Days that are not work days by default (e.g. Saturday) and days already in the past are skipped.
+// Returns {state, days:[iso…], skipped} or {error}.
+const DAY_RANGE_MAX=120;
+function applyDayRange(state,startIso,endIso,mode,startH,endH,todayIso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(startIso)||!/^\d{4}-\d{2}-\d{2}$/.test(endIso))return{error:'תאריך לא תקין'};
+  if(endIso<startIso)return{error:'תאריך הסיום חייב להיות אחרי תאריך ההתחלה'};
+  const n=Math.round((Date.UTC(...endIso.split('-').map((x,i)=>i===1?+x-1:+x))-Date.UTC(...startIso.split('-').map((x,i)=>i===1?+x-1:+x)))/86400000)+1;
+  if(n>DAY_RANGE_MAX)return{error:'אפשר לסמן עד '+DAY_RANGE_MAX+' ימים בבת אחת'};
+  let st=state;const days=[];let skipped=0;
+  for(let i=0;i<n;i++){
+    const iso=_isoPlusDays(startIso,i);
+    if(todayIso&&iso<todayIso){skipped++;continue;}
+    const dow=_dowOfISO(iso);
+    const w=_weekWindowsFor(st,iso);
+    if(!w.def.some(x=>x.dow===dow)){skipped++;continue;} // not a work day by default
+    const r=computeDayOverride(st,iso,mode,startH,endH);
+    if(r.error)return{error:r.error};
+    st=applyEvent(st,'work',{type:'SET_WEEK_WORK_WINDOWS',weekId:r.weekId,windows:r.windows});
+    days.push(iso);
+  }
+  return{state:st,days,skipped};
+}
 let _dayEditIso=null;
 function openDayEditor(iso){
   const m=document.getElementById('dayModal');if(!m)return;
@@ -6841,14 +6864,26 @@ function openDayEditor(iso){
     `<label style="${nameBtn}"><input type="radio" name="dayMode" value="regular" ${mode==='regular'?'checked':''}> יום רגיל</label>`+
     `<label style="${nameBtn}"><input type="radio" name="dayMode" value="off" ${mode==='off'?'checked':''}> 🏖 יום חופש (בלי עבודה)</label>`+
     `<label style="${nameBtn}"><input type="radio" name="dayMode" value="short" ${mode==='short'?'checked':''}> ⏱ עובד פחות:&nbsp;<select id="dayStartH">${opts(sH)}</select>&nbsp;עד&nbsp;<select id="dayEndH">${opts(Math.min(eH,23))}</select></label>`+
-    `<div style="font-size:.78em;color:var(--muted);margin-top:4px;">השינוי חל רק על היום הזה. שאר הימים נשארים כרגיל והתכנון מחושב מחדש.</div>`;
+    `<label style="display:flex;align-items:center;gap:8px;font-size:.88em;margin:6px 0 4px;">רוצה גם ימים נוספים? עד תאריך:<input type="date" id="dayEndDate" min="${iso}" style="padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;"/></label>`+
+    `<div style="font-size:.78em;color:var(--muted);margin-top:4px;">בלי תאריך — רק היום הזה. עם תאריך — כל ימי העבודה עד אליו (שבת ובדיקת ימים שעברו מדולגים). שאר הימים נשארים כרגיל והתכנון מחושב מחדש.</div>`;
   m.classList.add('open');
 }
 function closeDayEditor(){const m=document.getElementById('dayModal');if(m)m.classList.remove('open');_dayEditIso=null;}
 function saveDayEditor(){
   if(!_dayEditIso)return;
   const mode=(document.querySelector('input[name="dayMode"]:checked')||{}).value||'regular';
-  const r=computeDayOverride(STATE_ACTIVE,_dayEditIso,mode,parseInt((document.getElementById('dayStartH')||{}).value,10),parseInt((document.getElementById('dayEndH')||{}).value,10));
+  const sH=parseInt((document.getElementById('dayStartH')||{}).value,10),eH=parseInt((document.getElementById('dayEndH')||{}).value,10);
+  const endDate=((document.getElementById('dayEndDate')||{}).value||'').trim();
+  if(endDate&&endDate>_dayEditIso){ // a range of days
+    const rr=applyDayRange(STATE_ACTIVE,_dayEditIso,endDate,mode,sH,eH,STATE_ACTIVE.meta.today);
+    if(rr.error){showErrorToast(rr.error);return;}
+    if(rr.days.length===0){showToast('אין ימי עבודה בטווח שנבחר');return;}
+    STATE_ACTIVE=commitState(rr.state,'day-range-override:'+mode);
+    closeDayEditor();
+    showToast((mode==='off'?'סימנתי חופש':mode==='short'?'עדכנתי שעות':'החזרתי לרגיל')+' ב-'+rr.days.length+' ימי עבודה והמערכת חושבה מחדש ✓');
+    return;
+  }
+  const r=computeDayOverride(STATE_ACTIVE,_dayEditIso,mode,sH,eH);
   if(r.error){showErrorToast(r.error);return;}
   dispatch({type:'SET_WEEK_WORK_WINDOWS',weekId:r.weekId,windows:r.windows});
   closeDayEditor();
@@ -9787,6 +9822,27 @@ function runDayOverrideTests(){
     const dAfter=daysOf(offState);
     ok('16. הלוח שלפני שינוי משתמש ביום רביעי (תנאי מקדים לבדיקה)',[...dBefore].some(d=>d===wed),[...dBefore].join(','));
     ok('17. אחרי "יום חופש" ברביעי המנוע לא משבץ עבודה בו, וממשיך לשבץ בימים אחרים',!dAfter.has(wed)&&dAfter.size>0,[...dAfter].join(','));
+    // 24+. date ranges
+    {
+      const todayIso='2026-02-16';
+      const r1=applyDayRange(base,'2026-02-17','2026-02-24','off',9,18,todayIso); // Tue 17 … Tue 24 (crosses a weekend & two planning weeks)
+      ok('R1. טווח חופש חוצה שבוע: מסומנים רק ימי עבודה (ג׳ ד׳ ה׳ + א׳ ב׳ ג׳ = 6), שבת/שישי מדולגים',!r1.error&&r1.days.length===6&&!r1.days.includes('2026-02-20')&&!r1.days.includes('2026-02-21')&&r1.skipped===2,JSON.stringify(r1.days)+' skipped='+r1.skipped);
+      ok('R2. שני השבועות נשמרים כ-override וימי החופש חסרים בהם',(()=>{const a=r1.state.weeklyWorkPlan.weeks['2026-02-15'],b=r1.state.weeklyWorkPlan.weeks['2026-02-22'];return !!a&&!!b&&!a.some(w=>[2,3,4].includes(w.dow))&&!b.some(w=>[0,1,2].includes(w.dow));})());
+      ok('R3. הפונקציה טהורה: state המקורי לא השתנה',JSON.stringify(base.weeklyWorkPlan.weeks)==='{}');
+      ok('R4. תאריך סיום לפני התחלה / טווח ארוך מדי / תאריך לא תקין נדחים',!!applyDayRange(base,'2026-02-20','2026-02-18','off',9,18,todayIso).error&&!!applyDayRange(base,'2026-02-17','2027-12-31','off',9,18,todayIso).error&&!!applyDayRange(base,'x','2026-02-18','off',9,18,todayIso).error);
+      const rp=applyDayRange(base,'2026-02-14','2026-02-17','off',9,18,'2026-02-16');
+      ok('R5. ימים שכבר עברו מדולגים (14–15 בפברואר לפני היום)',rp.days.join(',')==='2026-02-16,2026-02-17'&&rp.skipped>=2,rp.days.join(','));
+      const rs=applyDayRange(base,'2026-02-17','2026-02-19','short',9,13,todayIso);
+      ok('R6. "עובד פחות" לטווח: כל הימים בטווח 9–13, שאר השבוע רגיל',rs.days.length===3&&[2,3,4].every(d=>rs.state.weeklyWorkPlan.weeks['2026-02-15'].find(w=>w.dow===d).endH===13)&&rs.state.weeklyWorkPlan.weeks['2026-02-15'].find(w=>w.dow===0).endH===18);
+      const back=applyDayRange(r1.state,'2026-02-17','2026-02-24','regular',9,18,todayIso);
+      ok('R7. "יום רגיל" על אותו טווח מבטל את כל ה-override (חוזר לברירת מחדל)',Object.keys(back.state.weeklyWorkPlan.weeks).length===0,JSON.stringify(back.state.weeklyWorkPlan.weeks));
+      const wk=applyDayRange(base,'2026-02-15','2026-02-19','off',9,18,'2026-02-10');
+      ok('R8. שבוע שלם חופש (א׳–ה׳) נשמר כ-override אמיתי ולא חוזר לברירת מחדל',(wk.state.weeklyWorkPlan.weeks['2026-02-15']||[]).length>0&&!(wk.state.weeklyWorkPlan.weeks['2026-02-15']||[]).some(w=>w.dow<=5));
+      const withT=applyEvent(base,'work',{type:'ADD_TASK',payload:{...task,id:'rg1',requiredUnits:12,deadline:'2026-02-26',calendarId:'work'}});
+      const holiday=applyDayRange(withT,'2026-02-17','2026-02-19','off',9,18,todayIso);
+      const dAfterR=daysOf(holiday.state);
+      ok('R9. המנוע לא משבץ עבודה באף אחד מימי החופש בטווח, וממשיך לשבץ בימים אחרים',holiday.days.length===3&&!['2026-02-17','2026-02-18','2026-02-19'].some(d=>dAfterR.has(d))&&dAfterR.size>0,[...dAfterR].join(','));
+    }
     // 18-22 UI
     STATE_ACTIVE=withTask;ACTIVE_CALENDAR='work';CW=0;_cwManuallySet=true;ACTIVE_TAB='work';recalcAndRender();
     const ths=[...document.querySelectorAll('#tHead th')].filter(th=>th.getAttribute('onclick')&&th.getAttribute('onclick').includes('openDayEditor'));
@@ -9805,6 +9861,16 @@ function runDayOverrideTests(){
     STATE_ACTIVE=commitState({...STATE_ACTIVE,meta:{...STATE_ACTIVE.meta,today:'2026-02-18'}},'t-today',{render:false});
     openDayEditor('2026-02-16');
     ok('23. יום שכבר עבר: העורך לא נפתח',!document.getElementById('dayModal').classList.contains('open'));
+    closeDayEditor();
+    // range via the modal
+    STATE_ACTIVE=commitState({...withTask,meta:{...withTask.meta,today:'2026-02-16'}},'t-range',{render:false});
+    openDayEditor('2026-02-17');
+    ok('R10. בחלון היום יש שדה "עד תאריך"',!!document.getElementById('dayEndDate'));
+    document.querySelector('input[name="dayMode"][value="off"]').checked=true;document.getElementById('dayEndDate').value='2026-02-19';
+    const revR=STATE_ACTIVE.meta.revision;saveDayEditor();
+    ok('R11. שמירה עם תאריך סיום: revision עלה פעם אחת, 3 ימים סומנו כחופש',STATE_ACTIVE.meta.revision===revR+1&&['2026-02-17','2026-02-18','2026-02-19'].every(d=>dayWorkStatus(STATE_ACTIVE,d)==='off'),String(STATE_ACTIVE.meta.revision-revR));
+    openDayEditor('2026-02-17');document.querySelector('input[name="dayMode"][value="regular"]').checked=true;document.getElementById('dayEndDate').value='2026-02-19';saveDayEditor();
+    ok('R12. חזרה ל"רגיל" על הטווח מנקה את כולו',['2026-02-17','2026-02-18','2026-02-19'].every(d=>dayWorkStatus(STATE_ACTIVE,d)===''));
     closeDayEditor();
   }catch(e){ok('runDayOverrideTests threw',false,e.stack||e.message);}
   finally{
