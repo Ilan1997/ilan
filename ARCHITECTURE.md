@@ -493,3 +493,10 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - `recalcAndRender` now re-renders the Maya screen when it is the active tab, so the weekly briefing follows any calendar change. The week card shows "יומן גוגל עודכן לפני …" (`agoHe`) with a "↻ סנכרן עכשיו" button.
 - Briefing polish: a leading time in an event title that repeats the displayed time is stripped; events more than 6 days away show the date (22/10) instead of "(בעוד N ימים)".
 - Tests: AS1–AS12 in `runAccountTests`. Real Google behaviour is unverified (sandbox cannot reach Google).
+
+## §41 The AI never waits forever
+
+- Cause of a permanent "חושב/ת…": no request had a time limit, so a stalled server or Gemini call left the bubble waiting indefinitely.
+- Client: `_cloudFetch` aborts after `timeoutMs` (default 30s; the AI call uses 75s) and returns `{network:true,timeout:true}`; `_aiCallProxy` turns that into "מאיה לא ענתה בזמן…". `sendAIMessage` also wraps the whole model call in `_aiWithTimeout(…, 90s)`, which covers every route (including the in-claude.ai capability).
+- Server (`maya-ai`): each Gemini call has `AbortSignal.timeout(28s)` and the whole chain a 60s budget (`TOTAL_BUDGET_MS`); a timeout with no response returns 504 `timeout`.
+- Tests: TO1–TO6 (`runAccountTests`) and a static check of the function source.

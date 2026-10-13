@@ -5502,6 +5502,12 @@ let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting exp
 // capability (no API key in the page). Anywhere else (tests, local file) → the
 // original direct fetch. The system prompt is sent as an <instructions> prefix
 // of the first user message because `sample` is memoryless and has no system slot.
+// Safety net around any AI route (including the in-claude.ai capability): never wait forever.
+function _aiWithTimeout(p,ms){
+  let tm;
+  const t=new Promise((_,rej)=>{tm=setTimeout(()=>{const e=new Error('ai-timeout');e.userMessage='מאיה לא ענתה בזמן. נסה שוב, ואם זה חוזר, ייתכן עומס אצל גוגל.';rej(e);},ms);});
+  return Promise.race([p,t]).finally(()=>clearTimeout(tm));
+}
 async function _aiCallModel(sys,msgs){
   try{
     if(typeof window!=='undefined'&&window.claude&&typeof window.claude.use==='function'){
@@ -5529,7 +5535,8 @@ async function _aiEnsureConsent(){
 async function _aiCallProxy(sys,msgs){
   if(!(await _aiEnsureConsent())){const e=new Error('no-consent');e.userMessage='בלי אישור לא אשלח את ההודעות ל-AI. אפשר לאשר בפעם הבאה שתשלח הודעה.';throw e;}
   if(!(await _cloudEnsureFresh())){const e=new Error('login');e.userMessage='ההתחברות פגה — התחבר שוב דרך 👤 החשבון שלי.';throw e;}
-  const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))}});
+  const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',timeoutMs:75000,body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))}});
+  if(r.timeout){const e=new Error('ai-timeout');e.userMessage='מאיה לא ענתה בזמן. נסה שוב, ואם זה חוזר, ייתכן עומס אצל גוגל.';throw e;}
   if(r.network){const e=new Error('network');e.userMessage='אין חיבור לשרת — בדוק אינטרנט ונסה שוב.';throw e;}
   if(r.status===404){const e=new Error('proxy-not-deployed');e.noKey=true;throw e;} // service not set up yet → offer a personal key
   if(!r.ok){const e=new Error((r.data&&r.data.error)||('HTTP '+r.status));e.userMessage=(r.data&&r.data.message)?(r.data.message+((r.data.detail&&r.data.error==='upstream')?' ('+String(r.data.detail).slice(0,140)+')':'')):null;e.noKey=!!(r.data&&r.data.error==='not_configured');throw e;}
@@ -5585,7 +5592,7 @@ async function sendAIMessage(){
     (AI_PREFS?`\nהעדפות שנלמדו על המשתמש/ת מתיקונים קודמים (קח/י בחשבון בעדינות, אל תזכיר/י את זה במפורש): ${AI_PREFS}`:'');
 
   try{
-    const fullText=await _aiCallModel(sys,AI_CHAT_HISTORY.map(m=>({role:m.role,content:m.content})));
+    const fullText=await _aiWithTimeout(_aiCallModel(sys,AI_CHAT_HISTORY.map(m=>({role:m.role,content:m.content}))),90000);
     typingEl?.remove();
 
     // Primary format: SEMANTIC_PLAN. Legacy fallback: PLAN_JSON — both route
@@ -7243,9 +7250,14 @@ async function _cloudFetch(path,opts={}){
   if(_tok)h.Authorization='Bearer '+_tok;
   else if(!/^sb_/.test(CLOUD_CONFIG.anonKey))h.Authorization='Bearer '+CLOUD_CONFIG.anonKey; // new-style publishable keys (sb_…) are not JWTs: apikey header only
   let r;
-  try{ r=await fetch(CLOUD_CONFIG.url.replace(/\/$/,'')+path,{method:opts.method||'GET',headers:h,body:opts.body===undefined?undefined:JSON.stringify(opts.body)}); }
-  catch(_e){ return{ok:false,status:0,data:null,network:true}; }
+  // a request that never answers must not hang the UI forever (the AI "thinking…" bubble used to wait indefinitely)
+  const ctl=typeof AbortController==='function'?new AbortController():null;
+  const tm=ctl?setTimeout(()=>{try{ctl.abort();}catch(_e){}},opts.timeoutMs||30000):null;
+  let timedOut=false;if(ctl)ctl.signal.addEventListener('abort',()=>{timedOut=true;});
+  try{ r=await fetch(CLOUD_CONFIG.url.replace(/\/$/,'')+path,{method:opts.method||'GET',headers:h,body:opts.body===undefined?undefined:JSON.stringify(opts.body),signal:ctl?ctl.signal:undefined}); }
+  catch(_e){ if(tm)clearTimeout(tm); return{ok:false,status:0,data:null,network:true,timeout:timedOut}; }
   let data=null; try{ data=await r.json(); }catch(_e){}
+  if(tm)clearTimeout(tm);
   return{ok:r.ok,status:r.status,data};
 }
 async function _cloudEnsureFresh(){
@@ -11761,6 +11773,24 @@ async function runAccountTests(){
         try{if(prevPrefs===null)localStorage.removeItem(GCAL_PREF_KEY);else localStorage.setItem(GCAL_PREF_KEY,prevPrefs);}catch(_e){}
         try{recalcAndRender();}catch(_e){}
       }
+    }
+    // TO. the AI never waits forever
+    {
+      const prevFetch=window.fetch,prevUrl=CLOUD_CONFIG.url,prevKey=CLOUD_CONFIG.anonKey;
+      try{
+        CLOUD_CONFIG.url='https://x.supabase.co';CLOUD_CONFIG.anonKey=CLOUD_CONFIG.anonKey||'sb_publishable_x';
+        window.fetch=(u,o)=>new Promise((res,rej)=>{if(o&&o.signal)o.signal.addEventListener('abort',()=>{const e=new Error('aborted');e.name='AbortError';rej(e);});});
+        const t0=Date.now();const r=await _cloudFetch('/functions/v1/maya-ai',{method:'POST',timeoutMs:40,body:{}});
+        ok('TO1. בקשה שלא נענית נקטעת אחרי ההגבלה ומסומנת timeout (ולא תלויה לנצח)',r.ok===false&&r.network===true&&r.timeout===true&&Date.now()-t0<2000);
+        window.fetch=async()=>({ok:true,status:200,json:async()=>({text:'שלום'})});
+        const r2=await _cloudFetch('/x',{timeoutMs:40});
+        ok('TO2. בקשה תקינה לא מסומנת timeout',r2.ok&&!r2.timeout);
+      }finally{window.fetch=prevFetch;CLOUD_CONFIG.url=prevUrl;CLOUD_CONFIG.anonKey=prevKey;}
+      let rej=null;try{await _aiWithTimeout(new Promise(()=>{}),30);}catch(e){rej=e;}
+      ok('TO3. _aiWithTimeout: הבטחה תקועה נדחית עם הודעה בעברית',!!rej&&rej.message==='ai-timeout'&&rej.userMessage.includes('בזמן'));
+      ok('TO4. _aiWithTimeout: תשובה מהירה עוברת כמו שהיא',(await _aiWithTimeout(Promise.resolve('ok'),500))==='ok');
+      ok('TO5. הצינור משתמש בהגבלות: קריאת ה-proxy עם timeoutMs, ו-sendAIMessage עטוף ב-_aiWithTimeout',_aiCallProxy.toString().includes('timeoutMs')&&sendAIMessage.toString().includes('_aiWithTimeout'));
+      ok('TO6. קוד הלקוח מציג הודעה ברורה על timeout (השרת נבדק בבדיקות הסטטיות: AbortSignal.timeout + תקציב זמן כולל)',_aiCallProxy.toString().includes('ai-timeout'));
     }
     // RS. recurring Google events: scope choice for delete / edit (this one / this and following / all)
     {

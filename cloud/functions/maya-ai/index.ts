@@ -8,6 +8,7 @@ const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.8-flash";
 const FALLBACKS = (Deno.env.get("GEMINI_FALLBACK_MODELS") ?? "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash-lite").split(",").map((x) => x.trim()).filter(Boolean);
 const DAILY_LIMIT = Number(Deno.env.get("DAILY_LIMIT") ?? "40");
 const ALLOWED = (Deno.env.get("ALLOWED_ORIGINS") ?? "https://ilan1997.github.io").split(",").map((s) => s.trim());
+const PER_MODEL_MS = 28000, TOTAL_BUDGET_MS = 60000;
 const MAX_SYSTEM = 30000, MAX_TOTAL = 90000, MAX_MESSAGES = 40;
 
 function cors(origin: string | null) {
@@ -60,19 +61,28 @@ Deno.serve(async (req) => {
     systemInstruction: { parts: [{ text: system }] },
     contents: msgs.map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
   });
-  let r: Response | null = null, data: any = {}, lastDetail = "";
+  let r: Response | null = null, data: any = {}, lastDetail = "", timedOut = false;
+  const deadline = Date.now() + TOTAL_BUDGET_MS; // the browser gives up at 75s, so stay well under it
   for (const model of [MODEL, ...FALLBACKS.filter((x) => x !== MODEL)]) {
+    const left = deadline - Date.now();
+    if (left < 3000) break;
     try {
       r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey }, body: payload,
+        signal: AbortSignal.timeout(Math.min(PER_MODEL_MS, left)),
       });
       data = await r.json().catch(() => ({}));
-    } catch (e) { lastDetail = `${model}: network ${String(e).slice(0, 120)}`; console.error("gemini fetch failed", lastDetail); r = null; continue; }
+    } catch (e) {
+      const to = (e as Error)?.name === "TimeoutError" || (e as Error)?.name === "AbortError";
+      if (to) timedOut = true;
+      lastDetail = `${model}: ${to ? "timeout" : "network " + String(e).slice(0, 120)}`; console.error("gemini fetch failed", lastDetail); r = null; continue;
+    }
     if (r.ok && !data?.error) break;
     lastDetail = `${model}: ${r.status} ${String(data?.error?.message ?? "").slice(0, 200)}`;
     console.error("gemini error", lastDetail); // visible in Supabase → Edge Functions → Logs
     if (r.status === 401 || r.status === 403) break; // bad key/permission: other models won't help. 429 (quota) and 404 (retired) fall through: each distinct model has its own free-tier quota.
   }
+  if (!r && timedOut) return json({ error: "timeout", detail: lastDetail, message: "מאיה לא ענתה בזמן. נסה שוב בעוד רגע." }, 504, origin);
   if (!r || !r.ok || data?.error) {
     const busy = r?.status === 429;
     return json({ error: busy ? "busy" : "upstream", detail: lastDetail, message: busy ? "השירות עמוס כרגע — נסה שוב בעוד דקה." : "שגיאה מול ה-AI." }, busy ? 503 : 502, origin);
