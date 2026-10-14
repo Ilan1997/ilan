@@ -778,6 +778,31 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 .mic-opts{gap:4px 14px;font-size:.72em;opacity:.85;}
 @media (prefers-reduced-motion:reduce){.ai-bubble,.ai-dots i{animation:none!important;}}
 </style>
+<style id="themeV6">
+/* V6: Maya chat in a clean "assistant chat" layout — Maya's replies as plain text on white, person's messages as soft grey pills, rounded composer with a round send button */
+#paneAI .ai-wrap{background:#fff;border:1px solid #e8eaf0;border-radius:24px;margin-top:10px;max-width:760px;padding:18px 22px 14px;box-shadow:0 1px 2px rgba(31,35,64,.04);}
+.ai-log{gap:20px;padding:6px 2px 14px;}
+.ai-bubble.ai-bot{background:transparent!important;border:0;box-shadow:none;border-radius:0;max-width:100%;padding:2px 4px;font-size:1em;line-height:1.8;color:#1f2340;}
+.ai-bubble.ai-user{background:#f1f2f6!important;color:#1f2340!important;box-shadow:none;border-radius:22px;max-width:78%;padding:10px 18px;font-size:.95em;}
+.ai-bubble.ai-bot.ai-proposal{background:#fafbfe!important;border:1px solid #e8eaf0;border-radius:18px;padding:12px 16px;}
+.ai-bubble.ai-typing{padding:2px 4px;font-size:.9em;}
+#aiGreeting{padding-inline-start:46px!important;min-height:36px;}
+#aiGreeting::before{top:2px!important;inset-inline-start:4px!important;width:28px!important;height:28px!important;}
+.ai-quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 12px;}
+.ai-q{border-radius:16px;padding:12px 14px;text-align:start;font-weight:500;font-size:.88em;border:1px solid #e3e5ee;background:#fff;color:#2b2f45;}
+.ai-q:hover{background:#f6f7fb;border-color:#d4d7e4;}
+.ai-inputrow{border-radius:26px!important;background:#f6f7fb!important;border:1px solid #e3e5ee!important;box-shadow:none!important;padding:8px 10px 8px 8px!important;align-items:flex-end;}
+.ai-inputrow:focus-within{background:#fff!important;border-color:#c9cde0!important;box-shadow:0 0 0 3px rgba(106,82,238,.12)!important;}
+.ai-inputrow textarea{font-size:1em;padding:8px 10px;min-height:24px;}
+#aiSendBtn{background:#1f2340!important;width:36px;height:36px;font-size:1.15em;font-weight:700;line-height:1;}
+#aiSendBtn:hover{background:#34395f!important;}
+#aiSendBtn:disabled{background:#c9cde0!important;}
+#aiMicBtn{background:transparent!important;border:0!important;width:36px;height:36px;font-size:1.1em;}
+.mic-opts{justify-content:center;}
+.ai-hint{text-align:center;}
+.ai-ins-toggle{border-color:#e3e5ee;}
+@media (max-width:640px){#paneAI .ai-wrap{margin:6px 0 0;border-radius:20px 20px 0 0;border-inline:0;padding:14px 14px 10px;}.ai-quick{gap:8px;}.ai-q{padding:10px 12px;font-size:.8em;}}
+</style>
 
 
 </head>
@@ -1086,9 +1111,9 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
       <button type="button" class="ai-q" onclick="_aiQuick('send','השבוע עמוס לי. אפשר להקל עליי?')">😮‍💨 השבוע עמוס לי</button>
     </div>
     <div class="ai-inputrow">
-      <textarea id="aiChatInput" placeholder="כתוב כאן איך אתה רוצה שהשבוע ייראה…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+      <textarea id="aiChatInput" placeholder="כתוב למאיה…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
       <button id="aiMicBtn" onclick="micToggle()" title="דבר אל מאיה" aria-label="הקלט הודעה למאיה" aria-pressed="false" style="background:var(--card);color:var(--text);border:1px solid var(--border2);">🎙</button>
-      <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">➤</button>
+      <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">↑</button>
     </div>
     <div class="mic-opts"><label><input type="checkbox" id="micAutoSend" onchange="micSetPref('autoSend',this.checked)"> שלח אוטומטית אחרי שאני מדבר</label><label><input type="checkbox" id="micSpeak" onchange="micSetPref('speak',this.checked)"> מאיה מקריאה בקול את התשובה</label></div>
     <div class="ai-hint" id="aiHint">Enter לשליחה · Shift+Enter לשורה חדשה · <a href="#" onclick="event.preventDefault();if(confirm('לאפס את כל מה שמאיה למדה עליך (פרופיל והעדפות)?'))resetAILearned().then(()=>showToast('האיפוס בוצע'));" style="color:inherit;text-decoration:underline;">אפס מה שנלמד</a></div>
