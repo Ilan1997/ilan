@@ -759,6 +759,25 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 .blk{border-radius:6px;box-shadow:none;}
 .blk:hover{box-shadow:0 1px 3px rgba(60,64,67,.3);}
 </style>
+<style id="themeV5">
+/* V5: Maya screen — calmer flow: quick-start chips, real typing dots, folded summary once chatting */
+.ai-ins-toggle{display:none;align-self:flex-start;margin:0 0 8px;border:1px solid var(--hair,#e6e8f1);background:#fff;border-radius:999px;padding:5px 12px;font-family:inherit;font-size:.78em;font-weight:600;color:#5f6684;cursor:pointer;}
+#paneAI.has-chat:not(.ins-open) #mayaInsights{display:none!important;}
+#paneAI.has-chat #aiQuick{display:none;}
+.ai-quick{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px;}
+.ai-q{border:1.5px solid var(--hair,#e6e8f1);background:#fff;border-radius:999px;padding:8px 14px;font-family:inherit;font-size:.84em;font-weight:600;color:#3c4043;cursor:pointer;transition:border-color .15s,background .15s;}
+.ai-q:hover{border-color:#b9a6ff;background:#f6f2ff;}
+.ai-bubble{animation:bubbleIn .25s var(--ease,ease);}
+.ai-bubble.ai-typing{font-style:normal;color:#70757a;}
+.ai-dots{display:inline-flex;gap:3px;margin-inline-start:6px;vertical-align:middle;}
+.ai-dots i{width:5px;height:5px;border-radius:50%;background:#9aa0b8;animation:aiDot 1.2s infinite ease-in-out;}
+.ai-dots i:nth-child(2){animation-delay:.15s}.ai-dots i:nth-child(3){animation-delay:.3s}
+@keyframes aiDot{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+.ai-bubble strong{font-weight:700;}
+.ai-proposal .btn.btn-xs{border-radius:999px;border:1.5px solid #b9a6ff;background:#f6f2ff;color:#4b36c4;font-weight:700;padding:6px 14px;}
+.mic-opts{gap:4px 14px;font-size:.72em;opacity:.85;}
+@media (prefers-reduced-motion:reduce){.ai-bubble,.ai-dots i{animation:none!important;}}
+</style>
 
 
 </head>
@@ -1053,14 +1072,21 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 <!-- ══ AI PLANNER PANE ═══════════════════════════════════ -->
 <div class="tab-pane" id="paneAI">
   <div class="ai-wrap">
+    <button type="button" id="mayaInsToggle" class="ai-ins-toggle" aria-expanded="false" onclick="_aiToggleInsights()">📋 סקירה והעדפות ▾</button>
     <div id="mayaInsights" style="flex:none;max-height:36vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
     <div class="ai-log" id="aiChatLog">
       <div class="ai-bubble ai-bot" id="aiGreeting">
         <div class="ai-bubble-txt" id="aiGreetingTxt">היי, אני מאיה 👋 המזכירה האישית שלך. ספר לי איך אתה רוצה שהשבוע ייראה — למשל "יש לי מבחן בסטטיסטיקה ביום חמישי, ורציתי גם להתאמן פעמיים השבוע" — ואני אהפוך את זה למשימות מתוזמנות בלוח. ככל שתתקן אותי (למשל תגרור משימה למקום אחר), כך אלמד את ההעדפות שלך.</div>
       </div>
     </div>
+    <div class="ai-quick" id="aiQuick" role="group" aria-label="התחלה מהירה">
+      <button type="button" class="ai-q" onclick="_aiQuick('send','מה מחכה לי השבוע? תן לי סיכום קצר.')">📅 מה מחכה לי השבוע?</button>
+      <button type="button" class="ai-q" onclick="_aiQuick('fill','יש לי משימה חדשה: ')">➕ משימה חדשה</button>
+      <button type="button" class="ai-q" onclick="_aiQuick('fill','תוסיפי ליומן: ')">🗓️ אירוע ליומן</button>
+      <button type="button" class="ai-q" onclick="_aiQuick('send','השבוע עמוס לי. אפשר להקל עליי?')">😮‍💨 השבוע עמוס לי</button>
+    </div>
     <div class="ai-inputrow">
-      <textarea id="aiChatInput" placeholder="כתוב כאן איך אתה רוצה שהשבוע ייראה…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+      <textarea id="aiChatInput" placeholder="כתוב כאן איך אתה רוצה שהשבוע ייראה…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
       <button id="aiMicBtn" onclick="micToggle()" title="דבר אל מאיה" aria-label="הקלט הודעה למאיה" aria-pressed="false" style="background:var(--card);color:var(--text);border:1px solid var(--border2);">🎙</button>
       <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">➤</button>
     </div>
@@ -4856,6 +4882,18 @@ async function _aiSaveSoft(){ try{ await window.storage.set('ai:soft', JSON.stri
 async function _aiSaveProfile(){ try{ await window.storage.set('ai:profile', JSON.stringify(AI_PROFILE)); _cloudSchedulePush(); }catch(_e){} }
 async function _aiSavePrefs(){ try{ await window.storage.set('ai:prefs', AI_PREFS); _cloudSchedulePush(); }catch(_e){} }
 
+// After a failed turn: one button re-sends the same message without duplicating it in the chat or the history.
+function _aiOfferRetry(text){
+  _aiAppendActionBubble('אפשר לנסות שוב — ההודעה שלך נשמרה.',[{label:'↻ נסה שוב',onclick:(div)=>{
+    if(AI_BUSY)return;
+    const log=document.getElementById('aiChatLog');
+    if(div&&div.remove)div.remove();
+    if(log){const us=log.querySelectorAll('.ai-user');const last=us[us.length-1];if(last&&last.textContent===text)last.remove();}
+    const lastH=AI_CHAT_HISTORY[AI_CHAT_HISTORY.length-1];
+    if(lastH&&lastH.role==='user'&&lastH.content===text)AI_CHAT_HISTORY.pop();
+    const input=document.getElementById('aiChatInput');if(input){input.value=text;sendAIMessage();}
+  }}]);
+}
 function _aiRenderHistory(){
   const log=document.getElementById('aiChatLog');
   if(!log)return;
@@ -4868,8 +4906,40 @@ function _aiRenderHistory(){
   });
   log.scrollTop=log.scrollHeight;
   try{_aiRefreshGreeting();}catch(_ge){}
+  try{_aiSyncChatState();}catch(_se){}
 }
 
+// Light, safe formatting for Maya's replies: **bold** and "- " bullets only. Built with DOM nodes (never innerHTML) so model text cannot inject markup.
+function _aiFormatInto(el,text){
+  const lines=String(text==null?'':text).split('\n');
+  lines.forEach((ln,i)=>{
+    const t=ln.replace(/^\s*[-*]\s+/,'• ');
+    t.split(/(\*\*[^*\n]+\*\*)/).forEach(part=>{
+      if(/^\*\*[^*\n]+\*\*$/.test(part)){const b=document.createElement('strong');b.textContent=part.slice(2,-2);el.appendChild(b);}
+      else if(part)el.appendChild(document.createTextNode(part));
+    });
+    if(i<lines.length-1)el.appendChild(document.createTextNode('\n'));
+  });
+}
+// Quick-start chips: 'send' sends immediately, 'fill' puts a starter in the box so the person finishes the sentence.
+function _aiQuick(mode,text){
+  const input=document.getElementById('aiChatInput');if(!input)return;
+  input.value=text;input.style.height='auto';
+  if(mode==='send'){sendAIMessage();}else{input.focus();try{input.setSelectionRange(text.length,text.length);}catch(_e){}}
+}
+function _aiToggleInsights(){
+  const pane=document.getElementById('paneAI');if(!pane)return;
+  const open=pane.classList.toggle('ins-open');
+  const b=document.getElementById('mayaInsToggle');if(b){b.setAttribute('aria-expanded',String(open));b.textContent=open?'📋 סקירה והעדפות ▴':'📋 סקירה והעדפות ▾';}
+}
+// Chips show only while the conversation is empty; once it starts, the summary cards fold behind a toggle so the chat gets the room.
+function _aiSyncChatState(){
+  const pane=document.getElementById('paneAI');if(!pane)return;
+  const has=(typeof AI_CHAT_HISTORY!=='undefined'&&Array.isArray(AI_CHAT_HISTORY))&&AI_CHAT_HISTORY.some(m=>m&&m.role==='user');
+  pane.classList.toggle('has-chat',has);
+  const box=document.getElementById('mayaInsights'),tg=document.getElementById('mayaInsToggle');
+  if(tg)tg.style.display=(has&&box&&box.children.length>0)?'inline-block':'none';
+}
 function _aiAppendBubble(text,who){
   const log=document.getElementById('aiChatLog');
   if(!log)return null;
@@ -4877,7 +4947,9 @@ function _aiAppendBubble(text,who){
   div.className='ai-bubble '+(who==='user'?'ai-user':who==='typing'?'ai-bot ai-typing':'ai-bot');
   const txt=document.createElement('div');
   txt.className='ai-bubble-txt';
-  txt.textContent=text;
+  if(who==='typing'){txt.textContent='חושב/ת';const dots=document.createElement('span');dots.className='ai-dots';dots.setAttribute('aria-hidden','true');dots.innerHTML='<i></i><i></i><i></i>';txt.appendChild(dots);}
+  else if(who==='user')txt.textContent=text;
+  else _aiFormatInto(txt,text);
   div.appendChild(txt);
   log.appendChild(div);
   log.scrollTop=log.scrollHeight;
@@ -5416,7 +5488,7 @@ function renderMayaScreen(){
   const box=document.getElementById('mayaInsights');if(!box)return;
   box.textContent='';
   _aiRefreshGreeting();
-  if(!STATE_ACTIVE)return;
+  if(!STATE_ACTIVE){try{_aiSyncChatState();}catch(_e){}return;}
   const I=computeMayaInsights(STATE_ACTIVE);
   const mk=(cls,css)=>{const d=document.createElement('div');d.className=cls;d.style.cssText=css;return d;};
   if(STATE_ACTIVE.meta&&STATE_ACTIVE.meta.onboarded){
@@ -5456,6 +5528,7 @@ function renderMayaScreen(){
   const line=(txt)=>{const d=mk('maya-card maya-line','background:var(--bg2);border-radius:12px;padding:8px 14px;font-size:.84em;');d.textContent='💡 '+txt;box.appendChild(d);};
   const others=I.atRisk.length-Math.min(crit.length,3);
   if(others>0)line(others===1?'יש עוד משימה אחת שדורשת תשומת לב השבוע.':`יש עוד ${others} משימות שדורשות תשומת לב השבוע.`);
+  try{_aiSyncChatState();}catch(_e){}
 }
 // ── Hidden channel helpers ──
 // Blocks the user must NEVER see. Pure. Removes closed fenced blocks of the given names
@@ -5601,13 +5674,16 @@ async function sendAIMessage(){
     try{ await _aiLoadPromise; }catch(_le){ /* load failure already handled inside _aiLoadState itself */ }
   }
 
+  input.style.height='auto';
   _aiAppendBubble(text,'user');
   AI_CHAT_HISTORY.push({role:'user',content:text});
   _aiSaveHistory();
+  try{_aiSyncChatState();}catch(_se){}
 
   AI_BUSY=true;
   const sendBtn=document.getElementById('aiSendBtn'); if(sendBtn)sendBtn.disabled=true;
   const typingEl=_aiAppendBubble('חושב/ת…','typing');
+  const _slowT=setTimeout(()=>{try{const t=typingEl&&typingEl.querySelector('.ai-bubble-txt');if(t&&typingEl.isConnected){t.textContent='עוד רגע, זה לוקח קצת יותר מהרגיל';const d=document.createElement('span');d.className='ai-dots';d.setAttribute('aria-hidden','true');d.innerHTML='<i></i><i></i><i></i>';t.appendChild(d);}}catch(_e){}},12000);
 
   const todayStr=STATE_ACTIVE?.meta?.today||getTodayISO();
   const sys=AI_SYSTEM_PROMPT_BASE+`\nהיום בתאריך (עוגן תכנון): ${todayStr}.`+`\nיומן גוגל: ${gcalWriteEnabled()?'מחובר וכתיבה מאופשרת — מותר להציע CAL_CREATE':(_gcalPrefs().on?'מחובר לקריאה בלבד — כתיבה לא מאופשרת':'לא מחובר')}.`+
@@ -5712,7 +5788,9 @@ async function sendAIMessage(){
     } else {
       _aiAppendBubble('משהו השתבש בחיבור ל-AI. נסה שוב בעוד רגע.','bot');
     }
+    if(!(err&&err.noKey))_aiOfferRetry(text);
   }finally{
+    clearTimeout(_slowT);
     AI_BUSY=false;
     if(sendBtn)sendBtn.disabled=false;
     try{renderMayaScreen();}catch(_me){}
