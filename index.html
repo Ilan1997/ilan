@@ -764,7 +764,14 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 .ai-ins-toggle{display:none;align-self:flex-start;margin:0 0 8px;border:1px solid var(--hair,#e6e8f1);background:#fff;border-radius:999px;padding:5px 12px;font-family:inherit;font-size:.78em;font-weight:600;color:#5f6684;cursor:pointer;}
 #paneAI.has-chat:not(.ins-open) #mayaInsights{display:none!important;}
 #paneAI.has-chat #aiQuick{display:none;}
-.ai-quick{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 10px;}
+.ai-more-wrap{position:relative;flex:none;}
+.ai-more{background:transparent!important;color:#5f6684!important;border:0!important;width:36px;height:36px;font-size:1.3em;font-weight:700;line-height:1;border-radius:50%!important;}
+.ai-more:hover{background:#eceef5!important;}
+.ai-more-menu{position:absolute;bottom:calc(100% + 10px);inset-inline-start:0;min-width:230px;background:#fff;border:1px solid #e3e5ee;border-radius:16px;box-shadow:0 12px 32px -12px rgba(31,35,64,.35);padding:6px;z-index:20;}
+.ai-more-menu[hidden]{display:none;}
+.ai-more-menu button{display:block;width:100%;text-align:start;background:transparent;border:0;border-radius:10px;padding:10px 12px;font-family:inherit;font-size:.9em;color:#2b2f45;cursor:pointer;}
+.ai-more-menu button:hover{background:#f3f4f9;}
+.ai-quick{display:none;}
 .ai-q{border:1.5px solid var(--hair,#e6e8f1);background:#fff;border-radius:999px;padding:8px 14px;font-family:inherit;font-size:.84em;font-weight:600;color:#3c4043;cursor:pointer;transition:border-color .15s,background .15s;}
 .ai-q:hover{border-color:#b9a6ff;background:#f6f2ff;}
 .ai-bubble{animation:bubbleIn .25s var(--ease,ease);}
@@ -1104,13 +1111,16 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
         <div class="ai-bubble-txt" id="aiGreetingTxt">היי, אני מאיה 👋 המזכירה האישית שלך. ספר לי איך אתה רוצה שהשבוע ייראה — למשל "יש לי מבחן בסטטיסטיקה ביום חמישי, ורציתי גם להתאמן פעמיים השבוע" — ואני אהפוך את זה למשימות מתוזמנות בלוח. ככל שתתקן אותי (למשל תגרור משימה למקום אחר), כך אלמד את ההעדפות שלך.</div>
       </div>
     </div>
-    <div class="ai-quick" id="aiQuick" role="group" aria-label="התחלה מהירה">
-      <button type="button" class="ai-q" onclick="_aiQuick('send','מה מחכה לי השבוע? תן לי סיכום קצר.')">📅 מה מחכה לי השבוע?</button>
-      <button type="button" class="ai-q" onclick="_aiQuick('fill','יש לי משימה חדשה: ')">➕ משימה חדשה</button>
-      <button type="button" class="ai-q" onclick="_aiQuick('fill','תוסיפי ליומן: ')">🗓️ אירוע ליומן</button>
-      <button type="button" class="ai-q" onclick="_aiQuick('send','השבוע עמוס לי. אפשר להקל עליי?')">😮‍💨 השבוע עמוס לי</button>
-    </div>
     <div class="ai-inputrow">
+      <div class="ai-more-wrap">
+        <button type="button" id="aiMoreBtn" class="ai-more" title="עוד אפשרויות" aria-label="עוד אפשרויות" aria-haspopup="true" aria-expanded="false" onclick="_aiToggleMore(event)">⋯</button>
+        <div class="ai-more-menu" id="aiMoreMenu" role="menu" hidden>
+          <button type="button" role="menuitem" onclick="_aiQuick('send','מה מחכה לי השבוע? תן לי סיכום קצר.')">📅 מה מחכה לי השבוע?</button>
+          <button type="button" role="menuitem" onclick="_aiQuick('fill','יש לי משימה חדשה: ')">➕ משימה חדשה</button>
+          <button type="button" role="menuitem" onclick="_aiQuick('fill','תוסיפי ליומן: ')">🗓️ אירוע ליומן</button>
+          <button type="button" role="menuitem" onclick="_aiQuick('send','השבוע עמוס לי. אפשר להקל עליי?')">😮‍💨 השבוע עמוס לי</button>
+        </div>
+      </div>
       <textarea id="aiChatInput" placeholder="כתוב למאיה…" rows="1" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
       <button id="aiMicBtn" onclick="micToggle()" title="דבר אל מאיה" aria-label="הקלט הודעה למאיה" aria-pressed="false" style="background:var(--card);color:var(--text);border:1px solid var(--border2);">🎙</button>
       <button id="aiSendBtn" onclick="sendAIMessage()" title="שלח" aria-label="שלח הודעה">↑</button>
@@ -4947,7 +4957,16 @@ function _aiFormatInto(el,text){
   });
 }
 // Quick-start chips: 'send' sends immediately, 'fill' puts a starter in the box so the person finishes the sentence.
+function _aiCloseMore(){const m=document.getElementById('aiMoreMenu'),b=document.getElementById('aiMoreBtn');if(m)m.hidden=true;if(b)b.setAttribute('aria-expanded','false');}
+function _aiToggleMore(ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  const m=document.getElementById('aiMoreMenu'),b=document.getElementById('aiMoreBtn');if(!m||!b)return;
+  m.hidden=!m.hidden;b.setAttribute('aria-expanded',String(!m.hidden));
+}
+document.addEventListener('click',e=>{const w=e.target&&e.target.closest&&e.target.closest('.ai-more-wrap');if(!w)_aiCloseMore();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')_aiCloseMore();});
 function _aiQuick(mode,text){
+  _aiCloseMore();
   const input=document.getElementById('aiChatInput');if(!input)return;
   input.value=text;input.style.height='auto';
   if(mode==='send'){sendAIMessage();}else{input.focus();try{input.setSelectionRange(text.length,text.length);}catch(_e){}}
@@ -7855,10 +7874,13 @@ function _gcalLoadGis(){
     document.head.appendChild(sc);
   });
 }
+const GCAL_TOK_KEY='maya_gcal_tok';
+// A reload inside the same tab reuses a still-valid token instead of asking Google again (sessionStorage only; gone when the tab closes).
+(function(){try{const o=JSON.parse(sessionStorage.getItem(GCAL_TOK_KEY)||'null');if(o&&o.t&&o.e>Date.now()+60000&&_gcalPrefs().on){_gcalLastToken=o.t;_gcalTokenExp=o.e;}}catch(_e){}})();
 function _gcalRequestToken(forceConsent){
   const _pr=_gcalPrefs();
   return _gcalLoadGis().then(o2=>new Promise((res,rej)=>{
-    const tc=o2.initTokenClient({client_id:GCAL_CONFIG.clientId,scope:_pr.write?GCAL_CONFIG.scopeWrite:GCAL_CONFIG.scope,callback:r=>{if(r&&r.access_token){_gcalTokenExp=Date.now()+Math.max(60,(+r.expires_in||3600)-120)*1000;res(r.access_token);}else rej(new Error((r&&r.error)||'denied'));},error_callback:e=>rej(new Error((e&&e.type)||'popup'))});
+    const tc=o2.initTokenClient({client_id:GCAL_CONFIG.clientId,scope:_pr.write?GCAL_CONFIG.scopeWrite:GCAL_CONFIG.scope,callback:r=>{if(r&&r.access_token){_gcalTokenExp=Date.now()+Math.max(60,(+r.expires_in||3600)-120)*1000;try{sessionStorage.setItem(GCAL_TOK_KEY,JSON.stringify({t:r.access_token,e:_gcalTokenExp}));}catch(_e){}res(r.access_token);}else rej(new Error((r&&r.error)||'denied'));},error_callback:e=>rej(new Error((e&&e.type)||'popup'))});
     _gcalTokenClient=tc;
     tc.requestAccessToken({prompt:(forceConsent||!_pr.on)?'consent':''});
   }));
@@ -7883,20 +7905,22 @@ function _gcalConsentDialog(){
     const box=document.createElement('div');box.style.cssText='background:#fff;color:#111;border-radius:14px;max-width:420px;width:100%;padding:18px;direction:rtl;max-height:90vh;overflow:auto;font-family:inherit;';
     box.innerHTML='<div style="font-weight:800;font-size:1.05em;margin-bottom:8px;">📅 חיבור יומן גוגל — לפני שממשיכים</div>'
       +'<div style="font-size:.88em;line-height:1.7;">'
-      +'• האפליקציה תקרא (בלבד, בלי לשנות) את האירועים שביומן שלך ל-60 הימים הקרובים, ותסמן אותם כזמן תפוס כדי שמאיה לא תשבץ עליהם.<br>'
+      +'• האפליקציה תקרא את האירועים שביומן שלך ל-60 הימים הקרובים, ותסמן אותם כזמן תפוס כדי שמאיה לא תשבץ עליהם.<br>'
+      +'• <b>אישור אחד מכסה הכול:</b> מאיה תוכל גם ליצור, לערוך ולמחוק אירועים ביומן הראשי שלך — אבל רק אחרי שאישרת כל פעולה (כרטיס אישור בשיחה או כפתור). אפשר לבטל את זה בתיבה למטה או בהמשך בחשבון.<br>'
       +'• האירועים נשמרים בחשבון שלך באפליקציה (בענן) ועלולים להישלח ל-AI של גוגל (Gemini) כחלק מהתכנון.<br>'
       +'• <b>אל תחבר יומן שיש בו מידע אישי או רגיש שאינך רוצה לשתף.</b> מומלץ להשאיר את האפשרות "רק זמנים תפוסים" מסומנת — אז שמות האירועים, המשתתפים והמיקומים לא נכנסים בכלל.<br>'
       +'• האחריות על המידע שביומן ועל ההחלטה לחבר אותו היא שלך בלבד. אפשר לנתק בכל רגע, וזה ימחק את האירועים שיובאו.'
       +'</div>'
       +'<div id="gcalWarnNote" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:10px;padding:9px 11px;margin-top:10px;font-size:.82em;line-height:1.6;">ℹ️ <b>גוגל עשויה להציג אזהרה</b> "Google לא אימתה את האפליקציה", כי האימות שלה עדיין בתהליך. זה צפוי: לחץ <b>"מתקדם"</b> ואז <b>"המשך"</b> ואשר את הגישה.</div>'
       +'<label style="display:flex;gap:8px;align-items:flex-start;margin:12px 0 6px;font-size:.88em;"><input type="checkbox" id="gcalHide" checked style="margin-top:3px;"/><span>ייבא רק זמנים תפוסים, בלי שמות אירועים (מומלץ)</span></label>'
+      +'<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 6px;font-size:.88em;"><input type="checkbox" id="gcalWrite" checked style="margin-top:3px;"/><span>אפשר למאיה ליצור ולערוך אירועים ביומן (רק באישורי)</span></label>'
       +'<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0 12px;font-size:.88em;"><input type="checkbox" id="gcalOk" style="margin-top:3px;"/><span>קראתי והבנתי את הסיכון, אין ביומן מידע שאני לא מוכן לחשוף, והכול באחריותי.</span></label>'
       +'<div style="display:flex;gap:8px;"><button id="gcalGo" disabled style="flex:1;padding:10px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;opacity:.5;cursor:pointer;font-family:inherit;">אישור והמשך לגוגל</button><button id="gcalNo" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;">ביטול</button></div>';
     ov.appendChild(box);document.body.appendChild(ov);
     const ok=box.querySelector('#gcalOk'),go=box.querySelector('#gcalGo');
     ok.onchange=()=>{go.disabled=!ok.checked;go.style.opacity=ok.checked?'1':'.5';};
     const done=v=>{ov.remove();res(v);};
-    go.onclick=()=>done({ok:true,hideTitles:box.querySelector('#gcalHide').checked});
+    go.onclick=()=>done({ok:true,hideTitles:box.querySelector('#gcalHide').checked,write:box.querySelector('#gcalWrite').checked});
     box.querySelector('#gcalNo').onclick=()=>done({ok:false});
   });
 }
@@ -7906,7 +7930,8 @@ async function gcalConnect(){
   if(!pr.consent){
     const c=await _gcalConsentDialog();
     if(!c||!c.ok)return{ok:false,cancelled:true};
-    _gcalSavePrefs({...pr,consent:new Date().toISOString(),hideTitles:c.hideTitles!==false});
+    const _now=new Date().toISOString(),_w=c.write!==false;
+    _gcalSavePrefs({...pr,consent:_now,hideTitles:c.hideTitles!==false,write:_w,...(_w?{writeConsent:_now}:{})});
   }
   return gcalSync();
 }
@@ -7984,7 +8009,7 @@ async function gcalEnableWrite(){
   catch(e){_gcalSavePrefs({..._gcalPrefs(),write:false});return{ok:false,error:_gcalErrText(e)};}
   return{ok:true};
 }
-function gcalDisableWrite(){_gcalSavePrefs({..._gcalPrefs(),write:false});_gcalTokenExp=0;_gcalLastToken='';}
+function gcalDisableWrite(){_gcalSavePrefs({..._gcalPrefs(),write:false});_gcalTokenExp=0;_gcalLastToken='';try{sessionStorage.removeItem(GCAL_TOK_KEY);}catch(_e){}}
 async function _gcalGetToken(){
   if(_gcalLastToken&&Date.now()<_gcalTokenExp)return _gcalLastToken;
   const t=await _gcalRequestToken(false);_gcalLastToken=t;return t;
@@ -8096,11 +8121,6 @@ async function openGcalEditor(blockId){
   const evs=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal)||{}).events||[];
   const b=evs.find(e=>e.id===blockId);if(!b||!b.gid)return;
   if(evs.filter(e=>e.gid===b.gid).length>1){showToast('אירוע שנמשך כמה ימים — אפשר לערוך אותו ישירות ביומן גוגל');return;}
-  if(_gcalPrefs().hideTitles!==false&&b.title==='תפוס (יומן גוגל)'){
-    if(await _gcalAsk('שמות האירועים מוסתרים, ולכן רואים רק "תפוס".\nלהציג את שמות האירועים מיומן גוגל? (השמות יישלחו גם ל-AI כשאתה מדבר עם מאיה.)\n\nאישור = להציג שמות. ביטול = להמשיך לעריכה בלי לשנות.')){
-      _gcalSavePrefs({..._gcalPrefs(),hideTitles:false});const r=await gcalSync();showToast(r.ok?'השמות מוצגים עכשיו ✓':r.error);return;
-    }
-  }
   if(!gcalWriteEnabled()){const r=await gcalEnableWrite();if(!r.ok){if(!r.cancelled)showErrorToast(r.error);return;}}
   let g=null;try{g=await gcalGetEvent(b.gid);}catch(e){showErrorToast(_gcalErrText(e));return;}
   if(!g||!g.start||!g.start.dateTime||!g.end||!g.end.dateTime){showToast('אירוע כל-היום — אפשר לערוך אותו ישירות ביומן גוגל');return;}
@@ -8177,13 +8197,14 @@ function _aiOfferCalCreate(list){
 function gcalDisconnect(){
   try{dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:[]});}catch(_e){}
   _gcalSaveAllDay([]);_gcalTokenExp=0;_gcalSig='';
+  try{sessionStorage.removeItem(GCAL_TOK_KEY);}catch(_e){}
   try{const o2=window.google&&window.google.accounts&&window.google.accounts.oauth2;if(o2&&o2.revoke&&_gcalLastToken)o2.revoke(_gcalLastToken,()=>{});}catch(_e){}
   try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
 }
 function _gcalBlockHTML(btn){
   if(!gcalAvailable())return'';
   const pr=_gcalPrefs();
-  if(!pr.on)return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">📅 יומן גוגל</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">ייבוא אירועים כזמן תפוס, כדי שמאיה לא תשבץ עליהם. קריאה בלבד.</div><button id="accGcal" onclick="_accGcalConnect()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">חבר יומן גוגל</button></div>';
+  if(!pr.on)return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">📅 יומן גוגל</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">ייבוא אירועים כזמן תפוס, כדי שמאיה לא תשבץ עליהם. אישור אחד מכסה גם יצירה ועריכה של אירועים — רק באישורך על כל פעולה.</div><button id="accGcal" onclick="_accGcalConnect()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">חבר יומן גוגל</button></div>';
   const t=pr.last?new Date(pr.last).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:4px;">📅 יומן גוגל — מחובר</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">'+(pr.hideTitles!==false?'רק זמנים תפוסים · ':'')+(pr.count||0)+' אירועים'+(t?' · סונכרן '+escapeHTML(t):'')+'</div>'+(pr.write?'<div id="accGcalWriteOn" style="font-size:.8em;color:var(--text2);margin-bottom:8px;">✏️ כתיבה ליומן מאופשרת (כל פעולה באישורך). <a href="#" onclick="event.preventDefault();_accGcalWriteOff()" style="color:inherit;text-decoration:underline;">בטל</a></div>':'<button id="accGcalWriteBtn" onclick="_accGcalWriteOn()" style="'+btn+'width:100%;margin-bottom:8px;background:var(--card);border:1.5px solid var(--border);color:var(--text);">✏️ אפשר ליצור ולערוך אירועים ביומן גוגל</button>')+'<label style="display:flex;gap:6px;align-items:flex-start;font-size:.78em;color:var(--text2);margin-bottom:8px;cursor:pointer;"><input type="checkbox" id="accGcalTitles" '+(pr.hideTitles===false?'checked ':'')+'onchange="_accGcalTitles(this.checked)"> הצג את שמות האירועים (ולא רק "תפוס"). השמות יישלחו גם ל-AI כשאתה מדבר איתה.</label><div style="display:flex;gap:8px;"><button id="accGcalSync" onclick="_accGcalSync()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accGcalOff" onclick="_accGcalOff()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">נתק ומחק</button></div></div>';
 }
@@ -12041,7 +12062,7 @@ async function runAccountTests(){
           if(m==='DELETE')return{ok:true,status:204,json:async()=>null};
           return{ok:true,status:200,json:async()=>({id:'new1'})};};
         STATE_ACTIVE=baseState([]);
-        _gcalAskConsent=()=>({ok:true,hideTitles:false});
+        _gcalAskConsent=()=>({ok:true,hideTitles:false,write:false});
         await gcalConnect();
         const r0=await gcalCreateEvent({title:'x',date:'2026-10-14',startMin:540,endMin:600});
         ok('WR1. בלי הרשאת כתיבה: לא נשלחת בקשת כתיבה וההודעה מנחה לאפשר',!r0.ok&&r0.error.includes('לאפשר כתיבה')&&!calls.some(c=>c.m==='POST'));
@@ -12118,7 +12139,8 @@ async function runAccountTests(){
         window.google={accounts:{oauth2:{initTokenClient:c=>({requestAccessToken:()=>c.callback({access_token:'t'})}),revoke:()=>{}}}};
         window.fetch=async(u)=>{fetched.push(String(u));return{ok:true,status:200,json:async()=>({items:[{id:'h',summary:'ישיבה אמיתית',start:{dateTime:'2026-10-14T14:00:00'},end:{dateTime:'2026-10-14T15:00:00'}}]})};};
         await openGcalEditor('gcal_h_2026-10-14');
-        ok('WR22. לחיצה על "תפוס" כששמות מוסתרים: מוצעת הצגת שמות; באישור — השמות נשמרים ומסונכרנים מחדש',asked.includes('מוסתרים')&&_gcalPrefs().hideTitles===false&&STATE_ACTIVE.constraintsGlobal.events.some(e=>e.title==='ישיבה אמיתית'));
+        ok('WR22. לחיצה על "תפוס": אין שאלה נוספת על הצגת שמות, ההעדפה נשארת, ורק בקשת הרשאת הכתיבה החד-פעמית מופיעה',!asked.includes('מוסתרים')&&asked.includes('מאיה תוכל')&&_gcalPrefs().hideTitles===true);
+        {const ed=document.getElementById('gcalEd');if(ed)ed.remove();}
       }finally{GCAL_CONFIG.clientId=prevCfg;_gcalAskWrite=prevAskW;window.fetch=prevFetch;STATE_ACTIVE=_sa;if(prevG)window.google=prevG;else delete window.google;try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}}
     }
     // CR. secretary rules, categories, tidy briefing
@@ -12251,7 +12273,7 @@ async function runAccountTests(){
         GCAL_CONFIG.clientId='cid.apps.googleusercontent.com';renderAccountModal();
         ok('GC5. עם Client ID — מוצג כפתור "חבר יומן גוגל"',!!document.getElementById('accGcal'));
         let tokenReqs=0,gCalls=[];
-        window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>{tokenReqs++;c.callback({access_token:'g-tok'});}}),revoke:()=>{}}}};
+        window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>{tokenReqs++;window.__lastGScope=c.scope;c.callback({access_token:'g-tok'});}}),revoke:()=>{}}}};
         window.fetch=async(u,o)=>{gCalls.push({u:String(u),h:o&&o.headers});return{ok:true,status:200,json:async()=>({items})};};
         STATE_ACTIVE=baseState([]);
         _gcalAskConsent=()=>({ok:false});
@@ -12261,6 +12283,7 @@ async function runAccountTests(){
         const rs=await gcalConnect();
         const evs=(STATE_ACTIVE.constraintsGlobal.events||[]).filter(e=>e.id.startsWith('gcal_'));
         ok('GC7. אחרי אישור: נקרא רק googleapis calendar עם הטוקן, האירועים נכנסו כזמן תפוס, האישור והמצב נשמרו',rs.ok&&tokenReqs===1&&gCalls.length===1&&gCalls[0].u.startsWith('https://www.googleapis.com/calendar/v3/calendars/primary/events')&&gCalls[0].h.Authorization==='Bearer g-tok'&&evs.length===hid.length&&_gcalPrefs().consent&&_gcalPrefs().on===true,JSON.stringify(rs));
+        ok('GC7b. חיבור באישור אחד: כתיבה מופעלת כברירת מחדל, בקשת גוגל אחת עם הרשאת calendar.events, בלי חלון נוסף',gcalWriteEnabled()&&!!_gcalPrefs().writeConsent&&tokenReqs===1&&window.__lastGScope==='https://www.googleapis.com/auth/calendar.events');
         STATE_ACTIVE=commitState({...STATE_ACTIVE,constraintsGlobal:{...STATE_ACTIVE.constraintsGlobal,events:[...STATE_ACTIVE.constraintsGlobal.events,{id:'mine1',title:'שלי',date:'2026-10-20',startH:10,endH:11}]}},'test-own-event',{save:false,render:false});
         window.fetch=async()=>({ok:true,status:200,json:async()=>({items:[items[0]]})});
         await gcalSync();

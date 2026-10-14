@@ -37,7 +37,7 @@ const w=dom.window;
     const r=w.eval(`(()=>{const o={};
       const el=document.createElement('div');_aiFormatInto(el,'היי **חשוב** <img src=x onerror=1>\\n- אחד');
       o.bold=el.querySelectorAll('strong').length===1&&el.querySelector('strong').textContent==='חשוב';o.noHtml=!el.querySelector('img')&&el.textContent.includes('<img');o.bullet=el.textContent.includes('• אחד');
-      const keep=AI_CHAT_HISTORY.slice();AI_CHAT_HISTORY.length=0;_aiSyncChatState();const pane=document.getElementById('paneAI');
+      o.menu=!!document.getElementById('aiMoreMenu')&&document.getElementById('aiMoreMenu').hidden===true&&!document.getElementById('aiQuick');_aiToggleMore();o.menuOpen=document.getElementById('aiMoreMenu').hidden===false&&document.querySelectorAll('#aiMoreMenu button').length===4;_aiQuick('fill','x');o.menuClosed=document.getElementById('aiMoreMenu').hidden===true;document.getElementById('aiChatInput').value='';const keep=AI_CHAT_HISTORY.slice();AI_CHAT_HISTORY.length=0;_aiSyncChatState();const pane=document.getElementById('paneAI');
       o.emptyNoChat=!pane.classList.contains('has-chat');
       AI_CHAT_HISTORY.push({role:'user',content:'שלום'});_aiSyncChatState();o.hasChat=pane.classList.contains('has-chat');
       _aiQuick('fill','יש לי משימה חדשה: ');o.fill=document.getElementById('aiChatInput').value==='יש לי משימה חדשה: ';document.getElementById('aiChatInput').value='';
