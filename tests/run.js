@@ -49,6 +49,46 @@ const w=dom.window;
       return o;})()`);
     const okm=Object.values(r).every(Boolean);rows.push(['maya screen flow',String(okm)+(okm?'':' '+JSON.stringify(r))]);if(!okm)failed=true;
   }catch(e){rows.push(['maya screen flow','THROW '+e.message]);failed=true;}
+  // Work/life: domain travels with the Google event, fixed-time add dialog, work zone on the grid
+  try{
+    const r=await w.eval(`(async()=>{const o={};
+      const it=(x)=>({id:'d1',summary:'ישיבה',start:{dateTime:'2026-10-14T10:00:00'},end:{dateTime:'2026-10-14T11:00:00'},...x});
+      o.imp=gcalItemsToBlocks([it({extendedProperties:{private:{maya_domain:'work'}}})])[0].domain==='work'&&gcalItemsToBlocks([it({})])[0].domain===undefined;
+      const v=_gcalValidateEv({title:'x',date:'2026-10-14',startMin:600,endMin:660,domain:'work'}).ev;
+      o.body=_gcalBody(v).extendedProperties.private.maya_domain==='work'&&!('extendedProperties' in _gcalBody({...v,domain:'life'}))&&_gcalBody({...v,domain:'life'},true).extendedProperties.private.maya_domain===null;
+      const sa=STATE_ACTIVE;
+      try{
+        openQA({mode:'fixed',date:'2026-10-14',startMin:660,deadline:'2026-10-14'});await new Promise(r=>setTimeout(r,120));
+        const sh=document.querySelector('#qaModal .qa-sheet');o.mode=sh.dataset.mode==='fixed'&&document.getElementById('qaFxStart').value==='660'&&document.getElementById('qaFxEnd').value==='720';
+        document.getElementById('qaName').value='ישיבת צוות';document.querySelector('#qaFxDom [data-v=work]').click();
+        document.getElementById('qaFxEnd').value='660';_qaGoFixed();await new Promise(r=>setTimeout(r,20));
+        o.badEnd=!(STATE_ACTIVE.constraintsGlobal.events||[]).some(e=>e.title==='ישיבת צוות')&&/אחרי שעת ההתחלה/.test(document.getElementById('qaFxNote').textContent);
+        document.getElementById('qaFxEnd').value='720';await _qaGoFixed();
+        const ev=(STATE_ACTIVE.constraintsGlobal.events||[]).find(e=>e.title==='ישיבת צוות');
+        o.local=!!ev&&ev.date==='2026-10-14'&&ev.startMin===660&&ev.endMin===720&&ev.startH===11&&ev.endH===12&&ev.domain==='work';
+      }finally{try{closeQA();}catch(_e){} if(sa)STATE_ACTIVE=commitState(sa,'test-restore',{save:false,render:false});}
+      return o;})()`);
+    const okw=Object.values(r).every(Boolean);rows.push(['work/life + fixed-time add',String(okw)+(okw?'':' '+JSON.stringify(r))]);if(!okw)failed=true;
+  }catch(e){rows.push(['work/life + fixed-time add','THROW '+e.message]);failed=true;}
+  // fixed-time item with Google connected: created in Google (with work domain), not locally
+  try{
+    const r=await w.eval(`(async()=>{const o={};
+      const prevG=window.google;window.google={accounts:{oauth2:{initTokenClient:c=>({requestAccessToken:()=>c.callback({access_token:'tt',expires_in:3600})}),revoke:()=>{}}}};
+      const prevCfg=GCAL_CONFIG.clientId,prevFetch=window.fetch,pl=_gcalLastToken,pe=_gcalTokenExp,prevPrefs=localStorage.getItem(GCAL_PREF_KEY),sa=STATE_ACTIVE;
+      try{
+        GCAL_CONFIG.clientId='cid.apps.googleusercontent.com';_gcalSavePrefs({on:true,consent:'x',write:true,writeConsent:'x',hideTitles:false});_gcalLastToken='tt';_gcalTokenExp=Date.now()+3600000;
+        const calls=[];window.fetch=async(u,op)=>{calls.push({u:String(u),m:(op&&op.method)||'GET',b:op&&op.body});return{ok:true,status:200,json:async()=>({id:'n1',items:[]})};};
+        openQA({mode:'fixed',date:'2026-10-14',startMin:600,deadline:'2026-10-14'});await new Promise(r=>setTimeout(r,120));
+        o.visible=document.getElementById('qaFxGWrap').style.display!=='none'&&document.getElementById('qaFxG').checked;
+        document.getElementById('qaName').value='פגישת לקוח';document.querySelector('#qaFxDom [data-v=work]').click();
+        await _qaGoFixed();
+        const post=calls.find(c=>c.m==='POST'),b=post&&JSON.parse(post.b);
+        o.google=!!post&&b.summary==='פגישת לקוח'&&b.start.dateTime==='2026-10-14T10:00:00'&&b.extendedProperties.private.maya_domain==='work';
+        o.noLocal=!(STATE_ACTIVE.constraintsGlobal.events||[]).some(e=>e.title==='פגישת לקוח'&&!String(e.id).startsWith('gcal_'));
+      }finally{try{closeQA();}catch(_e){}GCAL_CONFIG.clientId=prevCfg;window.fetch=prevFetch;if(prevG)window.google=prevG;else delete window.google;_gcalLastToken=pl;_gcalTokenExp=pe;try{if(prevPrefs)localStorage.setItem(GCAL_PREF_KEY,prevPrefs);else localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){} if(sa)STATE_ACTIVE=commitState(sa,'test-restore',{save:false,render:false});}
+      return o;})()`);
+    const okg=Object.values(r).every(Boolean);rows.push(['fixed-time add -> Google',String(okg)+(okg?'':' '+JSON.stringify(r))]);if(!okg)failed=true;
+  }catch(e){rows.push(['fixed-time add -> Google','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

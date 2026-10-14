@@ -863,6 +863,30 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 .ai-mic-dot{flex:none;width:9px;height:9px;border-radius:50%;background:#dc2626;animation:micPulse 1.1s infinite;}
 @media (min-width:1024px){.ai-mic-status{grid-column:1;grid-row:3;}.ai-inputrow{grid-row:4!important;}.mic-opts{grid-row:5!important;}.ai-hint{grid-row:6!important;}#mayaInsights{grid-row:2 / span 5!important;}}
 </style>
+<style id="themeV9">
+/* V9: add dialog — task vs fixed time (Google-style), and the work/life zones on the grid */
+.qa-mode{display:flex;gap:4px;background:#f1f2f6;border-radius:999px;padding:3px;margin:0 0 12px;}
+.qa-mode button{flex:1;border:0;background:transparent;border-radius:999px;padding:8px 10px;font-family:inherit;font-size:.86em;font-weight:600;color:#5f6684;cursor:pointer;}
+.qa-mode button.on{background:#fff;color:#1f2340;box-shadow:0 1px 3px rgba(31,35,64,.18);}
+.qa-fixed{display:none;margin-top:12px;}
+.qa-sheet[data-mode="fixed"] .qa-fixed{display:block;}
+.qa-sheet[data-mode="fixed"] #qaStepDur,.qa-sheet[data-mode="fixed"] #qaStepDl,.qa-sheet[data-mode="fixed"] #qaMoreBtn,.qa-sheet[data-mode="fixed"] #qaAdvanced,.qa-sheet[data-mode="fixed"] #qaCat{display:none!important;}
+.qa-fx-row{display:flex;align-items:center;gap:8px;margin:0 0 10px;}
+.qa-fx-row>label{flex:none;width:52px;font-size:.84em;color:#5f6684;font-weight:600;}
+.qa-fx-row .qa-f{flex:1;margin:0;min-width:0;}
+.qa-fx-dash{color:#9aa0b8;}
+.qa-fx-g{display:flex;align-items:center;gap:8px;font-size:.9em;margin:4px 0 2px;color:#2b2f45;}
+/* work / life zones on the calendar grid */
+:root{--work-cell-bg:#fff;--life-cell-bg:#fff;--zone-work:#0e9f8e;--zone-work-bg:#eaf7f5;--zone-life:#6a52ee;}
+.tbl-wrap{border-top:3px solid var(--zone-life);}
+body.work-mode .tbl-wrap{border-top-color:var(--zone-work);}
+td.zone-work{background:var(--zone-work-bg)!important;border-inline-start:2px solid #0e9f8e99!important;position:relative;}
+td.zone-work .zone-lbl{position:absolute;top:3px;inset-inline-start:6px;font-size:.72em;font-weight:600;color:#0b7a6d;pointer-events:none;}
+td.zone-nonwork{background:#f8f9fa!important;}
+#mBtnL.on{background:var(--zone-life)!important;color:#fff!important;}
+#mBtnW.on{background:var(--zone-work)!important;color:#fff!important;}
+.blk-event .zone-tag{margin-inline-end:2px;}
+</style>
 
 
 </head>
@@ -926,6 +950,10 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
   <div class="qa-sheet" data-step="1" role="dialog" aria-label="משימה חדשה">
     <div class="qa-notch"></div>
     <div class="qa-maya"><span class="maya-orb" aria-hidden="true"></span><div class="qa-bubble" id="qaBubble">מה צריך לעשות?</div></div>
+    <div class="qa-mode" id="qaMode" role="tablist" aria-label="סוג הוספה">
+      <button type="button" class="on" data-m="task" role="tab" onclick="qaMode('task')">📋 משימה לשיבוץ</button>
+      <button type="button" data-m="fixed" role="tab" onclick="qaMode('fixed')">🕒 בזמן קבוע</button>
+    </div>
     <input class="qa-f" id="qaName" placeholder="למשל: להתקשר לרואה החשבון" type="text" autocomplete="off"
       oninput="qaNameInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();qaNext();}"/>
     <button class="qa-catchip" id="qaCat" type="button" onclick="qaCycleCat()" style="display:none" title="לחץ כדי לשנות סוג"></button>
@@ -961,6 +989,20 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
       <div class="qa-note" id="qaDlNote" aria-live="polite"></div>
     </div>
 
+    <div class="qa-fixed" id="qaFixed">
+      <div class="qa-fx-row"><label for="qaFxDate">תאריך</label><input class="qa-f qa-sm" id="qaFxDate" type="date"/></div>
+      <div class="qa-fx-row"><label for="qaFxStart">שעות</label>
+        <select class="qa-f qa-sm" id="qaFxStart" aria-label="שעת התחלה" onchange="qaFxStartChanged()"></select>
+        <span class="qa-fx-dash">–</span>
+        <select class="qa-f qa-sm" id="qaFxEnd" aria-label="שעת סיום"></select>
+      </div>
+      <div class="qa-fx-row"><label>תחום</label><div class="qa-chips" id="qaFxDom">
+        <button type="button" class="qa-c on" data-v="life" onclick="qaFxDom(this)">🏠 חיים</button>
+        <button type="button" class="qa-c" data-v="work" onclick="qaFxDom(this)">💼 עבודה</button>
+      </div></div>
+      <label class="qa-fx-g" id="qaFxGWrap"><input type="checkbox" id="qaFxG" checked/><span>הוסף גם ליומן גוגל</span></label>
+      <div class="qa-note" id="qaFxNote" aria-live="polite"></div>
+    </div>
     <!-- ── כפתור "עוד אפשרויות" ── -->
     <button class="qa-more-btn" id="qaMoreBtn" onclick="qaToggleMore()">עוד אפשרויות</button>
 
@@ -2052,7 +2094,7 @@ function buildEngine(state,calendarId,options={}){
   for(const ev of(gc.events||[])){
     const dId=dayId(parseISO(ev.date));
     if(!gEvents.has(dId))gEvents.set(dId,[]);
-    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin,gid:ev.gid,color:ev.color});
+    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin,gid:ev.gid,color:ev.color,domain:ev.domain});
   }
 
   // Resolve tasks. NOTE: 'needed' is ALWAYS task.requiredUnits — buildEngine
@@ -4269,7 +4311,7 @@ function renderEngine(){
             const cs=sm-h*60,dur=em-sm,isG=String(e.id||'').indexOf('gcal_')===0;
             const w=100/l.n,left=l.col*w;
             const tt=`${e.title} · ${_fmtMin(sm)}–${_fmtMin(em)}`;
-            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;'+(e.color?`background:${escapeHTML(e.color)};color:${gcalTextOn(e.color)};`:''):''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
+            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;'+(e.color?`background:${escapeHTML(e.color)};color:${gcalTextOn(e.color)};`:''):''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${e.domain==='work'?'💼':(isG?'🗓️':'📅')} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
           }).join('')}</td>`;
         }
       }
@@ -4284,7 +4326,7 @@ function renderEngine(){
         const cs=_ev.startMin-h*60,dur=_ev.endMin-_ev.startMin;
         const isG=String(_ev.id||'').indexOf('gcal_')===0;
         const _tt=`${evTitle} · ${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}`;
-        return`<td ${_tdA}><div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45?' blk-event-short':''}" title="${escapeHTML(_tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(_ev.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${evTitle}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</bdi></div></div></td>`;
+        return`<td ${_tdA}><div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45?' blk-event-short':''}" title="${escapeHTML(_tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(_ev.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${e.domain==='work'?'💼':(isG?'🗓️':'📅')} ${evTitle}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</bdi></div></div></td>`;
       }
       const _evAny=_evs.find(e=>e.title===evTitle&&h>=e.startH&&h<e.endH&&e.gid);
       if(_evAny)return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event blk-event-g" data-gcal="${escapeHTML(String(_evAny.id))}" onclick="openGcalEditor(this.dataset.gcal)" title="${escapeHTML(evTitle)} · לחיצה לעריכה" style="pointer-events:auto;cursor:pointer;${_evAny.color?`background:${escapeHTML(_evAny.color)};color:${gcalTextOn(_evAny.color)};`:''}"><div class="blk-event-name">🗓️ ${evTitle}</div></div></td>`;
@@ -4350,7 +4392,11 @@ function renderEngine(){
           <div class="blk-meta">${_metaLine}</div>${_riskLine}</div></td>`;
     }
     if(status==='not_work_window'){
-      return`<td class="bld${_todayClass}" data-sid="${sid}" data-cal="${ACTIVE_CALENDAR}" style="background:var(--blocked-cell-bg);" title="מחוץ לשעות עבודה — לחץ לאפשרויות"></td>`;
+      return`<td class="bld zone-nonwork${_todayClass}" data-sid="${sid}" data-cal="${ACTIVE_CALENDAR}" title="מחוץ לשעות עבודה"></td>`;
+    }
+    if(status==='work'){ // life view: the hours that belong to work are a visible zone, labelled once per window
+      const _pw=h>HOURS[0]?uiStatus(date,h-1,ww):null;
+      return`<td class="bld zone-work${_todayClass}" data-sid="${sid}" data-cal="${ACTIVE_CALENDAR}" title="שעות עבודה">${_pw!=='work'?'<div class="zone-lbl">💼 עבודה</div>':''}</td>`;
     }
     if(bl)return`<td class="bld${_todayClass}" data-sid="${sid}" data-cal="${ACTIVE_CALENDAR}" style="background:var(--blocked-cell-bg);"></td>`;
     return`<td class="${_extraClass}" data-sid="${sid}" data-cal="${ACTIVE_CALENDAR}" ondragover="event.preventDefault();this.classList.add('td-drop-over')" ondragleave="this.classList.remove('td-drop-over')" ondrop="dropSlot(event,'${sid}','${ACTIVE_CALENDAR}')" style="cursor:pointer;background:${ACTIVE_CALENDAR==='work'?'var(--work-cell-bg)':'var(--life-cell-bg)'};"></td>`;
@@ -4395,7 +4441,8 @@ function renderEngine(){
     const _sid=td.dataset.sid;
     const _d=_sid?.split('T')[0]||STATE_ACTIVE.meta.today;
     const _cal=td.dataset.cal||ACTIVE_CALENDAR;
-    openQA({deadline:_d, calId:_cal, sid:_sid});
+    const _h=parseInt((_sid.split('T')[1]||'9'),10);
+    openQA({deadline:_d, calId:_cal, sid:_sid, mode:'fixed', date:_d, startMin:(isNaN(_h)?9:_h)*60});
   },_sig);
 
   // Right-click on empty cell → action menu (event / small tasks / rest / block)
@@ -7898,6 +7945,7 @@ function gcalItemsToBlocks(items,hideTitles){
       if(endH<=startH)continue;
       const sMin=first?st.getHours()*60+st.getMinutes():0,eMin=last?Math.min(1440,en.getHours()*60+en.getMinutes()||1440):1440;
       const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),color:gcalColorOf(it)};
+      if(it.extendedProperties&&it.extendedProperties.private&&it.extendedProperties.private.maya_domain==='work')blk.domain='work';
       if(sMin<eMin){blk.startMin=sMin;blk.endMin=eMin;}
       out.push(blk);
     }
@@ -8082,7 +8130,7 @@ function _gcalValidateEv(ev){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T12:00:00Z')))return{ok:false,error:'תאריך לא תקין'};
   const s=ev.startMin,e=ev.endMin;
   if(!Number.isInteger(s)||!Number.isInteger(e)||s<0||e>1440||s>=e)return{ok:false,error:'שעת הסיום חייבת להיות אחרי שעת ההתחלה (באותו יום)'};
-  return{ok:true,ev:{title,date,startMin:s,endMin:e}};
+  return{ok:true,ev:{title,date,startMin:s,endMin:e,domain:ev.domain==='work'?'work':(ev.domain==='life'?'life':undefined)}};
 }
 async function _gcalCall(method,path,body){
   if(!gcalWriteEnabled()){const e=new Error('no-write');throw e;}
@@ -8093,7 +8141,8 @@ async function _gcalCall(method,path,body){
   if(!r.ok)throw new Error('http-'+r.status);
   return r.status===204?null:await r.json().catch(()=>null);
 }
-const _gcalBody=v=>({summary:v.title,start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin)});
+// Work/life is kept on the Google event itself (private extended property), so it follows the event across devices.
+const _gcalBody=(v,isUpdate)=>({summary:v.title,start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin),...(v.domain==='work'?{extendedProperties:{private:{maya_domain:'work'}}}:(isUpdate&&v.domain==='life'?{extendedProperties:{private:{maya_domain:null}}}:{}))});
 async function gcalCreateEvent(ev){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
   try{const d=await _gcalCall('POST','',_gcalBody(v.ev));await gcalSync();return{ok:true,id:d&&d.id};}catch(e){return{ok:false,error:_gcalErrText(e)};}
@@ -8101,7 +8150,7 @@ async function gcalCreateEvent(ev){
 async function gcalGetEvent(gid){return _gcalCall('GET','/'+encodeURIComponent(gid));}
 async function gcalUpdateEvent(gid,ev){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
-  try{await _gcalCall('PATCH','/'+encodeURIComponent(gid),_gcalBody(v.ev));await gcalSync();return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
+  try{await _gcalCall('PATCH','/'+encodeURIComponent(gid),_gcalBody(v.ev,true));await gcalSync();return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
 async function gcalDeleteEvent(gid){
   try{await _gcalCall('DELETE','/'+encodeURIComponent(gid));await gcalSync();return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
@@ -8145,14 +8194,14 @@ async function gcalUpdateScoped(g,ev,scope){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
   try{
     if(!g||!g.id)return{ok:false,error:'האירוע לא נמצא'};
-    if(!g.recurringEventId||scope==='one'){await _gcalCall('PATCH','/'+encodeURIComponent(g.id),_gcalBody(v.ev));}
+    if(!g.recurringEventId||scope==='one'){await _gcalCall('PATCH','/'+encodeURIComponent(g.id),_gcalBody(v.ev,true));}
     else if(scope==='all'){
       const origDate=(()=>{const d=new Date(g.start.dateTime),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());})();
       if(v.ev.date!==origDate)return{ok:false,error:'שינוי תאריך חל רק על האירוע הזה — בחר "רק האירוע הזה"'};
       const m=await gcalGetEvent(g.recurringEventId);
       const md=new Date(m.start.dateTime),p=n=>String(n).padStart(2,'0');
       const mDate=md.getFullYear()+'-'+p(md.getMonth()+1)+'-'+p(md.getDate());
-      await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),_gcalBody({...v.ev,date:mDate}));
+      await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),_gcalBody({...v.ev,date:mDate},true));
     }else return{ok:false,error:'בחירה לא חוקית'};
     const sy=await gcalSync();
     return{ok:true,synced:!!(sy&&sy.ok)};
@@ -8189,18 +8238,20 @@ async function openGcalEditor(blockId){
     +'<label style="font-size:.8em;font-weight:600;">שם</label><input id="gcalEdTitle" maxlength="120" style="'+inp+'margin-bottom:8px;"/>'
     +'<label style="font-size:.8em;font-weight:600;">תאריך</label><input id="gcalEdDate" type="date" style="'+inp+'margin-bottom:8px;"/>'
     +'<div style="display:flex;gap:8px;"><div style="flex:1"><label style="font-size:.8em;font-weight:600;">התחלה</label><input id="gcalEdStart" type="time" style="'+inp+'"/></div><div style="flex:1"><label style="font-size:.8em;font-weight:600;">סיום</label><input id="gcalEdEnd" type="time" style="'+inp+'"/></div></div>'
+    +'<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.88em;"><input type="checkbox" id="gcalEdWork"/><span>💼 זה זמן עבודה</span></label>'
     +'<div id="gcalEdNote" style="font-size:.75em;color:#667085;margin-top:8px;"></div><div id="gcalEdErr" style="font-size:.8em;color:#dc2626;margin-top:6px;"></div>'
     +'<div style="display:flex;gap:8px;margin-top:12px;"><button id="gcalEdSave" style="flex:2;padding:10px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;">שמור בגוגל</button><button id="gcalEdDel" style="flex:1;padding:10px;border:1.5px solid #dc2626;border-radius:10px;background:#fff;color:#dc2626;cursor:pointer;font-family:inherit;">מחק</button><button id="gcalEdCancel" style="flex:1;padding:10px;border:1.5px solid #ddd;border-radius:10px;background:#fff;cursor:pointer;font-family:inherit;">סגור</button></div>';
   ov.appendChild(box);document.body.appendChild(ov);
   const $=id=>box.querySelector('#'+id);
   $('gcalEdTitle').value=String(g.summary||'');$('gcalEdDate').value=dISO(st);$('gcalEdStart').value=tHM(st);$('gcalEdEnd').value=tHM(en);
+  $('gcalEdWork').checked=!!(g.extendedProperties&&g.extendedProperties.private&&g.extendedProperties.private.maya_domain==='work');
   $('gcalEdNote').textContent=(g.recurringEventId?'אירוע חוזר: בשמירה או במחיקה תישאל אם זה חל על האירוע הזה בלבד או על יותר. ':'')+(((g.attendees||[]).length>1)?'באירוע יש משתתפים — שינוי עלול להישלח אליהם.':'');
   const err=m=>{$('gcalEdErr').textContent=m||'';};
   const close=()=>ov.remove();
   const hm=v=>{const m=/^(\d{2}):(\d{2})$/.exec(v||'');return m?(+m[1])*60+(+m[2]):NaN;};
   $('gcalEdCancel').onclick=close;
   $('gcalEdSave').onclick=async()=>{
-    const ev={title:$('gcalEdTitle').value,date:$('gcalEdDate').value,startMin:hm($('gcalEdStart').value),endMin:hm($('gcalEdEnd').value)};
+    const ev={title:$('gcalEdTitle').value,date:$('gcalEdDate').value,startMin:hm($('gcalEdStart').value),endMin:hm($('gcalEdEnd').value),domain:$('gcalEdWork').checked?'work':'life'};
     let scope='one';
     if(g.recurringEventId){
       scope=await _gcalPick('לשנות איזה אירועים?',[{key:'one',label:'רק האירוע הזה'},{key:'all',label:'כל האירועים בסדרה (שם ושעות)'}]);
@@ -8764,9 +8815,62 @@ function openQA(opts){
   document.querySelectorAll('#qaDlC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.w==='שבוע הבא'));
   _qaSetDeadline((document.getElementById('qaDeadline')||{}).value,'');
   { const n=document.getElementById('qaDlNote');if(n&&opts.deadline)n.textContent=''; }
-  setTimeout(()=>{const f=document.getElementById('qaName');if(f){f.value=opts.title||'';f.focus();}qaNameInput();qaSetStep(opts.title?2:1);},70);
+  qaMode(opts.mode==='fixed'?'fixed':'task',opts.mode==='fixed'?{date:opts.date,startMin:opts.startMin,endMin:opts.endMin,domain:opts.domain}:null);
+  setTimeout(()=>{const f=document.getElementById('qaName');if(f){f.value=opts.title||'';f.focus();}qaNameInput();qaSetStep(opts.title?2:1);qaMode(opts.mode==='fixed'?'fixed':'task',opts.mode==='fixed'?{date:opts.date,startMin:opts.startMin,endMin:opts.endMin,domain:opts.domain}:null);},70);
 }
-function closeQA(){document.getElementById('qaModal').classList.remove('open');const f=document.getElementById('qaName');if(f)f.value='';_qt='regular';_qu='normal';_qCal=null;_qSid=null;_qCat=null;qaSetStep(1);_finalizeReservePromotion();const adv=document.getElementById('qaAdvanced');const btn=document.getElementById('qaMoreBtn');if(adv)adv.classList.remove('open');if(btn)btn.classList.remove('open');document.querySelectorAll('#qaTypeC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='regular'));document.querySelectorAll('#qaUrgC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='normal'));}
+function closeQA(){document.getElementById('qaModal').classList.remove('open');try{qaMode('task');}catch(_e){}const f=document.getElementById('qaName');if(f)f.value='';_qt='regular';_qu='normal';_qCal=null;_qSid=null;_qCat=null;qaSetStep(1);_finalizeReservePromotion();const adv=document.getElementById('qaAdvanced');const btn=document.getElementById('qaMoreBtn');if(adv)adv.classList.remove('open');if(btn)btn.classList.remove('open');document.querySelectorAll('#qaTypeC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='regular'));document.querySelectorAll('#qaUrgC .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v==='normal'));}
+function _qaFxFillSelects(){
+  const a=document.getElementById('qaFxStart'),b=document.getElementById('qaFxEnd');if(!a||!b||a.options.length)return;
+  const pad=n=>String(n).padStart(2,'0'),lab=m=>pad(Math.floor(m/60))+':'+pad(m%60);
+  for(let m=0;m<1440;m+=30){const o=document.createElement('option');o.value=String(m);o.textContent=lab(m);a.appendChild(o);}
+  for(let m=30;m<=1440;m+=30){const o=document.createElement('option');o.value=String(m);o.textContent=lab(m);b.appendChild(o);}
+}
+function qaMode(m,pre){
+  const sh=document.querySelector('#qaModal .qa-sheet');if(!sh)return;
+  m=m==='fixed'?'fixed':'task';sh.dataset.mode=m;
+  document.querySelectorAll('#qaMode button').forEach(b=>{const on=b.dataset.m===m;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on));});
+  const bub=document.getElementById('qaBubble'),go=document.getElementById('qaGoBtn');
+  if(m==='fixed'){
+    _qaFxFillSelects();pre=pre||{};
+    const d=document.getElementById('qaFxDate');if(d&&(pre.date||!d.value))d.value=pre.date||STATE_ACTIVE.meta.today;
+    const sm=Number.isInteger(pre.startMin)?pre.startMin:(document.getElementById('qaFxStart').value?+document.getElementById('qaFxStart').value:540);
+    document.getElementById('qaFxStart').value=String(sm);
+    document.getElementById('qaFxEnd').value=String(Math.min(1440,Number.isInteger(pre.endMin)?pre.endMin:sm+60));
+    const dom=pre.domain||(ACTIVE_CALENDAR==='work'?'work':'life');
+    document.querySelectorAll('#qaFxDom .qa-c').forEach(b=>b.classList.toggle('on',b.dataset.v===dom));
+    const gp=_gcalPrefs(),gOn=gcalAvailable()&&!!gp.on,w=document.getElementById('qaFxGWrap'),g=document.getElementById('qaFxG');
+    if(w)w.style.display=gOn?'flex':'none';if(g)g.checked=gOn;
+    const n=document.getElementById('qaFxNote');if(n)n.textContent='';
+    if(bub)bub.textContent='מתי זה קורה?';if(go)go.textContent='שמור ✓';
+  }else{
+    if(bub)qaSetStep(+sh.dataset.step||1);if(go)go.textContent='הוסף ✓';
+  }
+}
+function qaFxStartChanged(){const a=document.getElementById('qaFxStart'),b=document.getElementById('qaFxEnd');if(!a||!b)return;if(+b.value<=+a.value)b.value=String(Math.min(1440,+a.value+60));}
+function qaFxDom(btn){document.querySelectorAll('#qaFxDom .qa-c').forEach(b=>b.classList.toggle('on',b===btn));}
+// Fixed-time item: a real calendar event. With Google connected it is created THERE (and comes back through sync); otherwise it is a local event. Work/life is stored as the event's domain (also in Google's private extended properties).
+async function _qaGoFixed(){
+  const note=document.getElementById('qaFxNote'),say=t=>{if(note)note.textContent=t;};
+  const title=(document.getElementById('qaName').value||'').trim();
+  if(!title){document.getElementById('qaName').focus();return;}
+  const date=(document.getElementById('qaFxDate').value||'').trim();
+  const startMin=+document.getElementById('qaFxStart').value,endMin=+document.getElementById('qaFxEnd').value;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){say('בחר תאריך.');return;}
+  if(!(endMin>startMin)){say('שעת הסיום חייבת להיות אחרי שעת ההתחלה.');return;}
+  const domEl=document.querySelector('#qaFxDom .qa-c.on'),domain=domEl&&domEl.dataset.v==='work'?'work':'life';
+  const g=document.getElementById('qaFxG'),wantG=!!(g&&g.checked&&document.getElementById('qaFxGWrap').style.display!=='none');
+  if(wantG){
+    if(!gcalWriteEnabled()){const r=await gcalEnableWrite();if(!r.ok){if(!r.cancelled)say(r.error);else say('לא אושרה כתיבה ליומן גוגל. אפשר לבטל את "הוסף גם ליומן גוגל" ולשמור באפליקציה בלבד.');return;}}
+    const btn=document.getElementById('qaGoBtn');if(btn)btn.disabled=true;
+    const r=await gcalCreateEvent({title,date,startMin,endMin,domain});
+    if(btn)btn.disabled=false;
+    if(!r.ok){say(r.error||'לא הצלחתי להוסיף ליומן גוגל.');return;}
+    closeQA();celebrate();showToast('נוסף ליומן גוגל ✓');return;
+  }
+  const ev={id:genId('ev'),title,date,startH:Math.floor(startMin/60),endH:Math.ceil(endMin/60),startMin,endMin,...(domain==='work'?{domain:'work'}:{})};
+  dispatchEvent('personal',{type:'ADD_GLOBAL_EVENT',payload:ev});
+  saveState();recalcAndRender();closeQA();celebrate();showToast('האירוע נוסף ✓');
+}
 function qaSetStep(n){
   const sh=document.querySelector('#qaModal .qa-sheet');if(!sh)return;
   sh.dataset.step=String(n);
@@ -8869,6 +8973,7 @@ function qaType(btn){
 }
 function qaUrg(btn){_qu=btn.dataset.v;document.querySelectorAll('#qaUrgC .qa-c').forEach(b=>b.classList.toggle('on',b===btn));}
 function qaGo(){
+  const _sh=document.querySelector('#qaModal .qa-sheet');if(_sh&&_sh.dataset.mode==='fixed'){_qaGoFixed();return;}
   const name=(document.getElementById('qaName').value||'').trim();
   if(!name){document.getElementById('qaName').focus();return;}
   const today=STATE_ACTIVE.meta.today,calId=_qCal||ACTIVE_CALENDAR;
