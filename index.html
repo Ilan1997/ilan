@@ -854,6 +854,15 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
   #paneAI .ai-wrap{max-width:720px;}
 }
 </style>
+<style id="themeV8">
+#aiMicBtn.rec{background:#dc2626!important;color:#fff!important;border-radius:50%!important;}
+.ai-mic-status{display:flex;align-items:center;gap:6px;margin:0 2px 8px;padding:8px 14px;border-radius:14px;font-size:.86em;line-height:1.5;}
+.ai-mic-status[hidden]{display:none;}
+.ai-mic-status.on{background:#f1edff;color:#4b36c4;}
+.ai-mic-status.err{background:#fdf0ee;color:#b3261e;}
+.ai-mic-dot{flex:none;width:9px;height:9px;border-radius:50%;background:#dc2626;animation:micPulse 1.1s infinite;}
+@media (min-width:1024px){.ai-mic-status{grid-column:1;grid-row:3;}.ai-inputrow{grid-row:4!important;}.mic-opts{grid-row:5!important;}.ai-hint{grid-row:6!important;}#mayaInsights{grid-row:2 / span 5!important;}}
+</style>
 
 
 </head>
@@ -1156,6 +1165,7 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
         <div class="ai-bubble-txt" id="aiGreetingTxt">היי, אני מאיה 👋 המזכירה האישית שלך. ספר לי איך אתה רוצה שהשבוע ייראה — למשל "יש לי מבחן בסטטיסטיקה ביום חמישי, ורציתי גם להתאמן פעמיים השבוע" — ואני אהפוך את זה למשימות מתוזמנות בלוח. ככל שתתקן אותי (למשל תגרור משימה למקום אחר), כך אלמד את ההעדפות שלך.</div>
       </div>
     </div>
+    <div class="ai-mic-status" id="aiMicStatus" role="status" aria-live="polite" hidden></div>
     <div class="ai-inputrow">
       <div class="ai-more-wrap">
         <button type="button" id="aiMoreBtn" class="ai-more" title="עוד אפשרויות" aria-label="עוד אפשרויות" aria-haspopup="true" aria-expanded="false" onclick="_aiToggleMore(event)">⋯</button>
@@ -8269,6 +8279,14 @@ let _micAskConsent=(msg)=>{try{return window.confirm(msg);}catch(_e){return fals
 function micSupported(){return !!(window.SpeechRecognition||window.webkitSpeechRecognition);}
 function _micUI(on,msg){
   const b=document.getElementById('aiMicBtn');if(b){b.classList.toggle('rec',!!on);b.title=on?'עצור הקלטה':'דבר אל מאיה';b.setAttribute('aria-pressed',on?'true':'false');}
+  const st=document.getElementById('aiMicStatus');
+  if(st){clearTimeout(st._t);
+    if(on||msg){st.hidden=false;st.className='ai-mic-status'+(on?' on':' err');st.textContent='';
+      if(on){const d=document.createElement('i');d.className='ai-mic-dot';st.appendChild(d);}
+      st.appendChild(document.createTextNode((on?' ':'')+(msg||'')));
+      if(!on)st._t=setTimeout(()=>{st.hidden=true;},9000);
+    }else if(msg===undefined&&!on&&!st.classList.contains('err')){st.hidden=true;}
+  }
   const h=document.getElementById('aiHint');if(h&&msg!==undefined){h.dataset.orig=h.dataset.orig||h.innerHTML;if(msg)h.textContent=msg;else if(h.dataset.orig)h.innerHTML=h.dataset.orig;}
 }
 function micToggle(){
@@ -8279,11 +8297,36 @@ function micToggle(){
     if(!_micAskConsent('להפעיל את המיקרופון? מה שתגיד יומר לטקסט. ברוב הדפדפנים (כמו Chrome) ההמרה נעשית בשרתי גוגל, ולכן אל תגיד פרטים רגישים שאינך רוצה לשתף. הטקסט יופיע בתיבה ותוכל לערוך לפני שליחה. הכול באחריותך. להמשיך?'))return;
     try{localStorage.setItem(MIC_CONSENT_KEY,'1');}catch(_e){}
   }
+  // Pre-flight: ask for the microphone explicitly first. This surfaces the browser permission prompt and tells "no permission / no mic / mic busy" apart, which speech recognition alone reports vaguely.
+  const md=navigator.mediaDevices;
+  if(md&&md.getUserMedia){
+    _micUI(true,'מבקשת גישה למיקרופון… אשר בחלון של הדפדפן');
+    md.getUserMedia({audio:true}).then(stream=>{try{stream.getTracks().forEach(t=>t.stop());}catch(_e){}_micStart();})
+      .catch(err=>{_micUI(false,_micErrText(err&&err.name||err&&err.error||''));});
+    return;
+  }
+  _micStart();
+}
+function _micErrText(e){
+  e=String(e||'');
+  const framed=(()=>{try{return window.self!==window.top;}catch(_e){return true;}})();
+  if(e==='not-allowed'||e==='service-not-allowed'||e==='NotAllowedError'||e==='SecurityError')return framed?'המיקרופון חסום כי האפליקציה פתוחה בתוך מסגרת. פתח אותה בלשונית נפרדת (הקישור הישיר של האתר) ונסה שוב.':'אין הרשאה למיקרופון. לחץ על סמל המנעול ליד כתובת האתר ← מיקרופון ← אפשר, ואז נסה שוב.';
+  if(e==='NotFoundError'||e==='DevicesNotFoundError'||e==='audio-capture')return'לא נמצא מיקרופון במחשב. חבר מיקרופון או בחר אחד בהגדרות הקול של המערכת.';
+  if(e==='NotReadableError'||e==='TrackStartError')return'המיקרופון תפוס על ידי תוכנה אחרת (למשל שיחת וידאו). סגור אותה ונסה שוב.';
+  if(e==='no-speech')return'לא שמעתי קול. בדוק שהמיקרופון הנכון נבחר בהגדרות הקול של המערכת, ודבר מיד אחרי הלחיצה.';
+  if(e==='network')return'שירות ההמרה לטקסט של הדפדפן לא זמין (בדוק חיבור אינטרנט או חסימת רשת) — אפשר להקליד במקום.';
+  if(e==='aborted')return'ההקלטה הופסקה.';
+  return'ההקלטה נכשלה — נסה שוב.';
+}
+function _micStart(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){_micUI(false,'הדפדפן הזה לא תומך בהקלטה לטקסט. נסה Chrome או Edge.');return;}
   const rec=new SR();rec.lang='he-IL';rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=1;
   const input=document.getElementById('aiChatInput');const base=input?input.value:'';
   rec.onresult=ev=>{let t='';for(let i=0;i<ev.results.length;i++)t+=ev.results[i][0].transcript;if(input){input.value=(base?base+' ':'')+t.trim();input.focus();}};
-  rec.onerror=ev=>{const e=ev&&ev.error;_micUI(false,e==='not-allowed'||e==='service-not-allowed'?'אין הרשאה למיקרופון — אפשר אותה בהגדרות הדפדפן.':(e==='no-speech'?'לא שמעתי כלום — נסה שוב.':(e==='audio-capture'?'לא נמצא מיקרופון.':'ההקלטה נכשלה — נסה שוב.')));};
+  rec.onerror=ev=>{_micUI(false,_micErrText(ev&&ev.error));};
+  rec.onaudiostart=()=>{if(_micOn)_micUI(true,'המיקרופון פעיל — דבר עכשיו');};
+  rec.onspeechstart=()=>{if(_micOn)_micUI(true,'שומעת אותך…');};
   let _gotText=false;const _origRes=rec.onresult;rec.onresult=ev=>{_gotText=true;_micSpeakNext=true;_origRes(ev);};
   rec.onend=()=>{_micOn=false;_micRec=null;_micUI(false);if(_gotText&&micPrefs().autoSend&&input&&input.value.trim()){_micSpeakNext=true;sendAIMessage();}};
   try{rec.start();_micRec=rec;_micOn=true;_micUI(true,'מקשיבה… דבר עכשיו');}catch(_e){_micOn=false;_micUI(false,'לא הצלחתי להפעיל את המיקרופון.');}
@@ -12357,6 +12400,23 @@ async function runAccountTests(){
       ok('MIC2. הדיבור הופך לטקסט בתיבה (לא נשלח אוטומטית — המשתמש מאשר)',inp.value==='יש לי מבחן ביום חמישי'&&AI_CHAT_HISTORY.every(m=>m.content!=='יש לי מבחן ביום חמישי'));
       micToggle();
       ok('MIC3. לחיצה נוספת עוצרת; האישור נשמר ולא נשאלים שוב',!document.getElementById('aiMicBtn').classList.contains('rec')&&localStorage.getItem(MIC_CONSENT_KEY)==='1'&&(()=>{asked=0;micToggle();const again=asked===0&&recs.length===2;recs[1].stop();return again;})());
+      {
+        // MIC6-8: explicit microphone pre-flight + clear, visible reasons
+        const hadMD=Object.getOwnPropertyDescriptor(navigator,'mediaDevices');const wait=()=>new Promise(r=>setTimeout(r,20));
+        const setMD=fn=>Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:fn}});
+        try{
+          try{localStorage.setItem(MIC_CONSENT_KEY,'1');}catch(_e){}
+          const before=recs.length;
+          setMD(()=>Promise.reject({name:'NotAllowedError'}));micToggle();await wait();
+          const st=document.getElementById('aiMicStatus');
+          ok('MIC6. אין הרשאה למיקרופון: הודעה גלויה בשורת הסטטוס עם הוראות, ולא מתחילה הקלטה',recs.length===before&&!st.hidden&&st.classList.contains('err')&&/אין הרשאה/.test(st.textContent));
+          setMD(()=>Promise.reject({name:'NotFoundError'}));micToggle();await wait();
+          ok('MIC7. אין מיקרופון / מיקרופון תפוס: הודעות נפרדות וברורות',/לא נמצא מיקרופון/.test(st.textContent)&&/תפוס/.test(_micErrText('NotReadableError'))&&/לא שמעתי קול/.test(_micErrText('no-speech'))&&/לא זמין/.test(_micErrText('network')));
+          let stopped=0;setMD(()=>Promise.resolve({getTracks:()=>[{stop:()=>{stopped++;}}]}));micToggle();await wait();
+          ok('MIC8. הרשאה אושרה: הזרם נסגר מיד וההקלטה מתחילה עם סטטוס "מקשיבה"',stopped===1&&recs.length===before+1&&document.getElementById('aiMicBtn').classList.contains('rec')&&!st.hidden&&st.classList.contains('on'));
+          if(_micRec){try{_micRec.stop();}catch(_e){}}
+        }finally{if(hadMD)Object.defineProperty(navigator,'mediaDevices',hadMD);else delete navigator.mediaDevices;}
+      }
       inp.value=_iv;_micAskConsent=prevAsk2;if(prevSR)window.SpeechRecognition=prevSR;else delete window.SpeechRecognition;try{localStorage.removeItem(MIC_CONSENT_KEY);}catch(_e){}
     }
     // 35. engine untouched
