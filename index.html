@@ -810,6 +810,50 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 .ai-ins-toggle{border-color:#e3e5ee;}
 @media (max-width:640px){#paneAI .ai-wrap{margin:6px 0 0;border-radius:20px 20px 0 0;border-inline:0;padding:14px 14px 10px;}.ai-quick{gap:8px;}.ai-q{padding:10px 12px;font-size:.8em;}}
 </style>
+<style id="themeV7">
+/* V7: Maya screen — one responsive layout. Phone: edge-to-edge, keyboard-safe height, big tap targets. Desktop: chat column + side panel with the summary. */
+#paneAI .ai-wrap{height:calc(100vh - 112px);height:calc(100dvh - 112px);min-height:420px;}
+.ai-head{display:flex;align-items:center;gap:12px;padding:2px 4px 14px;margin-bottom:6px;border-bottom:1px solid #eef0f6;}
+.ai-head-orb{flex:none;width:38px;height:38px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#fff 0 12%,#c9b9ff 30%,#6a52ee 62%,#33c9b8 100%);box-shadow:0 0 0 4px #f1edff,0 6px 18px -6px #6a52eeaa;}
+.ai-head-t{display:flex;flex-direction:column;line-height:1.25;}
+.ai-head-t b{font-size:1.05em;color:#1f2340;}
+.ai-head-t small{font-size:.78em;color:#7b8199;}
+#aiGreeting{padding-inline-start:4px!important;min-height:0;}
+#aiGreeting::before{display:none!important;}
+.ai-bubble.ai-bot{font-size:1.02em;}
+.ai-bubble.ai-user{background:linear-gradient(135deg,#6a52ee,#5440d6)!important;color:#fff!important;border-bottom-right-radius:8px;box-shadow:0 6px 16px -10px #6a52eeaa;}
+.ai-inputrow{box-shadow:0 8px 24px -16px rgba(31,35,64,.35)!important;}
+#aiChatInput{font-size:16px;} /* 16px stops iOS from zooming the page on focus */
+.ai-log>*{flex:none;}
+.ai-log{min-height:0;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#d7dae6 transparent;}
+#mayaInsights .maya-card{box-shadow:none;}
+/* phone */
+@media (max-width:640px){
+  #paneAI .ai-wrap{margin:4px 0 0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));height:calc(100dvh - 96px);border-radius:22px 22px 0 0;}
+  .ai-head{padding-bottom:10px;}
+  .ai-head-orb{width:34px;height:34px;}
+  .ai-bubble.ai-user{max-width:86%;}
+  .ai-more,#aiMicBtn,#aiSendBtn{width:40px!important;height:40px!important;}
+  .mic-opts{display:none;}
+  .ai-hint{display:none;}
+}
+/* tablet and desktop: side panel */
+@media (min-width:1024px){
+  #paneAI .ai-wrap{max-width:1060px;display:grid;grid-template-columns:minmax(0,1fr) 330px;grid-template-rows:auto minmax(0,1fr) auto auto auto;column-gap:26px;padding:20px 26px 16px;}
+  .ai-head{grid-column:1 / -1;grid-row:1;}
+  #mayaInsToggle{display:none!important;}
+  #paneAI.has-chat:not(.ins-open) #mayaInsights,#mayaInsights{display:flex!important;}
+  #mayaInsights{grid-column:2;grid-row:2 / span 4;max-height:none!important;align-self:start;overflow-y:auto;max-height:calc(100dvh - 260px)!important;padding-inline-start:20px;border-inline-start:1px solid #eef0f6;margin-bottom:0!important;}
+  .ai-log{grid-column:1;grid-row:2;}
+  .ai-inputrow{grid-column:1;grid-row:3;}
+  .mic-opts{grid-column:1;grid-row:4;}
+  .ai-hint{grid-column:1;grid-row:5;}
+  #paneAI .ai-wrap::after{content:none;}
+}
+@media (min-width:641px) and (max-width:1023px){
+  #paneAI .ai-wrap{max-width:720px;}
+}
+</style>
 
 
 </head>
@@ -1104,6 +1148,7 @@ td.td-today.td-now-line::before{content:"";position:absolute;inset-inline-start:
 <!-- ══ AI PLANNER PANE ═══════════════════════════════════ -->
 <div class="tab-pane" id="paneAI">
   <div class="ai-wrap">
+    <div class="ai-head"><span class="ai-head-orb" aria-hidden="true"></span><div class="ai-head-t"><b>מאיה</b><small>המזכירה האישית שלך</small></div></div>
     <button type="button" id="mayaInsToggle" class="ai-ins-toggle" aria-expanded="false" onclick="_aiToggleInsights()">📋 סקירה והעדפות ▾</button>
     <div id="mayaInsights" style="flex:none;max-height:36vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
     <div class="ai-log" id="aiChatLog">
