@@ -500,3 +500,12 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - Client: `_cloudFetch` aborts after `timeoutMs` (default 30s; the AI call uses 75s) and returns `{network:true,timeout:true}`; `_aiCallProxy` turns that into "מאיה לא ענתה בזמן…". `sendAIMessage` also wraps the whole model call in `_aiWithTimeout(…, 90s)`, which covers every route (including the in-claude.ai capability).
 - Server (`maya-ai`): each Gemini call has `AbortSignal.timeout(28s)` and the whole chain a 60s budget (`TOTAL_BUDGET_MS`); a timeout with no response returns 504 `timeout`.
 - Tests: TO1–TO6 (`runAccountTests`) and a static check of the function source.
+
+## 42. צבעי גוגל ומראה יומן
+
+- `GCAL_COLORS` ממפה `colorId` של אירוע בגוגל (1–11) לצבעי הפלטה של Google Calendar; בלי `colorId` נבחר כחול ברירת המחדל (`#039be5`). `gcalColorOf` טהורה.
+- `gcalItemsToBlocks` מוסיפה `color` לכל בלוק; `REPLACE_GCAL_EVENTS` שומר את השדה, ו-`buildEngine` מעביר אותו ל-`gEvents`. המנוע לא משתמש בצבע (תצוגה בלבד).
+- `gcalTextOn` בוחרת טקסט כהה/לבן לפי בהירות. הצ'יפ מרונדר עם `background` inline בשני מסלולי הרינדור (חופפים + legacy).
+- CSS ב-`themeV3`: צ'יפים אטומים עם פינות 6px וצל דק, כותרות ימים בסגנון גוגל.
+- מגבלה: מותר רק scope קריאה לאירועים, לכן צבע היומן עצמו (calendar-level) לא נקרא; אירוע ללא `colorId` מקבל כחול ברירת מחדל.
+- בדיקה: `gcal colour mapping` ב-`tests/run.js`.

@@ -733,6 +733,13 @@ header,.app-header,#topBar{backdrop-filter:saturate(1.4) blur(10px);}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px;}
 .blk{border-radius:8px;}
 ::selection{background:#6d4aff33}
+/* Google-Calendar-style event chips: solid event colour (copied from Google), white gap, readable text */
+.blk-event.blk-event-g{background:#039be5;color:#fff;border:0;border-radius:6px;box-shadow:0 0 0 1px #fff,0 1px 3px rgba(60,64,67,.28);}
+.blk-event.blk-event-g .blk-event-name{color:inherit;font-weight:600;}
+.blk-event.blk-event-g .blk-event-time{color:inherit;opacity:.92;font-weight:500;}
+.blk-event.blk-event-g:hover{filter:brightness(.94);box-shadow:0 0 0 1px #fff,0 3px 8px rgba(60,64,67,.35);transform:none;}
+thead th{font-weight:500;color:#70757a;font-size:.78em;}
+thead th span{font-size:1.45em;font-weight:400;color:#3c4043;letter-spacing:0;}
 @media (prefers-reduced-motion:reduce){.tk-card,.btn{transition:none!important;}.tk-card:hover{transform:none;}}
 </style>
 
@@ -1912,7 +1919,7 @@ function buildEngine(state,calendarId,options={}){
   for(const ev of(gc.events||[])){
     const dId=dayId(parseISO(ev.date));
     if(!gEvents.has(dId))gEvents.set(dId,[]);
-    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin,gid:ev.gid});
+    gEvents.get(dId).push({title:ev.title,startH:ev.startH,endH:ev.endH,id:ev.id,startMin:ev.startMin,endMin:ev.endMin,gid:ev.gid,color:ev.color});
   }
 
   // Resolve tasks. NOTE: 'needed' is ALWAYS task.requiredUnits — buildEngine
@@ -4129,7 +4136,7 @@ function renderEngine(){
             const cs=sm-h*60,dur=em-sm,isG=String(e.id||'').indexOf('gcal_')===0;
             const w=100/l.n,left=l.col*w;
             const tt=`${e.title} · ${_fmtMin(sm)}–${_fmtMin(em)}`;
-            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
+            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;'+(e.color?`background:${escapeHTML(e.color)};color:${gcalTextOn(e.color)};`:''):''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
           }).join('')}</td>`;
         }
       }
@@ -4147,7 +4154,7 @@ function renderEngine(){
         return`<td ${_tdA}><div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45?' blk-event-short':''}" title="${escapeHTML(_tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(_ev.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}position:absolute;inset-inline:2px;top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${isG?'🗓️':'📅'} ${evTitle}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(_ev.startMin)}–${_fmtMin(_ev.endMin)}</bdi></div></div></td>`;
       }
       const _evAny=_evs.find(e=>e.title===evTitle&&h>=e.startH&&h<e.endH&&e.gid);
-      if(_evAny)return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event blk-event-g" data-gcal="${escapeHTML(String(_evAny.id))}" onclick="openGcalEditor(this.dataset.gcal)" title="${escapeHTML(evTitle)} · לחיצה לעריכה" style="pointer-events:auto;cursor:pointer;"><div class="blk-event-name">🗓️ ${evTitle}</div></div></td>`;
+      if(_evAny)return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event blk-event-g" data-gcal="${escapeHTML(String(_evAny.id))}" onclick="openGcalEditor(this.dataset.gcal)" title="${escapeHTML(evTitle)} · לחיצה לעריכה" style="pointer-events:auto;cursor:pointer;${_evAny.color?`background:${escapeHTML(_evAny.color)};color:${gcalTextOn(_evAny.color)};`:''}"><div class="blk-event-name">🗓️ ${evTitle}</div></div></td>`;
       return`<td style="pointer-events:none;"${_todayClass?` class="${_todayClass.trim()}"`:``}><div class="blk-event"><div class="blk-event-name">📅 ${evTitle}</div></div></td>`;
     }
     if(ent){
@@ -7669,6 +7676,16 @@ function gcalAvailable(){return !!GCAL_CONFIG.clientId;}
 function _gcalPrefs(){try{return JSON.parse(localStorage.getItem(GCAL_PREF_KEY)||'null')||{};}catch(_e){return{};}}
 function _gcalSavePrefs(o){try{localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o));}catch(_e){}}
 // PURE: Google event items → engine blocks. Skips all-day, cancelled, "free" (transparent) and declined events; splits multi-day events.
+// Google's own event palette (colorId → colour, as shown in Google Calendar). Events with no colorId use the calendar's default blue.
+const GCAL_COLORS={'1':'#7986cb','2':'#33b679','3':'#8e24aa','4':'#e67c73','5':'#f6bf26','6':'#f4511e','7':'#039be5','8':'#616161','9':'#3f51b5','10':'#0b8043','11':'#d50000'};
+const GCAL_DEFAULT_COLOR='#039be5';
+function gcalColorOf(item){return GCAL_COLORS[String(item&&item.colorId)]||GCAL_DEFAULT_COLOR;}
+// Readable text colour on a Google chip: white on strong colours, dark on light ones (e.g. banana).
+function gcalTextOn(hex){
+  const m=/^#([0-9a-f]{6})$/i.exec(hex||'');if(!m)return'#fff';
+  const n=parseInt(m[1],16),r=n>>16,g=(n>>8)&255,b=n&255;
+  return (0.2126*r+0.7152*g+0.0722*b)/255>0.62?'#202124':'#fff';
+}
 function gcalItemsToBlocks(items,hideTitles){
   const out=[];const pad=n=>String(n).padStart(2,'0');
   const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -7686,7 +7703,7 @@ function gcalItemsToBlocks(items,hideTitles){
       const endH=last?Math.min(24,Math.ceil(en.getHours()+en.getMinutes()/60)):24;
       if(endH<=startH)continue;
       const sMin=first?st.getHours()*60+st.getMinutes():0,eMin=last?Math.min(1440,en.getHours()*60+en.getMinutes()||1440):1440;
-      const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id)};
+      const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),color:gcalColorOf(it)};
       if(sMin<eMin){blk.startMin=sMin;blk.endMin=eMin;}
       out.push(blk);
     }
