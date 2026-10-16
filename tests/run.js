@@ -89,6 +89,19 @@ const w=dom.window;
       return o;})()`);
     const okg=Object.values(r).every(Boolean);rows.push(['fixed-time add -> Google',String(okg)+(okg?'':' '+JSON.stringify(r))]);if(!okg)failed=true;
   }catch(e){rows.push(['fixed-time add -> Google','THROW '+e.message]);failed=true;}
+  // calendar header: no "empty board" banner, no week X/Y; a Google sync hint only while not synced
+  try{
+    const r=w.eval(`(()=>{const o={};
+      o.noOld=!document.getElementById('emptyCalendarHint')&&!document.documentElement.innerHTML.includes('הלוח הזה עדיין ריק');
+      const wk=document.getElementById('hnWeek');recalcAndRender();o.noWeek=!/שבוע|\\//.test((wk.textContent||'').replace(/\\d{1,2}\\.\\d{1,2}/g,''))&&/\\d/.test(wk.textContent||'');
+      const prevCfg=GCAL_CONFIG.clientId,prevPrefs=localStorage.getItem(GCAL_PREF_KEY);
+      try{GCAL_CONFIG.clientId='cid.apps.googleusercontent.com';localStorage.removeItem(GCAL_PREF_KEY);_gcalHintSync();const h=document.getElementById('gcalSyncHint');
+        o.shown=h.style.display==='flex';_gcalSavePrefs({on:true,consent:'x',last:new Date().toISOString()});_gcalHintSync();o.hidden=h.style.display==='none';
+        GCAL_CONFIG.clientId='';localStorage.removeItem(GCAL_PREF_KEY);_gcalHintSync();o.noClient=h.style.display==='none';
+      }finally{GCAL_CONFIG.clientId=prevCfg;if(prevPrefs)localStorage.setItem(GCAL_PREF_KEY,prevPrefs);else localStorage.removeItem(GCAL_PREF_KEY);_gcalHintSync();}
+      return o;})()`);
+    const okh=Object.values(r).every(Boolean);rows.push(['header + gcal sync hint',String(okh)+(okh?'':' '+JSON.stringify(r))]);if(!okh)failed=true;
+  }catch(e){rows.push(['header + gcal sync hint','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

@@ -887,6 +887,11 @@ td.zone-nonwork{background:#f8f9fa!important;}
 #mBtnW.on{background:var(--zone-work)!important;color:#fff!important;}
 .blk-event .zone-tag{margin-inline-end:2px;}
 </style>
+<style id="themeV10">
+.gcal-sync-hint{display:none;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:8px 14px;border:1px solid #dadce0;border-radius:12px;background:#fff;font-size:.88em;color:#3c4043;}
+.gcal-sync-hint .hn-btn{background:#1a73e8;color:#fff;border-color:#1a73e8;font-weight:600;}
+.gcal-sync-hint .hn-btn:disabled{opacity:.6;}
+</style>
 
 
 </head>
@@ -1142,14 +1147,9 @@ td.zone-nonwork{background:#f8f9fa!important;}
 <div class="layout">
 <div class="left-panel">
 <!-- summaryStrip and capRow removed — data moved to sidebar status cards -->
-<div id="emptyCalendarHint" style="display:none;text-align:center;padding:28px 20px;margin-bottom:14px;background:var(--blue-lt);border:1px dashed var(--blue);border-radius:var(--radius);">
-  <div style="font-size:1.3em;margin-bottom:6px;">🌱</div>
-  <div style="font-weight:700;color:var(--text);margin-bottom:4px;">הלוח הזה עדיין ריק</div>
-  <div style="font-size:.85em;color:var(--muted);margin-bottom:14px;">אפשר להוסיף משימה ידנית, או פשוט לספר ל-AI איך רוצים שהשבוע ייראה</div>
-  <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-    <button class="hn-btn hn-btn-wide" onclick="openQA()" style="background:var(--blue);color:#fff;border-color:var(--blue);">➕ הוסף משימה</button>
-    <button class="hn-btn hn-btn-wide" onclick="switchTab('ai')" style="background:#fff;">🤖 תכנן עם AI</button>
-  </div>
+<div id="gcalSyncHint" class="gcal-sync-hint" style="display:none;">
+  <span>📅 יומן גוגל עוד לא מסונכרן</span>
+  <button type="button" class="hn-btn" id="gcalSyncHintBtn" onclick="gcalHintGo()">סנכרן עם יומן גוגל</button>
 </div>
 <div class="tbl-wrap">
 <table><thead id="tHead"></thead><tbody id="tBody"></tbody></table>
@@ -4109,7 +4109,7 @@ function renderNav(){
   }
   const navRangeEl=document.getElementById('navRange');
   if(navRangeEl)navRangeEl.textContent=
-    `${APP_VERSION} · ${fmt(parseISO(STATE_ACTIVE.meta.startDate))} – ${fmt(parseISO(STATE_ACTIVE.meta.endDate))} · שבוע ${CW+1}/${TOTAL_WEEKS}`;
+    `${APP_VERSION} · ${fmt(parseISO(STATE_ACTIVE.meta.startDate))} – ${fmt(parseISO(STATE_ACTIVE.meta.endDate))}`;
   // ── Today indicator: shows planning anchor + mode badge ──
   // 'real' date → 📍 + no badge (normal planning mode)
   // manual date → 🔬 + "סימולציה" badge (user chose a custom date)
@@ -4143,7 +4143,7 @@ function renderNav(){
   const _hw=document.getElementById('hnWeek');
   if(_hw&&_R2){
     const _d0=addDays(_R2.derived.start,CW*7),_d6=addDays(_R2.derived.start,CW*7+6);
-    _hw.textContent='שבוע '+(CW+1)+'/'+TOTAL_WEEKS+' · '+fmt(_d0)+'–'+fmt(_d6);
+    _hw.textContent=fmt(_d0)+'–'+fmt(_d6);
   }
   const _mb=document.getElementById('mBtnL');const _mw=document.getElementById('mBtnW');
   if(_mb)_mb.classList.toggle('on',!isWork);if(_mw)_mw.classList.toggle('on',isWork);
@@ -4170,8 +4170,7 @@ function renderEngine(){
   const cal=STATE_ACTIVE.calendars[ACTIVE_CALENDAR];
   const isWork=ACTIVE_CALENDAR==='work';
   document.getElementById('taskCardsTitle').textContent=isWork?'💼 משימות עבודה':'📊 מצב משימות לימודים';
-  const _hintEl=document.getElementById('emptyCalendarHint');
-  if(_hintEl)_hintEl.style.display=(cal.tasks||[]).length===0?'block':'none';
+  try{_gcalHintSync();}catch(_e){}
 
   const renderOnceMap=new Map();
   for(const ob of(constraintsWithMode.onceBlocked||[]))
@@ -8056,6 +8055,7 @@ async function gcalSync(opts){
     }
     _gcalSig=sig;
     _gcalSavePrefs({..._gcalPrefs(),on:true,last:new Date().toISOString(),count:blocks.length});
+    try{_gcalHintSync();}catch(_e){}
     if(changed&&ACTIVE_TAB==='ai'){try{renderMayaScreen();}catch(_e){}}
     return{ok:true,count:blocks.length,changed};
   }catch(e){
@@ -8064,6 +8064,19 @@ async function gcalSync(opts){
   }finally{_gcalBusy=false;}
 }
 // Keeps the calendar fresh without the user pressing sync: on open, when the tab comes back, and every few minutes while visible.
+// Banner above the calendar: shown only when Google Calendar is available but not yet connected/synced.
+function _gcalHintSync(){
+  const el=document.getElementById('gcalSyncHint');if(!el)return;
+  const pr=_gcalPrefs(),need=gcalAvailable()&&!(pr.on&&pr.consent&&pr.last);
+  el.style.display=need?'flex':'none';
+}
+async function gcalHintGo(){
+  const b=document.getElementById('gcalSyncHintBtn');if(b){b.disabled=true;b.textContent='מסנכרן…';}
+  try{
+    const r=(_gcalPrefs().consent)?await gcalSync():await gcalConnect();
+    if(r&&r.ok)showToast('היומן סונכרן ✓ ('+r.count+' אירועים)');else if(r&&!r.cancelled&&r.error)showErrorToast(r.error);
+  }finally{if(b){b.disabled=false;b.textContent='סנכרן עם יומן גוגל';}try{_gcalHintSync();}catch(_e){}}
+}
 function gcalAutoSyncDue(now){const pr=_gcalPrefs();return !!(gcalAvailable()&&pr.on&&pr.consent&&!_gcalBusy&&(now-_gcalLastAuto)>=120000);}
 async function gcalAutoSync(){
   const now=Date.now();
@@ -8306,6 +8319,7 @@ function gcalDisconnect(){
   try{sessionStorage.removeItem(GCAL_TOK_KEY);}catch(_e){}
   try{const o2=window.google&&window.google.accounts&&window.google.accounts.oauth2;if(o2&&o2.revoke&&_gcalLastToken)o2.revoke(_gcalLastToken,()=>{});}catch(_e){}
   try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
+  try{_gcalHintSync();}catch(_e){}
 }
 function _gcalBlockHTML(btn){
   if(!gcalAvailable())return'';
