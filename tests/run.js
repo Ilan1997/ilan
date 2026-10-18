@@ -165,6 +165,19 @@ const w=dom.window;
       o.extBad=_aiExtractMeeting('אין')===null&&_aiExtractMeeting('\`\`\`MEETING_REQUEST\\nלא json\\n\`\`\`')===null&&_aiExtractMeeting('\`\`\`MEETING_REQUEST\\n{"title":""}\\n\`\`\`')===null;
       o.hidden=_aiStripHidden('בודקת\\n\`\`\`MEETING_REQUEST\\n{"title":"x"}\\n\`\`\`').trim()==='בודקת';
       o.prompt=AI_SYSTEM_PROMPT_BASE.includes('MEETING_REQUEST');
+      {const f2={'2026-10-19':free(0,8,20)},b2={'2026-10-19':[[600,660]]};
+        const nt=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:f2,busy:b2,days:1,count:5,travelMin:0}),tv=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:f2,busy:b2,days:1,count:1,travelMin:40});
+        o.travelPad=tv.length===1&&(tv[0].endMin<=600-40||tv[0].startMin>=660+40);
+        const ft=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:{'2026-10-19':[11]},busy:{'2026-10-19':[[600,660,0]]},days:1,count:3,travelMin:0});
+        o.adjacentOk=ft.length===1&&ft[0].startMin===660;
+        const ft2=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:{'2026-10-19':[11]},busy:{'2026-10-19':[[600,660,0]]},days:1,count:3,travelMin:30});
+        o.adjacentBlocked=ft2.length===0;
+        const nb=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:{'2026-10-19':[10,11,12,13]},busy:{'2026-10-19':[[600,660,45]]},days:1,count:3,travelMin:0});
+        o.neighbourTravel=nb.length>0&&nb.every(x=>x.startMin>=660+45);
+        const e3=_aiExtractMeeting('\`\`\`MEETING_REQUEST\\n{"title":"רופא","travelMin":35}\\n\`\`\`');o.extTravel=e3.travelMin===35&&_aiExtractMeeting('\`\`\`MEETING_REQUEST\\n{"title":"x","travelMin":-5}\\n\`\`\`').travelMin===0;
+        o.gcalBodyTravel=_gcalBody({title:'x',date:'2026-10-20',startMin:600,endMin:660,travelMin:30,domain:'work'}).extendedProperties.private.maya_travel==='30'&&_gcalValidateEv({title:'x',date:'2026-10-20',startMin:600,endMin:660,travelMin:30}).ev.travelMin===30;
+        o.gcalReadTravel=(gcalItemsToBlocks([{id:'q',summary:'a',start:{dateTime:'2026-10-20T10:00:00'},end:{dateTime:'2026-10-20T11:00:00'},extendedProperties:{private:{maya_travel:'25'}}}],false)||[])[0]?.travelMin===25;
+      }
       const sa=STATE_ACTIVE,prevPrefs=localStorage.getItem(GCAL_PREF_KEY);
       try{
         localStorage.removeItem(GCAL_PREF_KEY);

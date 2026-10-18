@@ -5783,7 +5783,8 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 6. תהליך נסתר בכל הודעה (המשתמש/ת לא רואה אותו): לפני שאת/ה כותב/ת תשובה — (א) עבור/י על כל הכללים שקיבלת, (ב) הסק/י מההודעה, מהתגובות האחרונות של המשתמש/ת להצעות שלך ומנתוני הלוח מה חדש, מה השתנה ומה כבר לא נכון, (ג) עדכן/י את הכללים בבלוק LEARN_RULE — הוסף/י כלל חדש, החלף/י כלל שהתברר כלא מדויק, הסר/י כלל שנסתר. אם לא נלמד דבר חדש — אל תצרף/י בלוק. הבלוקים הנסתרים (LEARN_RULE, PROFILE_UPDATE) נמחקים אוטומטית לפני שהמשתמש/ת רואה את התשובה.
 6ב. גבולות והעדפות גמישים ("מה מאיה יודעת עליו/ה"): את/ה לא מכונה בינארית. כשאת/ה מזהה דפוס או העדפה — אל תקבע/י כלל מיד. שאל/י בעדינות ובקצרה, למשל "רוצה שאנסה לא להכניס לך דברים בשישי?", ורק אחרי שהמשתמש/ת הסכים/ה צרף/י בלוק \`\`\`SOFT_RULE עם JSON: {"add":[{"what":"להכניס לך משימות ביום שישי","pol":"avoid","strength":"try","kind":"boundary"}],"exception":["שישי"],"soften":["..."],"remove":["..."]}. what הוא ביטוי קצר בלשון המקור ("להכניס…", "לשמור על…"); pol הוא avoid (לא) או prefer (כן); kind הוא value (מה חשוב לו/ה), boundary (גבול/העדפה) או rhythm (איך הוא/היא עובד/ת). strength תמיד "try" אלא אם המשתמש/ת אמר/ה במפורש "תמיד/אף פעם" — אז "firm" עם שדה quote שהוא ציטוט מדויק מהודעתו/ה. כשהמשתמש/ת מבקש/ת חריגה חד-פעמית ("הפעם כן") — עשי זאת בלי להתווכח, אל תסיר/י את הכלל, וצרף/י "exception". אם החריגות חוזרות — הצע/י לרכך ("נראה שזה כבר לא תמיד נכון, לרכך?"). בניסוח: בקשי רשות והציעי ("אשתדל", "בדרך כלל", "רוצה שננסה?"), לא "אסור/חובה/אי אפשר", ואל תחזור/י על אותה הצעה פעמיים. הבלוק נסתר מהמשתמש/ת.
 7ב. משימות קטנות בלי זמן קבוע ("להתקשר לרואה חשבון", "לקנות מתנה"): כשהמשתמש/ת מזכיר/ה כמה דברים קטנים שאסור לשכוח, הוסיפי בסוף התשובה בלוק מוסתר \`\`\`SMALL_ADD {"tasks":[{"title":"...","important":false}]} \`\`\` (important:true רק אם אמר/ה במפורש שזה חשוב/דחוף), והזכירי במשפט אחד שהוספת ל"לא לשכוח". אל תמציאי משימות. פגישה בזמן מסוים היא אירוע ולא משימה קטנה. ברשימת המשימות שב-state מופיעות משימות קטנות — מותר להציע איפה לשבץ אותן, ובמשימה מסומנת כחשובה אפשר להזכיר בעדינות.
-7ג. קביעת פגישה/אירוע בלי שעה מוכנה ("אני צריך לקבוע פגישה עם הרואה חשבון"): אל תמציא/י שעות בטקסט. צרף/י בסוף התשובה בלוק מוסתר \`\`\`MEETING_REQUEST {"title":"שם","durationMin":60,"domain":"work"|"life","date":"YYYY-MM-DD" (רק אם ביקש/ה יום מסוים),"after":"HH:MM" (רק אם ביקש/ה אחרי שעה)} \`\`\` — האפליקציה תחשב בעצמה 2–3 חלונות פנויים אמיתיים ותציג ככפתורים. בטקסט הגלוי כתבי רק משפט קצר כמו "בודקת מתי נוח לך". לא לכתוב שעות בעצמך.
+7ג. נסיעות: את/ה לא יודעת מרחקים. אם הפגישה נראית מחוץ לבית/למקום הרגיל (משרד, רופא, לקוח, עיר אחרת) ולא נאמר זמן נסיעה — שאלי שאלה אחת קצרה "כמה זמן נסיעה לשם בערך?" לפני שאת שולחת את הבלוק, ואז שלחי אותו עם travelMin. לעולם אל תנחשי מרחק בעצמך.
+7ג2. קביעת פגישה/אירוע בלי שעה מוכנה ("אני צריך לקבוע פגישה עם הרואה חשבון"): אל תמציא/י שעות בטקסט. צרף/י בסוף התשובה בלוק מוסתר \`\`\`MEETING_REQUEST {"title":"שם","durationMin":60,"domain":"work"|"life","date":"YYYY-MM-DD" (רק אם ביקש/ה יום מסוים),"after":"HH:MM" (רק אם ביקש/ה אחרי שעה),"travelMin":דקות נסיעה לכיוון אחד (רק אם המשתמש/ת אמר/ה)} \`\`\` — האפליקציה תחשב בעצמה 2–3 חלונות פנויים אמיתיים ותציג ככפתורים. בטקסט הגלוי כתבי רק משפט קצר כמו "בודקת מתי נוח לך". לא לכתוב שעות בעצמך.
 7א. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
 7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
@@ -7998,6 +7999,7 @@ function gcalItemsToBlocks(items,hideTitles){
       const sMin=first?st.getHours()*60+st.getMinutes():0,eMin=last?Math.min(1440,en.getHours()*60+en.getMinutes()||1440):1440;
       const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),color:gcalColorOf(it)};
       if(it.extendedProperties&&it.extendedProperties.private&&it.extendedProperties.private.maya_domain==='work')blk.domain='work';
+      {const tv=it.extendedProperties&&it.extendedProperties.private&&parseInt(it.extendedProperties.private.maya_travel,10);if(tv>0&&tv<=240)blk.travelMin=tv;}
       if(sMin<eMin){blk.startMin=sMin;blk.endMin=eMin;}
       out.push(blk);
     }
@@ -8196,7 +8198,8 @@ function _gcalValidateEv(ev){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T12:00:00Z')))return{ok:false,error:'תאריך לא תקין'};
   const s=ev.startMin,e=ev.endMin;
   if(!Number.isInteger(s)||!Number.isInteger(e)||s<0||e>1440||s>=e)return{ok:false,error:'שעת הסיום חייבת להיות אחרי שעת ההתחלה (באותו יום)'};
-  return{ok:true,ev:{title,date,startMin:s,endMin:e,domain:ev.domain==='work'?'work':(ev.domain==='life'?'life':undefined)}};
+  const tv=Number.isFinite(ev.travelMin)?Math.max(0,Math.min(240,Math.round(ev.travelMin))):0;
+  return{ok:true,ev:{title,date,startMin:s,endMin:e,domain:ev.domain==='work'?'work':(ev.domain==='life'?'life':undefined),...(tv?{travelMin:tv}:{})}};
 }
 async function _gcalCall(method,path,body){
   if(!gcalWriteEnabled()){const e=new Error('no-write');throw e;}
@@ -8208,7 +8211,12 @@ async function _gcalCall(method,path,body){
   return r.status===204?null:await r.json().catch(()=>null);
 }
 // Work/life is kept on the Google event itself (private extended property), so it follows the event across devices.
-const _gcalBody=(v,isUpdate)=>({summary:v.title,start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin),...(v.domain==='work'?{extendedProperties:{private:{maya_domain:'work'}}}:(isUpdate&&v.domain==='life'?{extendedProperties:{private:{maya_domain:null}}}:{}))});
+const _gcalBody=(v,isUpdate)=>{
+  const pr={};
+  if(v.domain==='work')pr.maya_domain='work';else if(isUpdate&&v.domain==='life')pr.maya_domain=null;
+  if(v.travelMin>0)pr.maya_travel=String(v.travelMin);
+  return{summary:v.title,start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin),...(Object.keys(pr).length?{extendedProperties:{private:pr}}:{})};
+};
 async function gcalCreateEvent(ev){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
   try{const d=await _gcalCall('POST','',_gcalBody(v.ev));await gcalSync();return{ok:true,id:d&&d.id};}catch(e){return{ok:false,error:_gcalErrText(e)};}
@@ -8373,6 +8381,7 @@ function suggestSlots(o){
   const today=o.today,nowMin=Number.isFinite(o.nowMin)?o.nowMin:0,dur=Math.max(15,Math.min(480,Math.round(o.durationMin||60)));
   const nDays=Math.max(1,Math.min(21,o.days||10)),count=Math.max(1,Math.min(5,o.count||3));
   const dayStart=Number.isFinite(o.dayStart)?o.dayStart:480,dayEnd=Number.isFinite(o.dayEnd)?o.dayEnd:1200;
+  const travel=Math.max(0,Math.min(240,Math.round(o.travelMin||0)));
   const freeHours=o.freeHours||{},busy=o.busy||{},prefDate=o.preferDate||null,after=Number.isFinite(o.afterMin)?o.afterMin:null;
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(today)))return[];
   const addD=(d,n)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
@@ -8387,13 +8396,16 @@ function suggestSlots(o){
       if(i===0&&s<nowMin+30)continue;
       if(after!=null&&s<after)continue;
       let ok=true;for(let h=Math.floor(s/60);h<Math.ceil(e/60);h++)if(!fh.has(h)){ok=false;break;}
-      if(!ok||bz.some(b=>s<b[1]&&e>b[0]))continue;
-      const prevEnd=Math.max(-1,...bz.filter(b=>b[1]<=s).map(b=>b[1])),nextStart=Math.min(99999,...bz.filter(b=>b[0]>=e).map(b=>b[0]));
+      // travel: padding on both sides = the larger of this meeting's travel and the neighbour's own travel (distance is not known, only what the user stated)
+      const pad=b=>Math.max(travel,b[2]||0);
+      if(!ok||s-travel<360||e+travel>1380||bz.some(b=>s<b[1]+pad(b)&&e>b[0]-pad(b)))continue;
+      const prevB=bz.filter(b=>b[1]<=s),nextB=bz.filter(b=>b[0]>=e);
+      const prevEnd=prevB.length?Math.max(...prevB.map(b=>b[1]+pad(b))):-1,nextStart=nextB.length?Math.min(...nextB.map(b=>b[0]-pad(b))):99999;
       const gapP=prevEnd<0?999:s-prevEnd,gapN=nextStart>=99999?999:nextStart-e;
       let sc=-i*3-load/30+(s>=540&&e<=1080?4:0)+(s>=600&&s<=960?2:0);
       if(prefDate)sc+=date===prefDate?100:-Math.abs((new Date(date)-new Date(prefDate))/864e5);
       if(gapP<10||gapN<10)sc-=8;
-      let reason=date===prefDate?'ביום שביקשת':load===0?'יום בלי אירועים אחרים':(gapP>=60&&gapN>=60)?'רווח נעים לפני ואחרי':load<=120?'יום קליל יחסית':'החלון הפנוי הכי נוח ביום הזה';
+      let reason=date===prefDate?'ביום שביקשת':load===0?'יום בלי אירועים אחרים':(travel&&(prevB.length||nextB.length))?'כולל זמן נסיעה ('+travel+' דק׳) בין האירועים':(gapP>=60&&gapN>=60)?'רווח נעים לפני ואחרי':load<=120?'יום קליל יחסית':'החלון הפנוי הכי נוח ביום הזה';
       cands.push({date,startMin:s,endMin:e,sc,reason});
     }
     cands.sort((a,b)=>b.sc-a.sc||a.startMin-b.startMin);
@@ -8418,7 +8430,7 @@ function _suggestInputs(domain,state){
   Object.keys(R.assignments||{}).forEach(k=>{const m=/^(\d{4}-\d{2}-\d{2})T(\d{1,2})$/.exec(k);if(m)(busy[m[1]]=busy[m[1]]||[]).push([+m[2]*60,+m[2]*60+60]);});
   ((state.constraintsGlobal&&state.constraintsGlobal.events)||[]).forEach(ev=>{
     const a=Number.isInteger(ev.startMin)?ev.startMin:ev.startH*60,b=Number.isInteger(ev.endMin)?ev.endMin:ev.endH*60;
-    (busy[ev.date]=busy[ev.date]||[]).push([a,b]);
+    (busy[ev.date]=busy[ev.date]||[]).push([a,b,ev.travelMin||0]);
   });
   return{freeHours,busy};
 }
@@ -8430,24 +8442,25 @@ function _aiExtractMeeting(fullText){
   let d=Number(j.durationMin);if(!Number.isFinite(d))d=60;d=Math.max(15,Math.min(480,Math.round(d)));
   const date=/^\d{4}-\d{2}-\d{2}$/.test(String(j.date||''))?String(j.date):null;
   const x=/^(\d{1,2}):(\d{2})$/.exec(String(j.after||'').trim());
-  return{title,durationMin:d,domain:j.domain==='work'?'work':'life',date,afterMin:x&&+x[1]<=23&&+x[2]<60?(+x[1])*60+(+x[2]):null};
+  const tv=Number(j.travelMin);
+  return{title,durationMin:d,travelMin:Number.isFinite(tv)&&tv>0?Math.min(240,Math.round(tv)):0,domain:j.domain==='work'?'work':'life',date,afterMin:x&&+x[1]<=23&&+x[2]<60?(+x[1])*60+(+x[2]):null};
 }
 function _aiOfferMeeting(req){
   if(!req)return null;
   const st=STATE_ACTIVE,today=st.meta.today;
   const nowD=new Date(),loc=nowD.getFullYear()+'-'+String(nowD.getMonth()+1).padStart(2,'0')+'-'+String(nowD.getDate()).padStart(2,'0');
-  let opts;try{const inp=_suggestInputs(req.domain,st);opts=suggestSlots({today,nowMin:today===loc?nowD.getHours()*60+nowD.getMinutes():0,durationMin:req.durationMin,preferDate:req.date,afterMin:req.afterMin,freeHours:inp.freeHours,busy:inp.busy,days:14,count:3});}catch(_e){opts=[];}
+  let opts;try{const inp=_suggestInputs(req.domain,st);opts=suggestSlots({today,nowMin:today===loc?nowD.getHours()*60+nowD.getMinutes():0,durationMin:req.durationMin,travelMin:req.travelMin,preferDate:req.date,afterMin:req.afterMin,freeHours:inp.freeHours,busy:inp.busy,days:14,count:3});}catch(_e){opts=[];}
   if(!opts.length)return _aiAppendBubble('לא מצאתי חלון פנוי מתאים ב-14 הימים הקרובים. אפשר לקצר או לנסות יום אחר?','bot');
   const DN=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
   const lab=o=>{const d=new Date(o.date+'T12:00:00Z');return'יום '+DN[d.getUTCDay()]+' '+d.getUTCDate()+'/'+(d.getUTCMonth()+1)+' · '+_fmtMin(o.startMin)+'–'+_fmtMin(o.endMin);};
-  const txt='מצאתי כמה אפשרויות ל"'+req.title+'":\n'+opts.map(o=>'• '+lab(o)+' — '+o.reason).join('\n');
+  const txt='מצאתי כמה אפשרויות ל"'+req.title+'"'+(req.travelMin>0?' (כולל '+req.travelMin+' דק׳ נסיעה לכל כיוון)':'')+':\n'+opts.map(o=>'• '+lab(o)+' — '+o.reason).join('\n');
   const btns=opts.map(o=>({label:lab(o),onclick:async(div)=>{
     div.querySelectorAll('button').forEach(b=>b.disabled=true);
     const t=div.querySelector('.ai-bubble-txt');
-    const ev={title:req.title,date:o.date,startMin:o.startMin,endMin:o.endMin,domain:req.domain};
+    const ev={title:req.title,date:o.date,startMin:o.startMin,endMin:o.endMin,domain:req.domain,travelMin:req.travelMin};
     let undo=null,err='';
     if(gcalWriteEnabled()){const r=await gcalCreateEvent(ev);if(r.ok&&r.id){undo=async()=>{const q=await gcalDeleteEvent(r.id);return q.ok;};}else err=r.error||'שגיאה';}
-    else{const id=genId('ev');dispatchEvent('personal',{type:'ADD_GLOBAL_EVENT',payload:{id,title:ev.title,date:ev.date,startH:Math.floor(ev.startMin/60),endH:Math.ceil(ev.endMin/60),startMin:ev.startMin,endMin:ev.endMin,domain:req.domain==='work'?'work':undefined}});undo=async()=>{dispatchEvent('personal',{type:'REMOVE_GLOBAL_EVENT',eventId:id});return true;};}
+    else{const id=genId('ev');dispatchEvent('personal',{type:'ADD_GLOBAL_EVENT',payload:{id,title:ev.title,date:ev.date,startH:Math.floor(ev.startMin/60),endH:Math.ceil(ev.endMin/60),startMin:ev.startMin,endMin:ev.endMin,domain:req.domain==='work'?'work':undefined,...(req.travelMin>0?{travelMin:req.travelMin}:{})}});undo=async()=>{dispatchEvent('personal',{type:'REMOVE_GLOBAL_EVENT',eventId:id});return true;};}
     div.querySelectorAll('button').forEach(b=>b.remove());
     if(!undo){if(t)t.textContent='לא הצלחתי לקבוע: '+err;return;}
     if(t)t.textContent='נקבע: '+req.title+' — '+lab(o)+' ✓'+(gcalWriteEnabled()?' (נוסף גם ליומן גוגל)':'');

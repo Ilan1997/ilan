@@ -565,3 +565,9 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - Hour granularity: the engine is hour-based, so options start on :00/:30 but never overlap engine-blocked hours.
 - Not verified live: Gemini actually emitting `MEETING_REQUEST`; real Google POST/DELETE round trip.
 - Tests: "maya meeting placement" in `tests/run.js`.
+
+### 49.1 Travel time (added after user feedback)
+- Maya has no map/distance data, so she never guesses distances: for an out-of-home meeting she asks once "how long is the trip?" and sends `travelMin` (minutes, one way) in `MEETING_REQUEST`.
+- `suggestSlots` pads the new meeting by `travelMin` on both sides and each existing event by the larger of its own `travelMin` and the new one's (conservative, since neighbours' locations are unknown). Candidates must also leave room within 06:00–23:00.
+- `travelMin` is stored on the event: locally as a field, in Google as `extendedProperties.private.maya_travel` (written by `_gcalBody`, read back by `gcalItemsToBlocks`), so it follows the event across devices.
+- Not covered: events created outside Maya have no travel unless set; real distance lookup would need a maps API + key (not available).
