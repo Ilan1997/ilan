@@ -178,6 +178,13 @@ const w=dom.window;
         o.gcalBodyTravel=_gcalBody({title:'x',date:'2026-10-20',startMin:600,endMin:660,travelMin:30,domain:'work'}).extendedProperties.private.maya_travel==='30'&&_gcalValidateEv({title:'x',date:'2026-10-20',startMin:600,endMin:660,travelMin:30}).ev.travelMin===30;
         o.gcalReadTravel=(gcalItemsToBlocks([{id:'q',summary:'a',start:{dateTime:'2026-10-20T10:00:00'},end:{dateTime:'2026-10-20T11:00:00'},extendedProperties:{private:{maya_travel:'25'}}}],false)||[])[0]?.travelMin===25;
       }
+      {const evs=[];for(let i=0;i<9;i++)evs.push({title:(i%2?'נסיעה ':'פעילות ')+i,date:'2026-10-19',start:(9+i)+':00',end:(9+i)+':45',kind:i%2?'travel':'event'});
+        const ex9=_aiExtractCalCreate('\`\`\`CAL_CREATE\\n'+JSON.stringify({events:evs})+'\\n\`\`\`');
+        o.multi=ex9.length===9&&ex9[1].colorId==='5'&&ex9[0].colorId==='9';
+        o.max12=_aiExtractCalCreate('\`\`\`CAL_CREATE\\n'+JSON.stringify({events:Array.from({length:15},(_,i)=>({title:'x'+i,date:'2026-10-19',start:'08:00',end:'09:00'}))})+'\\n\`\`\`').length===12;
+        o.bodyColor=_gcalBody({title:'x',date:'2026-10-19',startMin:540,endMin:600,colorId:'9'}).colorId==='9'&&_gcalBody({title:'x',date:'2026-10-19',startMin:540,endMin:600}).colorId===undefined;
+        o.promptCal=AI_SYSTEM_PROMPT_BASE.includes('עד 12 אירועים')&&AI_SYSTEM_PROMPT_BASE.includes('travel');
+        o.intakeLow=_aiProfileContext(emptyAIProfile()).includes('עדיפות נמוכה');}
       const sa=STATE_ACTIVE,prevPrefs=localStorage.getItem(GCAL_PREF_KEY);
       try{
         localStorage.removeItem(GCAL_PREF_KEY);
@@ -195,6 +202,18 @@ const w=dom.window;
         o.undoBtn=!!ub;
         ub.click();await new Promise(r=>setTimeout(r,20));
         o.undone=(STATE_ACTIVE.constraintsGlobal.events||[]).length===before&&!(STATE_ACTIVE.constraintsGlobal.events||[]).some(e=>e.title==='פגישת בדיקה');
+        {const evs2=[{title:'קניות',date:'2026-10-21',start:'10:00',end:'11:30',kind:'event'},{title:'נסיעה לחווה',date:'2026-10-21',start:'11:30',end:'12:10',kind:'travel'}];
+          const ex=_aiExtractCalCreate('\`\`\`CAL_CREATE\\n'+JSON.stringify({events:evs2})+'\\n\`\`\`');
+          const n0=(STATE_ACTIVE.constraintsGlobal.events||[]).length;
+          const cc=_aiOfferCalCreate(ex);o.localOffer=!!cc&&/ליומן באפליקציה/.test(cc.textContent);
+          cc.querySelectorAll('button')[0].click();await new Promise(r=>setTimeout(r,20));
+          const ev3=(STATE_ACTIVE.constraintsGlobal.events||[]).filter(e=>e.title==='קניות'||e.title==='נסיעה לחווה');
+          o.localAdded=ev3.length===2&&(STATE_ACTIVE.constraintsGlobal.events||[]).length===n0+2&&ev3.find(e=>e.title==='קניות').color==='#3f51b5'&&ev3.find(e=>e.title==='נסיעה לחווה').color==='#f6bf26';
+          const ub2=[...cc.querySelectorAll('button')].find(b=>/בטל/.test(b.textContent));ub2.click();await new Promise(r=>setTimeout(r,20));
+          o.localUndo=(STATE_ACTIVE.constraintsGlobal.events||[]).length===n0;}
+        {_aiLastIntakeTopic='peak';const pr0=AI_PROFILE;const inp=document.getElementById('aiChatInput');
+          if(inp){AI_BUSY=true;AI_BUSY=false;}
+          const r0=applyProfileUpdate(AI_PROFILE||emptyAIProfile(),{peak:'none'},'לא יודע',8,23);o.skipApplies=r0.accepted.includes('peak');AI_PROFILE=pr0;}
         const c2=_aiOfferMeeting({title:'עוד',durationMin:60,domain:'life',date:null,afterMin:null});
         [...c2.querySelectorAll('button')].pop().click();
         o.dismiss=!c2.querySelector('button')&&/לא קבעתי/.test(c2.textContent);

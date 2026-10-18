@@ -1620,6 +1620,7 @@ let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken=''
 const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
 let _micSpeakNext=false;
 let _boardCat='all';
+let _aiLastIntakeTopic=null;
 const SMALL_STALE_DAYS=10,SMALL_ASK_GAP_DAYS=7,SMALL_SNOOZE_DAYS=7,SMALL_BATCH_MAX=3,SMALL_BATCH_KEY='maya_small_batch';
 let _smallShowArchive=false;
 let _gcalSig='',_gcalLastAuto=0;   // auto-sync: signature of the last imported events + time of the last silent attempt
@@ -4348,7 +4349,7 @@ function renderEngine(){
             const cs=sm-h*60,dur=em-sm,isG=String(e.id||'').indexOf('gcal_')===0;
             const w=100/l.n,left=l.col*w;
             const tt=`${e.title} · ${_fmtMin(sm)}–${_fmtMin(em)}`;
-            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;'+(e.color?`background:${escapeHTML(e.color)};color:${gcalTextOn(e.color)};`:''):''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${e.domain==='work'?'💼':(isG?'🗓️':'📅')} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
+            return`<div class="blk-event blk-event-min${isG?' blk-event-g':''}${dur<=45||l.n>2?' blk-event-short':''}" title="${escapeHTML(tt)}${isG?' · לחיצה לעריכה':''}"${isG?` data-gcal="${escapeHTML(String(e.id))}" onclick="openGcalEditor(this.dataset.gcal)"`:''} style="${isG?'pointer-events:auto;cursor:pointer;':''}${e.color?`background:${escapeHTML(e.color)};color:${gcalTextOn(e.color)};`:''}position:absolute;inset-inline-start:calc(${left.toFixed(2)}% + 1px);width:calc(${w.toFixed(2)}% - 2px);top:${(cs/60*100).toFixed(2)}%;height:${(dur/60*100).toFixed(2)}%;"><div class="blk-event-name">${e.domain==='work'?'💼':(isG?'🗓️':'📅')} ${escapeHTML(String(e.title))}</div><div class="blk-event-time"><bdi dir="ltr">${_fmtMin(sm)}–${_fmtMin(em)}</bdi></div></div>`;
           }).join('')}</td>`;
         }
       }
@@ -5372,7 +5373,7 @@ function _aiProfileContext(profile){
   let c='';
   { const T=normalizeAIProfile(profile).topics; if(T.work&&!T.work.none)c+=`\nשעות העבודה שהמשתמש/ת קבע/ה: ${T.work.days.map(x=>AI_DAY_NAMES_HE[x]).join(', ')} ${T.work.start}:00–${T.work.end}:00. התחייבת לכבד אותן: אל תציע/י ואל תתכנן/י עבודה מחוץ להן; אם נדרשת חריגה — שאל/י ובקש/י אישור מפורש לפני.`; }
   if(sum)c+=`\nפרופיל מה שכבר ידוע על המשתמש/ת (אל תשאל/י שוב על זה): ${sum}.`;
-  if(nt)c+=`\nשלב היכרות פעיל: אחרי שענית על מה שהמשתמש/ת ביקש/ה, שאל/י שאלה אחת קצרה בלבד, על הנושא הבא: ${AI_PROFILE_TOPIC_HINT[nt]}. לעולם לא יותר משאלה אחת בהודעה. אם המשתמש/ת אמר/ה שאין כזה — החזר/י "none" לנושא.`;
+  if(nt)c+=`\nשלב היכרות (עדיפות נמוכה מאוד): קודם כל מבצעים את מה שהמשתמש/ת ביקש/ה. אסור לשאול שאלת היכרות באותה הודעה שבה את/ה מחכה לפרט חסר ממנו/ה, באמצע משימה, או כשיש בקשה פתוחה. רק כשהבקשה טופלה במלואה ואין לך שום שאלה אחרת — מותר שאלה אחת קצרה על: ${AI_PROFILE_TOPIC_HINT[nt]}. אם המשתמש/ת אמר/ה "לא יודע/אין/לא משנה" — החזר/י "none" לנושא ואל תשאל/י עליו שוב לעולם.`;
   else c+='\nההיכרות הסתיימה — אל תשאל/י שאלות היכרות נוספות.';
   return c;
 }
@@ -5785,7 +5786,7 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 7ב. משימות קטנות בלי זמן קבוע ("להתקשר לרואה חשבון", "לקנות מתנה"): כשהמשתמש/ת מזכיר/ה כמה דברים קטנים שאסור לשכוח, הוסיפי בסוף התשובה בלוק מוסתר \`\`\`SMALL_ADD {"tasks":[{"title":"...","important":false}]} \`\`\` (important:true רק אם אמר/ה במפורש שזה חשוב/דחוף), והזכירי במשפט אחד שהוספת ל"לא לשכוח". אל תמציאי משימות. פגישה בזמן מסוים היא אירוע ולא משימה קטנה. ברשימת המשימות שב-state מופיעות משימות קטנות — מותר להציע איפה לשבץ אותן, ובמשימה מסומנת כחשובה אפשר להזכיר בעדינות.
 7ג. נסיעות: את/ה לא יודעת מרחקים. אם הפגישה נראית מחוץ לבית/למקום הרגיל (משרד, רופא, לקוח, עיר אחרת) ולא נאמר זמן נסיעה — שאלי שאלה אחת קצרה "כמה זמן נסיעה לשם בערך?" לפני שאת שולחת את הבלוק, ואז שלחי אותו עם travelMin. לעולם אל תנחשי מרחק בעצמך.
 7ג2. קביעת פגישה/אירוע בלי שעה מוכנה ("אני צריך לקבוע פגישה עם הרואה חשבון"): אל תמציא/י שעות בטקסט. צרף/י בסוף התשובה בלוק מוסתר \`\`\`MEETING_REQUEST {"title":"שם","durationMin":60,"domain":"work"|"life","date":"YYYY-MM-DD" (רק אם ביקש/ה יום מסוים),"after":"HH:MM" (רק אם ביקש/ה אחרי שעה),"travelMin":דקות נסיעה לכיוון אחד (רק אם המשתמש/ת אמר/ה)} \`\`\` — האפליקציה תחשב בעצמה 2–3 חלונות פנויים אמיתיים ותציג ככפתורים. בטקסט הגלוי כתבי רק משפט קצר כמו "בודקת מתי נוח לך". לא לכתוב שעות בעצמך.
-7א. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
+7א. הוספה ליומן: כשהמשתמש/ת מבקש/ת להוסיף אירוע/רצף אירועים ליומן — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","kind":"event"|"travel","domain":"work"|"life"}]} (עד 12 אירועים, תאריכים שונים מותרים; כל קטע נסיעה הוא אירוע נפרד עם kind=travel וכותרת כמו "נסיעה לאריאל"). חשבי בעצמך את השעות ברצף מהזמנים שנמסרו (התחלה + משך כל קטע), בלי לשאול על כל פרט; שאלי רק על דבר חיוני אחד שחסר (למשל שעת התחלה) ורק אם אי אפשר להסיק אותו. "מחר"/"ביום ג׳" – חשבי לפי התאריך של היום שמופיע בהקשר. בטקסט הגלוי תני סיכום קצר של הרצף ואל תטעני שכבר נוצר — האירועים ייווצרו רק אחרי שהמשתמש/ת יאשר בכרטיס (ביומן גוגל אם מחובר, ואחרת ביומן של האפליקציה). אל תסרבי ואל תפני לחשבון: תמיד צרפי את הבלוק.
 7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
 let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting explicit user approval
@@ -5874,6 +5875,8 @@ async function sendAIMessage(){
   AI_CHAT_HISTORY.push({role:'user',content:text});
   _aiSaveHistory();
   try{_aiSyncChatState();}catch(_se){}
+  // "I don't know / skip" right after an intake question: close that topic deterministically so Maya never repeats it
+  try{if(_aiLastIntakeTopic&&text.length<=30&&/^(לא יודע|לא יודעת|אין|אין לי|לא משנה|דלג|עזוב|לא עכשיו|לא רוצה)/.test(text)){const r0=applyProfileUpdate(AI_PROFILE||emptyAIProfile(),{[_aiLastIntakeTopic]:'none'},text,..._aiGridBounds());if(r0.accepted.length){AI_PROFILE=r0.profile;_aiSaveProfile();try{_aiRefreshGreeting();}catch(_e){}}}}catch(_e){}
 
   AI_BUSY=true;
   const sendBtn=document.getElementById('aiSendBtn'); if(sendBtn)sendBtn.disabled=true;
@@ -5881,6 +5884,7 @@ async function sendAIMessage(){
   const _slowT=setTimeout(()=>{try{const t=typingEl&&typingEl.querySelector('.ai-bubble-txt');if(t&&typingEl.isConnected){t.textContent='עוד רגע, זה לוקח קצת יותר מהרגיל';const d=document.createElement('span');d.className='ai-dots';d.setAttribute('aria-hidden','true');d.innerHTML='<i></i><i></i><i></i>';t.appendChild(d);}}catch(_e){}},12000);
 
   const todayStr=STATE_ACTIVE?.meta?.today||getTodayISO();
+  _aiLastIntakeTopic=nextIntakeTopic(AI_PROFILE||emptyAIProfile());
   const sys=AI_SYSTEM_PROMPT_BASE+`\nהיום בתאריך (עוגן תכנון): ${todayStr}.`+`\nיומן גוגל: ${gcalWriteEnabled()?'מחובר וכתיבה מאופשרת — מותר להציע CAL_CREATE':(_gcalPrefs().on?'מחובר לקריאה בלבד — כתיבה לא מאופשרת':'לא מחובר')}.`+
     `\n${_aiCurrentItemsSummary()}`+
     _aiInsightsContext(STATE_ACTIVE,AI_RULES,AI_SIGNALS)+_aiProfileContext(AI_PROFILE||emptyAIProfile())+_aiSoftContext(AI_SOFT)+
@@ -7971,6 +7975,8 @@ function _gcalPrefs(){try{return JSON.parse(localStorage.getItem(GCAL_PREF_KEY)|
 function _gcalSavePrefs(o){try{localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o));}catch(_e){}}
 // PURE: Google event items → engine blocks. Skips all-day, cancelled, "free" (transparent) and declined events; splits multi-day events.
 // Google's own event palette (colorId → colour, as shown in Google Calendar). Events with no colorId use the calendar's default blue.
+// Events Maya creates get vivid Google colours (blueberry for events, banana for travel legs) so they stand out in both calendars
+const MAYA_EVENT_COLOR='9',MAYA_TRAVEL_COLOR='5';
 const GCAL_COLORS={'1':'#7986cb','2':'#33b679','3':'#8e24aa','4':'#e67c73','5':'#f6bf26','6':'#f4511e','7':'#039be5','8':'#616161','9':'#3f51b5','10':'#0b8043','11':'#d50000'};
 const GCAL_DEFAULT_COLOR='#039be5';
 function gcalColorOf(item){return GCAL_COLORS[String(item&&item.colorId)]||GCAL_DEFAULT_COLOR;}
@@ -8199,7 +8205,7 @@ function _gcalValidateEv(ev){
   const s=ev.startMin,e=ev.endMin;
   if(!Number.isInteger(s)||!Number.isInteger(e)||s<0||e>1440||s>=e)return{ok:false,error:'שעת הסיום חייבת להיות אחרי שעת ההתחלה (באותו יום)'};
   const tv=Number.isFinite(ev.travelMin)?Math.max(0,Math.min(240,Math.round(ev.travelMin))):0;
-  return{ok:true,ev:{title,date,startMin:s,endMin:e,domain:ev.domain==='work'?'work':(ev.domain==='life'?'life':undefined),...(tv?{travelMin:tv}:{})}};
+  return{ok:true,ev:{title,date,startMin:s,endMin:e,domain:ev.domain==='work'?'work':(ev.domain==='life'?'life':undefined),...(tv?{travelMin:tv}:{}),...(/^(1[01]|[1-9])$/.test(String(ev.colorId||''))?{colorId:String(ev.colorId)}:{})}};
 }
 async function _gcalCall(method,path,body){
   if(!gcalWriteEnabled()){const e=new Error('no-write');throw e;}
@@ -8215,7 +8221,7 @@ const _gcalBody=(v,isUpdate)=>{
   const pr={};
   if(v.domain==='work')pr.maya_domain='work';else if(isUpdate&&v.domain==='life')pr.maya_domain=null;
   if(v.travelMin>0)pr.maya_travel=String(v.travelMin);
-  return{summary:v.title,start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin),...(Object.keys(pr).length?{extendedProperties:{private:pr}}:{})};
+  return{summary:v.title,...(v.colorId?{colorId:v.colorId}:{}),start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin),...(Object.keys(pr).length?{extendedProperties:{private:pr}}:{})};
 };
 async function gcalCreateEvent(ev){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
@@ -8353,23 +8359,33 @@ function _aiExtractCalCreate(fullText){
   const arr=Array.isArray(j)?j:(j&&Array.isArray(j.events)?j.events:[]);
   const hm=v=>{const x=/^(\d{1,2}):(\d{2})$/.exec(String(v||'').trim());return x&&+x[1]<=24&&+x[2]<60?(+x[1])*60+(+x[2]):NaN;};
   const out=[];
-  arr.slice(0,3).forEach(e=>{const v=_gcalValidateEv({title:e&&e.title,date:e&&e.date,startMin:hm(e&&e.start),endMin:hm(e&&e.end)});if(v.ok)out.push(v.ev);});
+  arr.slice(0,12).forEach(e=>{const v=_gcalValidateEv({title:e&&e.title,date:e&&e.date,startMin:hm(e&&e.start),endMin:hm(e&&e.end),domain:e&&e.domain,colorId:e&&e.kind==='travel'?MAYA_TRAVEL_COLOR:MAYA_EVENT_COLOR});if(v.ok)out.push(v.ev);});
   return out;
 }
 function _aiOfferCalCreate(list){
   if(!list||!list.length)return null;
   const hh=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
-  if(!gcalWriteEnabled()){
-    return _aiAppendBubble('כדי שאוסיף את זה ליומן גוגל צריך לחבר את היומן ולאפשר כתיבה — ב-👤 החשבון שלי, בבלוק "יומן גוגל".','bot');
-  }
-  const txt='להוסיף ליומן גוגל?\n'+list.map(e=>`• ${e.title} — ${e.date} ${hh(e.startMin)}–${hh(e.endMin)}`).join('\n');
+  const toG=gcalWriteEnabled();
+  const byDate={};list.forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e);});
+  const txt=(toG?'להוסיף ליומן גוגל?':'להוסיף ליומן באפליקציה? (כדי שזה יופיע גם בגוגל — חבר/י את היומן ב-👤 החשבון שלי)')+'\n'+list.map(e=>`• ${e.title} — ${e.date} ${hh(e.startMin)}–${hh(e.endMin)}`).join('\n');
   return _aiAppendActionBubble(txt,[
-    {label:'✅ הוסף ליומן גוגל',style:'background:#2563eb;color:#fff;',onclick:async(div)=>{
+    {label:toG?'✅ הוסף ליומן גוגל':'✅ הוסף ליומן',style:'background:#2563eb;color:#fff;',onclick:async(div)=>{
       div.querySelectorAll('button').forEach(b=>b.disabled=true);
-      let okN=0,err='';
-      for(const e of list){const r=await gcalCreateEvent(e);if(r.ok)okN++;else{err=r.error;break;}}
-      const t=div.querySelector('.ai-bubble-txt');if(t)t.textContent=okN===list.length?(okN===1?'האירוע נוסף ליומן גוגל ✓':okN+' אירועים נוספו ליומן גוגל ✓'):('לא הצלחתי להוסיף: '+err);
+      const t=div.querySelector('.ai-bubble-txt');
+      let okN=0,err='';const undo=[];
+      if(toG){
+        for(const e of list){const r=await gcalCreateEvent(e);if(r.ok){okN++;if(r.id)undo.push(()=>gcalDeleteEvent(r.id));}else{err=r.error;break;}}
+      }else{
+        const ids=[];
+        const batch=list.map(e=>{const id=genId('ev');ids.push(id);return{id,title:e.title,date:e.date,startH:Math.floor(e.startMin/60),endH:Math.ceil(e.endMin/60),startMin:e.startMin,endMin:e.endMin,...(e.domain==='work'?{domain:'work'}:{}),...(e.travelMin?{travelMin:e.travelMin}:{}),...(e.colorId&&GCAL_COLORS[e.colorId]?{color:GCAL_COLORS[e.colorId]}:{})};});
+        dispatchEvent('personal',{type:'ADD_GLOBAL_EVENTS_BATCH',events:batch});
+        okN=batch.length;undo.push(async()=>{ids.forEach(id=>dispatchEvent('personal',{type:'REMOVE_GLOBAL_EVENT',eventId:id}));return{ok:true};});
+      }
       div.querySelectorAll('button').forEach(b=>b.remove());
+      if(t)t.textContent=okN===list.length?(okN===1?'האירוע נוסף ליומן'+(toG?' גוגל':'')+' ✓':okN+' אירועים נוספו ליומן'+(toG?' גוגל':'')+' ✓'):(okN?('נוספו '+okN+' מתוך '+list.length+'. '):'')+'לא הצלחתי להוסיף את כולם: '+err;
+      if(okN){const u=document.createElement('button');u.className='btn btn-xs';u.style.marginTop='10px';u.textContent='↩️ בטל';
+        u.onclick=async()=>{u.disabled=true;let ok=true;for(const f of undo){try{const r=await f();if(r&&r.ok===false)ok=false;}catch(_e){ok=false;}}if(t)t.textContent=ok?'בוטל — האירועים הוסרו.':'חלק מהאירועים לא הוסרו, אפשר למחוק ידנית.';u.remove();};
+        div.appendChild(u);}
     }},
     {label:'לא עכשיו',onclick:(div)=>{const t=div.querySelector('.ai-bubble-txt');if(t)t.textContent='בסדר, לא הוספתי כלום.';div.querySelectorAll('button').forEach(b=>b.remove());}}
   ]);
@@ -8457,10 +8473,10 @@ function _aiOfferMeeting(req){
   const btns=opts.map(o=>({label:lab(o),onclick:async(div)=>{
     div.querySelectorAll('button').forEach(b=>b.disabled=true);
     const t=div.querySelector('.ai-bubble-txt');
-    const ev={title:req.title,date:o.date,startMin:o.startMin,endMin:o.endMin,domain:req.domain,travelMin:req.travelMin};
+    const ev={title:req.title,date:o.date,startMin:o.startMin,endMin:o.endMin,domain:req.domain,travelMin:req.travelMin,colorId:MAYA_EVENT_COLOR};
     let undo=null,err='';
     if(gcalWriteEnabled()){const r=await gcalCreateEvent(ev);if(r.ok&&r.id){undo=async()=>{const q=await gcalDeleteEvent(r.id);return q.ok;};}else err=r.error||'שגיאה';}
-    else{const id=genId('ev');dispatchEvent('personal',{type:'ADD_GLOBAL_EVENT',payload:{id,title:ev.title,date:ev.date,startH:Math.floor(ev.startMin/60),endH:Math.ceil(ev.endMin/60),startMin:ev.startMin,endMin:ev.endMin,domain:req.domain==='work'?'work':undefined,...(req.travelMin>0?{travelMin:req.travelMin}:{})}});undo=async()=>{dispatchEvent('personal',{type:'REMOVE_GLOBAL_EVENT',eventId:id});return true;};}
+    else{const id=genId('ev');dispatchEvent('personal',{type:'ADD_GLOBAL_EVENT',payload:{id,title:ev.title,date:ev.date,startH:Math.floor(ev.startMin/60),endH:Math.ceil(ev.endMin/60),startMin:ev.startMin,endMin:ev.endMin,domain:req.domain==='work'?'work':undefined,...(req.travelMin>0?{travelMin:req.travelMin}:{}),color:GCAL_COLORS[MAYA_EVENT_COLOR]}});undo=async()=>{dispatchEvent('personal',{type:'REMOVE_GLOBAL_EVENT',eventId:id});return true;};}
     div.querySelectorAll('button').forEach(b=>b.remove());
     if(!undo){if(t)t.textContent='לא הצלחתי לקבוע: '+err;return;}
     if(t)t.textContent='נקבע: '+req.title+' — '+lab(o)+' ✓'+(gcalWriteEnabled()?' (נוסף גם ליומן גוגל)':'');
@@ -11686,7 +11702,7 @@ function runAIProfileTests(){
   for(let k=0;k<7;k++){const nt=nextIntakeTopic(p);if(!nt)break;order.push(nt);p=applyProfileUpdate(p,{[nt]:'none'},'x',8,23).profile;}
   ok('9. ההיכרות נסגרת אחרי ששת הנושאים (מקצוע ראשון), אחד בכל פעם',order.length===6&&order[0]==='role'&&nextIntakeTopic(p)===null,order.join(','));
   ok('10. בהיכרות סגורה ההקשר אוסר שאלות נוספות',_aiProfileContext(p).includes('ההיכרות הסתיימה'));
-  ok('11. בהיכרות פתוחה ההקשר מבקש שאלה אחת בלבד',_aiProfileContext(E).includes('שאלה אחת קצרה בלבד'));
+  ok('11. בהיכרות פתוחה ההקשר מבקש שאלה אחת בלבד',_aiProfileContext(E).includes('שאלה אחת קצרה')&&_aiProfileContext(E).includes('קודם כל מבצעים'));
   // ── Profession → time-management rules; work-hours acknowledgement ──
   {
     const rr=A({role:{text:'סטודנט לתואר שני'}},'אני סטודנט לתואר שני');
@@ -12611,7 +12627,7 @@ async function runAccountTests(){
         const log=document.getElementById('aiChatLog');const nb=log?log.children.length:0;
         gcalDisableWrite();
         const off=_aiOfferCalCreate(ex);
-        ok('WR16. בלי הרשאת כתיבה: מאיה מסבירה איך לאפשר, בלי כפתורי אישור',!!off&&off.textContent.includes('לאפשר כתיבה')&&off.querySelectorAll('button').length===0);
+        ok('WR16. בלי הרשאת כתיבה: מאיה מציעה הוספה ליומן של האפליקציה (לא מסרבת) ומסבירה איך לחבר את גוגל',!!off&&off.textContent.includes('ליומן באפליקציה')&&off.textContent.includes('החשבון')&&off.querySelectorAll('button').length===2);
         _gcalSavePrefs({..._gcalPrefs(),write:true});calls=[];
         const card=_aiOfferCalCreate(ex);
         ok('WR17. עם הרשאה: כרטיס אישור עם כפתורים ו*עדיין לא נכתב כלום*',!!card&&card.querySelectorAll('button').length===2&&card.textContent.includes('רופא שיניים')&&!calls.some(c=>c.m==='POST'));

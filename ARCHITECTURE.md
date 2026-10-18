@@ -571,3 +571,9 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - `suggestSlots` pads the new meeting by `travelMin` on both sides and each existing event by the larger of its own `travelMin` and the new one's (conservative, since neighbours' locations are unknown). Candidates must also leave room within 06:00–23:00.
 - `travelMin` is stored on the event: locally as a field, in Google as `extendedProperties.private.maya_travel` (written by `_gcalBody`, read back by `gcalItemsToBlocks`), so it follows the event across devices.
 - Not covered: events created outside Maya have no travel unless set; real distance lookup would need a maps API + key (not available).
+
+### 49.2 Calendar sequences, colours, intake order (user feedback)
+- `CAL_CREATE` now carries up to 12 events (any dates), each with `kind` (`event`|`travel`) and optional `domain`. Maya computes sequential times herself and emits the block even when Google isn't connected.
+- `_aiOfferCalCreate`: Google connected+write → Google events; otherwise → the app's own calendar (`ADD_GLOBAL_EVENTS_BATCH`) with a hint to connect Google. Both paths give a "↩️ בטל" button.
+- Vivid colours: events get Google colorId 9 (blueberry), travel legs 5 (banana) — sent as `colorId` to Google and used as `color` for local events; the minute-precision chip renderer now applies `e.color` to local events too (not only `gcal_`).
+- Intake questions ("when are you sharpest?") have very low priority: never while a request is pending or Maya waits for a detail. A reply like "לא יודע/אין/לא משנה" right after an intake question closes that topic deterministically (`_aiLastIntakeTopic` + `applyProfileUpdate(...'none')`).
