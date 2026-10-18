@@ -102,6 +102,41 @@ const w=dom.window;
       return o;})()`);
     const okh=Object.values(r).every(Boolean);rows.push(['header + gcal sync hint',String(okh)+(okh?'':' '+JSON.stringify(r))]);if(!okh)failed=true;
   }catch(e){rows.push(['header + gcal sync hint','THROW '+e.message]);failed=true;}
+  // small-task pool: internal score, reminders, once-a-day "still relevant?" batch, answers, extractor
+  try{
+    const r=await w.eval(`(async()=>{const o={};const T='2026-10-18';
+      const mk=(id,title,x)=>({id,title,category:'כללי',doneWeeks:[],createdAt:'2026-10-18',...x});
+      const imp=mk('a','להתקשר לרואה חשבון',{important:true}),plain=mk('b','לסדר מגירה'),old=mk('c','לקנות מתנה',{createdAt:'2026-09-20'}),oldImp=mk('d','לשלם ארנונה',{createdAt:'2026-09-01',important:true});
+      o.score=smallScore(imp,T)>smallScore(plain,T)&&smallScore(plain,T)<55&&smallScore(imp,T)>=55&&smallScore(mk('x','x',{due:'2026-10-19'}),T)>smallScore(plain,T);
+      o.kw=smallImportantFromText('להתקשר, זה חשוב')&&!smallImportantFromText('לא חשובים לי הדברים')===false||true;
+      o.kw=smallImportantFromText('זה דחוף!')&&!smallImportantFromText('לסדר את המחסן');
+      o.defer=smallScore(mk('y','y',{deferrals:3}),T)<smallScore(plain,T);
+      o.top=smallTop([plain,imp,old],T,'W',2)[0].id==='a';
+      o.rem=smallReminders([plain,imp,old],T,'W',3).map(t=>t.id).join()==='a';
+      const ci=smallCheckIn([plain,imp,old,oldImp],T,'W',3);o.ci=ci.length===1&&ci[0].id==='c';
+      const later=smallApplyAnswer(old,'later',T);o.later=smallCheckIn([later],T,'W',3).length===0&&later.snoozedUntil==='2026-10-25'&&later.deferrals===1&&smallSnoozed(later,T);
+      const kept=smallApplyAnswer(old,'keep',T);o.keep=smallCheckIn([kept],T,'W',3).length===0&&smallCheckIn([kept],'2026-10-29','W',3).length===1;
+      const dr=smallApplyAnswer(old,'drop',T);o.drop=dr.archived===true&&!smallIsOpen(dr,'W')&&smallIsOpen(smallApplyAnswer(dr,'restore',T),'W');
+      o.done=!smallIsOpen(smallApplyAnswer(plain,'done',T),'W');
+      const st=smallEnsureMeta({meta:{today:T},microTasks:{tasks:[{id:'l',title:'ישן',doneWeeks:[]}]}});o.stamp=st.microTasks.tasks[0].createdAt===T&&smallEnsureMeta(st)===st;
+      const ex=_aiExtractSmallAdd('כן\\n\`\`\`SMALL_ADD\\n{"tasks":["לקנות חלב",{"title":"  לשלם  ","important":true},{"title":""},5]}\\n\`\`\`');
+      o.ext=ex.length===2&&ex[0].title==='לקנות חלב'&&ex[1].title==='לשלם'&&ex[1].important===true&&_aiExtractSmallAdd('אין').length===0&&_aiExtractSmallAdd('\`\`\`SMALL_ADD\\nלא json\\n\`\`\`').length===0;
+      o.hidden=_aiStripHidden('שלום\\n\`\`\`SMALL_ADD\\n{"tasks":["x"]}\\n\`\`\`').trim()==='שלום';
+      const sa=STATE_ACTIVE;
+      try{
+        const s0=structuredClone(STATE_ACTIVE);s0.meta.onboarded=true;s0.microTasks={categories:['כללי'],tasks:[]};STATE_ACTIVE=commitState(s0,'t',{save:false,render:false});
+        const a1=smallAdd('לקנות מתנה לאמא, חשוב');o.add=!!a1&&a1.important===true&&a1.createdAt===STATE_ACTIVE.meta.today&&smallAdd('לקנות מתנה לאמא, חשוב')===null;
+        smallAdd('משהו ישן');_smallMutate(mt=>{mt.tasks[1].createdAt='2026-01-01';},'t');
+        try{localStorage.removeItem(SMALL_BATCH_KEY);}catch(_e){}
+        switchTab('ai');renderMayaScreen();const box=document.getElementById('mayaInsights');
+        o.cardAsk=!!box.querySelector('.maya-ask')&&/משהו ישן/.test(box.querySelector('.maya-ask').textContent)&&box.querySelectorAll('.maya-ask .ms-q').length===1;
+        smallBatchDismiss();o.dismiss=!document.getElementById('mayaInsights').querySelector('.maya-ask');
+        switchTab('board');renderTaskBoard();o.pool=document.querySelectorAll('#smallPoolList .sp-row').length===2&&document.querySelector('#smallPoolList .sp-row').textContent.includes('מתנה');
+        smallAnswer(STATE_ACTIVE.microTasks.tasks[1].id,'drop');renderSmallPool();o.arch=document.querySelectorAll('#smallPoolList .sp-row').length===1&&/ארכיון \\(1\\)/.test(document.getElementById('smallPoolList').textContent);
+      }finally{if(sa)STATE_ACTIVE=commitState(sa,'test-restore',{save:false,render:false});try{localStorage.removeItem(SMALL_BATCH_KEY);}catch(_e){}}
+      return o;})()`);
+    const oks=Object.values(r).every(Boolean);rows.push(['small-task pool',String(oks)+(oks?'':' '+JSON.stringify(r))]);if(!oks)failed=true;
+  }catch(e){rows.push(['small-task pool','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

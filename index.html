@@ -892,6 +892,37 @@ td.zone-nonwork{background:#f8f9fa!important;}
 .gcal-sync-hint .hn-btn{background:#1a73e8;color:#fff;border-color:#1a73e8;font-weight:600;}
 .gcal-sync-hint .hn-btn:disabled{opacity:.6;}
 </style>
+<style id="themeV11">
+.small-pool{margin:6px 0 14px;padding:12px 14px;background:#fff;border:1px solid var(--hair,#e6e8f1);border-radius:18px;}
+.sp-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:.95em;}
+.sp-count{font-size:.78em;color:#5f6684;background:#f1f2f6;border-radius:999px;padding:1px 9px;}
+.sp-count:empty{display:none;}
+.sp-add{display:flex;gap:8px;margin-bottom:8px;}
+.sp-add .hn-btn{flex:none;width:auto!important;height:auto!important;padding:8px 18px;border-radius:999px;background:#6a52ee;color:#fff;border-color:#6a52ee;font-weight:600;}
+.sp-add .input{flex:1;border-radius:999px;border:1.5px solid var(--hair,#e6e8f1);padding:9px 14px;font-family:inherit;font-size:16px;background:#fff;}
+.sp-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-top:1px solid #f1f2f6;}
+.sp-row:first-child{border-top:0;}
+.sp-row input[type=checkbox]{width:18px;height:18px;flex:none;accent-color:#6a52ee;cursor:pointer;}
+.sp-t{flex:1;min-width:0;font-size:.92em;line-height:1.5;}
+.sp-star,.sp-x,.sp-restore{flex:none;border:0;background:transparent;cursor:pointer;font-family:inherit;color:#9aa0b8;border-radius:8px;padding:4px 8px;font-size:1em;}
+.sp-star.on{color:#f59e0b;}.sp-star:hover,.sp-x:hover{background:#f3f4f9;}
+.sp-restore{font-size:.82em;color:#4b36c4;}
+.sp-arch{opacity:.65;}
+.sp-arch-toggle{border:0;background:none;color:#7b8199;font-family:inherit;font-size:.82em;padding:8px 4px 2px;cursor:pointer;}
+.sp-empty{font-size:.85em;color:#7b8199;padding:6px 2px;}
+.maya-small{flex:none;background:#fff;border:1px solid var(--hair,#e6e8f1);border-radius:14px;padding:10px 14px;}
+.maya-small.maya-ask{background:#fbf9ff;border-color:#dcd3ff;}
+.ms-h{font-weight:700;margin-bottom:6px;}
+.ms-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:.9em;}
+.ms-row span{flex:1;min-width:0;}
+.ms-btn{border:1.5px solid #e3e5ee;background:#fff;border-radius:999px;padding:5px 12px;font-family:inherit;font-size:.82em;font-weight:600;color:#2b2f45;cursor:pointer;}
+.ms-btn:hover{border-color:#b9a6ff;background:#f6f2ff;}
+.ms-ok{color:#0b7a6d;}
+.ms-q{padding:6px 0;border-top:1px solid #efeaff;}.ms-q:first-of-type{border-top:0;}
+.ms-qt{font-size:.9em;margin-bottom:6px;}
+.ms-bs{display:flex;flex-wrap:wrap;gap:6px;}
+.ms-later{border:0;background:none;color:#7b8199;font-family:inherit;font-size:.8em;padding:6px 0 0;cursor:pointer;}
+</style>
 
 
 </head>
@@ -1164,6 +1195,11 @@ td.zone-nonwork{background:#f8f9fa!important;}
 <input class="input" id="boardSearch" placeholder="חיפוש משימה" oninput="renderTaskBoard()" aria-label="חיפוש משימה"/>
 </div>
 </div>
+<section class="small-pool" id="smallPool" aria-label="משימות קטנות">
+  <div class="sp-head"><b>🧷 לא לשכוח</b><span class="sp-count" id="smallPoolCount"></span></div>
+  <div class="sp-add"><input class="input" id="smallPoolInput" placeholder="משהו קטן שחשוב לזכור…" maxlength="120" onkeydown="if(event.key==='Enter'){event.preventDefault();smallPoolAddFromInput();}" aria-label="משימה קטנה חדשה"/><button type="button" class="hn-btn" onclick="smallPoolAddFromInput()">הוסף</button></div>
+  <div id="smallPoolList"></div>
+</section>
 <div id="boardChips" class="tk-chips" role="tablist" aria-label="סינון לפי סוג"></div>
 <div id="boardCards" class="tk-list"></div>
 <div id="boardEmpty" style="display:none;" class="tk-empty"><span class="maya-orb" aria-hidden="true"></span><div><b>עוד אין משימות</b><br>לחץ על ➕ משימה חדשה, או פשוט ספר למאיה מה צריך לקרות.</div></div>
@@ -1584,6 +1620,8 @@ let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken=''
 const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
 let _micSpeakNext=false;
 let _boardCat='all';
+const SMALL_STALE_DAYS=10,SMALL_ASK_GAP_DAYS=7,SMALL_SNOOZE_DAYS=7,SMALL_BATCH_MAX=3,SMALL_BATCH_KEY='maya_small_batch';
+let _smallShowArchive=false;
 let _gcalSig='',_gcalLastAuto=0;   // auto-sync: signature of the last imported events + time of the last silent attempt
 let AI_SOFT=[];              // Maya's flexible, learned preferences/boundaries (persisted: ai:soft) — soft context only, never an engine rule
 let _accForced=false;
@@ -4677,7 +4715,7 @@ function handleAddTask(){
   if(taskType==='small'){
     const s=structuredClone(STATE_ACTIVE);
     if(!s.microTasks)s.microTasks={categories:['כספים','בירוקרטיה','שיחות','שגרה','כללי'],tasks:[]};
-    s.microTasks.tasks.push({id:'mt'+Date.now(),title,category:'כללי',urgency,calId:calendarId,doneWeeks:[]});
+    s.microTasks.tasks.push(smallNew(title,s.meta.today,{urgency,calId:calendarId}));
     STATE_ACTIVE=commitState(s,'add-microtask');
     document.getElementById('formOk').textContent='✅ משימה קטנה נוספה';
     document.getElementById('formOk').style.display='block';
@@ -5084,6 +5122,13 @@ function _aiSyncChatState(){
   pane.classList.toggle('has-chat',has);
   const box=document.getElementById('mayaInsights'),tg=document.getElementById('mayaInsToggle');
   if(tg)tg.style.display=(has&&box&&box.children.length>0)?'inline-block':'none';
+}
+// Hidden SMALL_ADD block: small things the person mentioned that just must not be forgotten (no fixed time). Pure extractor: max 6, titles trimmed, empties dropped.
+function _aiExtractSmallAdd(fullText){
+  const m=String(fullText||'').match(/```SMALL_ADD\s*([\s\S]*?)```/);if(!m)return[];
+  let o;try{o=JSON.parse(m[1]);}catch(_e){return[];}
+  const arr=Array.isArray(o&&o.tasks)?o.tasks:[];
+  return arr.map(x=>typeof x==='string'?{title:x}:x).filter(x=>x&&typeof x.title==='string'&&x.title.trim()).slice(0,6).map(x=>({title:x.title.trim().slice(0,120),important:x.important===true}));
 }
 function _aiAppendBubble(text,who){
   const log=document.getElementById('aiChatLog');
@@ -5634,6 +5679,7 @@ function renderMayaScreen(){
   box.textContent='';
   _aiRefreshGreeting();
   if(!STATE_ACTIVE){try{_aiSyncChatState();}catch(_e){}return;}
+  {const _st=smallEnsureMeta(STATE_ACTIVE);if(_st!==STATE_ACTIVE)STATE_ACTIVE=commitState(_st,'small-stamp',{render:false});}
   const I=computeMayaInsights(STATE_ACTIVE);
   const mk=(cls,css)=>{const d=document.createElement('div');d.className=cls;d.style.cssText=css;return d;};
   if(STATE_ACTIVE.meta&&STATE_ACTIVE.meta.onboarded){
@@ -5661,6 +5707,7 @@ function renderMayaScreen(){
       box.appendChild(card);
     }
   }
+  try{if(STATE_ACTIVE.meta&&STATE_ACTIVE.meta.onboarded)renderSmallMayaCards(box);}catch(_se){console.warn('small cards failed',_se);}
   try{if(STATE_ACTIVE.meta&&STATE_ACTIVE.meta.onboarded)renderKnowCard(box);}catch(_ke){console.warn('know card failed',_ke);}
   const crit=I.atRisk.filter(x=>x.level==='critical');
   crit.slice(0,3).forEach(c=>{
@@ -5679,7 +5726,7 @@ function renderMayaScreen(){
 // Blocks the user must NEVER see. Pure. Removes closed fenced blocks of the given names
 // (case-insensitive, all occurrences) and any trailing UNCLOSED block of those names
 // (e.g. a reply cut off mid-block). Ordinary code fences are left alone.
-const AI_HIDDEN_BLOCKS=['SEMANTIC_PLAN','PLAN_JSON','PROFILE_UPDATE','LEARN_RULE','SOFT_RULE','CAL_CREATE'];
+const AI_HIDDEN_BLOCKS=['SEMANTIC_PLAN','PLAN_JSON','PROFILE_UPDATE','LEARN_RULE','SOFT_RULE','CAL_CREATE','SMALL_ADD'];
 function _aiStripHidden(text,names){
   const alt=(names||AI_HIDDEN_BLOCKS).join('|');
   return String(text||'')
@@ -5735,6 +5782,7 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 5. למידה מתמשכת: בכל הודעה את/ה מקבל/ת מחדש את כל מה שלמדת — נתוני הלוח העדכניים, הפרופיל, כל הכללים וההעדפות מהגרירות — ותשובתך צריכה להתבסס על כולם יחד, לא רק על ההודעה האחרונה. כשהמשתמש/ת מגלה העדפה או הרגל חדשים (למשל "אני לא יכול ללמוד בערב"), צרף/י בסוף בלוק \`\`\`LEARN_RULE עם JSON: {"add":["כלל קצר וברור, עד 140 תווים"],"remove":["קטע מדויק מכלל ישן שהכלל החדש מחליף או סותר"]}. אל תוסיף/י כלל שכבר קיים, אל תנסח/י כללים על דברים חד-פעמיים, ושפר/י כללים קיימים (החלף/י ניסוח לא מדויק) במקום לצבור כפילויות. כשתשובה נוגעת למשימות בסיכון או לשעות פנויות — השתמש/י במספרים מנתוני הלוח העדכניים בלבד, אל תמציא/י.
 6. תהליך נסתר בכל הודעה (המשתמש/ת לא רואה אותו): לפני שאת/ה כותב/ת תשובה — (א) עבור/י על כל הכללים שקיבלת, (ב) הסק/י מההודעה, מהתגובות האחרונות של המשתמש/ת להצעות שלך ומנתוני הלוח מה חדש, מה השתנה ומה כבר לא נכון, (ג) עדכן/י את הכללים בבלוק LEARN_RULE — הוסף/י כלל חדש, החלף/י כלל שהתברר כלא מדויק, הסר/י כלל שנסתר. אם לא נלמד דבר חדש — אל תצרף/י בלוק. הבלוקים הנסתרים (LEARN_RULE, PROFILE_UPDATE) נמחקים אוטומטית לפני שהמשתמש/ת רואה את התשובה.
 6ב. גבולות והעדפות גמישים ("מה מאיה יודעת עליו/ה"): את/ה לא מכונה בינארית. כשאת/ה מזהה דפוס או העדפה — אל תקבע/י כלל מיד. שאל/י בעדינות ובקצרה, למשל "רוצה שאנסה לא להכניס לך דברים בשישי?", ורק אחרי שהמשתמש/ת הסכים/ה צרף/י בלוק \`\`\`SOFT_RULE עם JSON: {"add":[{"what":"להכניס לך משימות ביום שישי","pol":"avoid","strength":"try","kind":"boundary"}],"exception":["שישי"],"soften":["..."],"remove":["..."]}. what הוא ביטוי קצר בלשון המקור ("להכניס…", "לשמור על…"); pol הוא avoid (לא) או prefer (כן); kind הוא value (מה חשוב לו/ה), boundary (גבול/העדפה) או rhythm (איך הוא/היא עובד/ת). strength תמיד "try" אלא אם המשתמש/ת אמר/ה במפורש "תמיד/אף פעם" — אז "firm" עם שדה quote שהוא ציטוט מדויק מהודעתו/ה. כשהמשתמש/ת מבקש/ת חריגה חד-פעמית ("הפעם כן") — עשי זאת בלי להתווכח, אל תסיר/י את הכלל, וצרף/י "exception". אם החריגות חוזרות — הצע/י לרכך ("נראה שזה כבר לא תמיד נכון, לרכך?"). בניסוח: בקשי רשות והציעי ("אשתדל", "בדרך כלל", "רוצה שננסה?"), לא "אסור/חובה/אי אפשר", ואל תחזור/י על אותה הצעה פעמיים. הבלוק נסתר מהמשתמש/ת.
+7ב. משימות קטנות בלי זמן קבוע ("להתקשר לרואה חשבון", "לקנות מתנה"): כשהמשתמש/ת מזכיר/ה כמה דברים קטנים שאסור לשכוח, הוסיפי בסוף התשובה בלוק מוסתר \`\`\`SMALL_ADD {"tasks":[{"title":"...","important":false}]} \`\`\` (important:true רק אם אמר/ה במפורש שזה חשוב/דחוף), והזכירי במשפט אחד שהוספת ל"לא לשכוח". אל תמציאי משימות. פגישה בזמן מסוים היא אירוע ולא משימה קטנה. ברשימת המשימות שב-state מופיעות משימות קטנות — מותר להציע איפה לשבץ אותן, ובמשימה מסומנת כחשובה אפשר להזכיר בעדינות.
 7א. יצירת אירוע ביומן גוגל: רק כשהמשתמש/ת מבקש/ת במפורש להוסיף אירוע ליומן גוגל שלו/ה, ורק אם בהקשר כתוב שיומן גוגל מחובר וכתיבה מאופשרת — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM"}]} (עד 3 אירועים, באותו יום, שעת סיום אחרי התחלה). בטקסט עצמו אל תטען/י שהאירוע כבר נוצר — הוא ייווצר רק אחרי שהמשתמש/ת יאשר בכרטיס שיופיע. אם חסר תאריך או שעה — שאל/י קודם. אם הכתיבה לא מאופשרת — הסבר/י בקצרה שצריך לאפשר ב-👤 החשבון, ואל תצרף/י בלוק.
 7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
@@ -5850,7 +5898,7 @@ async function sendAIMessage(){
     const displayText=strippedText||(anyMatch?'הבנתי — הכנתי הצעה, אשר/י למטה כדי לבצע 👇':'קיבלתי.');
     _aiAppendBubble(displayText,'bot');
     // History keeps what was proposed (SEMANTIC_PLAN) but not the learning blocks — rules are re-sent fresh every turn.
-    AI_CHAT_HISTORY.push({role:'assistant',content:_aiStripHidden(fullText,['PROFILE_UPDATE','LEARN_RULE','SOFT_RULE','CAL_CREATE']),displayText});
+    AI_CHAT_HISTORY.push({role:'assistant',content:_aiStripHidden(fullText,['PROFILE_UPDATE','LEARN_RULE','SOFT_RULE','CAL_CREATE','SMALL_ADD']),displayText});
     {
       const ru=_aiExtractRuleUpdate(fullText);
       if(ru){
@@ -5887,6 +5935,7 @@ async function sendAIMessage(){
       }
     }
     {const _cc=_aiExtractCalCreate(fullText);if(_cc.length)_aiOfferCalCreate(_cc);}
+    {const _sa=_aiExtractSmallAdd(fullText);if(_sa.length){let n=0;_sa.forEach(x=>{if(smallAdd(x.title,{important:x.important}))n++;});if(n){showToast(n===1?'נוספה משימה קטנה ל"לא לשכוח" ✓':n+' משימות קטנות נוספו ל"לא לשכוח" ✓');try{renderMayaScreen();}catch(_e){}}}}
     _aiSaveHistory();
 
     if(anyMatch){
@@ -6070,7 +6119,8 @@ function _aiCurrentItemsSummary(){
       });
     });
     (STATE_ACTIVE.microTasks?.tasks||[]).forEach(t=>{
-      allTasks.push({id:t.id,title:t.title,label:'משימה קטנה',deadline:null,remaining:null,deadlineSort:'9999-99-99'});
+      if(!smallIsOpen(t,planningWeekId(parseISO(STATE_ACTIVE.meta.today))))return;
+      allTasks.push({id:t.id,title:t.title,label:'משימה קטנה'+(t.important?', מסומנת כחשובה':''),deadline:null,remaining:null,deadlineSort:'9999-99-99'});
     });
     allTasks.sort((a,b)=>a.deadlineSort<b.deadlineSort?-1:a.deadlineSort>b.deadlineSort?1:0);
     const shown=allTasks.slice(0,MAX_TASKS_SHOWN);
@@ -6841,6 +6891,7 @@ function levelLabel(level){
 function boardSetCat(c){_boardCat=c;renderTaskBoard();}
 const _CAT_COLORS={work:'#4a6cf7',study:'#7c4dff',family:'#ec4899',health:'#16a34a',finance:'#d97706',errands:'#f97316',rest:'#0d9488',other:'#7b8199'};
 function renderTaskBoard(){
+  try{renderSmallPool();}catch(_e){console.warn('small pool failed',_e);}
   if(!RESULT_P||!RESULT_W)return;
   const q=(document.getElementById('boardSearch')?.value||'').trim().toLowerCase();
   const today=STATE_ACTIVE.meta.today;
@@ -6902,7 +6953,7 @@ function renderTaskBoard(){
     });
   });
   const empty=document.getElementById('boardEmpty');
-  if(empty)empty.style.display=items.length===0?'flex':'none';
+  if(empty)empty.style.display=(items.length===0&&!(STATE_ACTIVE.microTasks?.tasks||[]).some(t=>smallIsOpen(t)))?'flex':'none';
   if(items.length>0&&list.length===0){const n=document.createElement('div');n.className='tk-empty';n.textContent='לא נמצאו משימות מתאימות.';box.appendChild(n);}
 }
 
@@ -8557,6 +8608,146 @@ function _finalizeReservePromotion(){
    ═══════════════════════════════════════════════════════ */
 let _microActiveCat = 'כספים';
 
+/* ═══════════════════════════════════════════════════════
+   SMALL-TASK POOL — one place for everything small that must not be forgotten.
+   Every item carries an INTERNAL importance score (never shown to the person) that decides
+   what Maya reminds about and what she asks "still relevant?" about. All helpers below are PURE.
+   ═══════════════════════════════════════════════════════ */
+function _sDays(fromISO,toISO){const a=Date.parse(fromISO+'T12:00:00Z'),b=Date.parse(toISO+'T12:00:00Z');return isNaN(a)||isNaN(b)?0:Math.round((b-a)/86400000);}
+function _sAdd(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+function smallImportantFromText(title){return /(^|[\s,.!:;-])(חשוב|חשובה|דחוף|דחופה|בהכרח|לא לשכוח)([\s,.!:;-]|$)/.test(String(title||''));}
+function smallIsDone(t,wkId){return !!(t&&(t.doneAt||(wkId&&(t.doneWeeks||[]).includes(wkId))));}
+function smallIsOpen(t,wkId){return !!t&&!t.archived&&!smallIsDone(t,wkId);}
+// 0–100, internal. Importance first, then closeness of a date, then category weight; many postponements lower it (probably not that important).
+function smallScore(t,today){
+  if(!t)return 0;
+  let s=20;
+  if(t.important||smallImportantFromText(t.title))s+=40;
+  if(t.due){const d=_sDays(today,t.due);s+=d<=0?35:d<=2?25:d<=7?12:0;}
+  if(t.urgency==='thisweek')s+=15;else if(t.urgency==='later')s-=8;
+  if(/כספים|בירוקרטיה/.test(String(t.category||'')))s+=8;
+  if(/(רופא|בריאות|תשלום|חשבון|מס\b|ביטוח|הורים|ילד|משפחה)/.test(String(t.title||'')))s+=8;
+  s-=Math.min(18,(t.deferrals||0)*6);
+  return Math.max(0,Math.min(100,s));
+}
+function smallAgeDays(t,today){const from=t.lastKeptAt||t.createdAt||today;return Math.max(0,_sDays(from,today));}
+function smallSnoozed(t,today){return !!(t&&t.snoozedUntil&&t.snoozedUntil>today);}
+// The ones worth bringing up now: open, not snoozed, highest internal score first.
+function smallTop(tasks,today,wkId,n){
+  return (tasks||[]).filter(t=>smallIsOpen(t,wkId)&&!smallSnoozed(t,today)).map(t=>({t,sc:smallScore(t,today)}))
+    .sort((a,b)=>b.sc-a.sc||String(a.t.createdAt||'').localeCompare(String(b.t.createdAt||''))).slice(0,n||3).map(x=>x.t);
+}
+// Reminders: only things that matter (marked important / due soon / high score). Everything else stays quietly in the pool.
+function smallReminders(tasks,today,wkId,n){
+  return smallTop(tasks,today,wkId,50).filter(t=>smallScore(t,today)>=55).slice(0,n||3);
+}
+// "Still relevant?" candidates: open for a long time, not important, not asked recently. At most `max`, oldest first.
+function smallCheckIn(tasks,today,wkId,max){
+  return (tasks||[]).filter(t=>smallIsOpen(t,wkId)&&!smallSnoozed(t,today)&&!(t.important||smallImportantFromText(t.title))
+      &&smallAgeDays(t,today)>=SMALL_STALE_DAYS&&(!t.lastAskedAt||_sDays(t.lastAskedAt,today)>=SMALL_ASK_GAP_DAYS))
+    .sort((a,b)=>smallAgeDays(b,today)-smallAgeDays(a,today)).slice(0,max||SMALL_BATCH_MAX);
+}
+// answer: keep | later | drop | done | star
+function smallApplyAnswer(t,answer,today){
+  const n={...t};
+  if(answer==='keep'){n.lastAskedAt=today;n.lastKeptAt=today;}
+  else if(answer==='later'){n.lastAskedAt=today;n.snoozedUntil=_sAdd(today,SMALL_SNOOZE_DAYS);n.deferrals=(n.deferrals||0)+1;}
+  else if(answer==='drop'){n.archived=true;n.archivedAt=today;}
+  else if(answer==='done'){n.doneAt=today;}
+  else if(answer==='star'){n.important=true;}
+  else if(answer==='unstar'){n.important=false;}
+  else if(answer==='restore'){n.archived=false;n.archivedAt=undefined;n.lastKeptAt=today;n.lastAskedAt=undefined;}
+  return n;
+}
+// Stamp creation date / defaults once (legacy items have none). Returns the SAME state object when nothing changed.
+function smallEnsureMeta(state){
+  const mt=state&&state.microTasks;if(!mt||!Array.isArray(mt.tasks))return state;
+  const today=state.meta&&state.meta.today;if(!today)return state;
+  if(!mt.tasks.some(t=>t&&!t.createdAt))return state;
+  return{...state,microTasks:{...mt,tasks:mt.tasks.map(t=>t&&!t.createdAt?{...t,createdAt:today}:t)}};
+}
+function smallNew(title,today,opts){
+  opts=opts||{};const ti=String(title||'').trim().slice(0,120);
+  return{id:'mt_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),title:ti,category:opts.category||'כללי',urgency:opts.urgency||'normal',calId:opts.calId||'personal',doneWeeks:[],createdAt:today,important:!!(opts.important||smallImportantFromText(ti)),...(opts.due?{due:opts.due}:{})};
+}
+function _smallMutate(fn,tag){
+  const s=structuredClone(STATE_ACTIVE);if(!s.microTasks)s.microTasks={categories:['כספים','בירוקרטיה','שיחות','שגרה','כללי'],tasks:[]};
+  fn(s.microTasks);STATE_ACTIVE=commitState(s,tag);
+}
+function smallAdd(title,opts){
+  const t=smallNew(title,STATE_ACTIVE.meta.today,opts);if(!t.title)return null;
+  const dup=(STATE_ACTIVE.microTasks?.tasks||[]).some(x=>smallIsOpen(x)&&x.title===t.title);if(dup)return null;
+  _smallMutate(mt=>mt.tasks.push(t),'small-add');return t;
+}
+function smallAnswer(id,answer){
+  _smallMutate(mt=>{mt.tasks=mt.tasks.map(t=>t.id===id?smallApplyAnswer(t,answer,STATE_ACTIVE.meta.today):t);},'small-answer');
+  try{renderSmallPool();renderMayaScreen();}catch(_e){}
+}
+function _smallBatchDismissedToday(){try{return localStorage.getItem(SMALL_BATCH_KEY)===STATE_ACTIVE.meta.today;}catch(_e){return false;}}
+function smallBatchDismiss(){try{localStorage.setItem(SMALL_BATCH_KEY,STATE_ACTIVE.meta.today);}catch(_e){}try{renderMayaScreen();}catch(_e){}}
+function smallPoolAddFromInput(){
+  const i=document.getElementById('smallPoolInput');if(!i||!i.value.trim())return;
+  const t=smallAdd(i.value);i.value='';
+  if(t){showToast('נוסף ✓');try{renderSmallPool();renderMayaScreen();}catch(_e){}}
+}
+function renderSmallPool(){
+  const box=document.getElementById('smallPoolList');if(!box||!STATE_ACTIVE)return;
+  const today=STATE_ACTIVE.meta.today,wk=planningWeekId(parseISO(today)),all=STATE_ACTIVE.microTasks?.tasks||[];
+  const open=all.filter(t=>smallIsOpen(t,wk)).map(t=>({t,sc:smallScore(t,today)})).sort((a,b)=>b.sc-a.sc||String(a.t.createdAt||'').localeCompare(String(b.t.createdAt||''))).map(x=>x.t);
+  const arch=all.filter(t=>t.archived);
+  box.textContent='';
+  const cnt=document.getElementById('smallPoolCount');if(cnt)cnt.textContent=open.length?String(open.length):'';
+  if(!open.length){const e=document.createElement('div');e.className='sp-empty';e.textContent='אין כרגע משימות קטנות. כתוב כאן משהו שחשוב לא לשכוח, או ספר למאיה.';box.appendChild(e);}
+  const row=(t,isArch)=>{
+    const r=document.createElement('div');r.className='sp-row'+(t.important?' sp-imp':'')+(isArch?' sp-arch':'');
+    const cb=document.createElement('input');cb.type='checkbox';cb.setAttribute('aria-label','בוצע');cb.disabled=!!isArch;cb.onchange=()=>smallAnswer(t.id,'done');
+    const tx=document.createElement('span');tx.className='sp-t';tx.textContent=t.title;
+    r.appendChild(cb);r.appendChild(tx);
+    if(!isArch){
+      const st=document.createElement('button');st.type='button';st.className='sp-star'+(t.important?' on':'');st.textContent=t.important?'★':'☆';st.title=t.important?'חשוב — מאיה תזכיר':'סמן כחשוב';st.setAttribute('aria-label',st.title);st.onclick=()=>smallAnswer(t.id,t.important?'unstar':'star');r.appendChild(st);
+      const x=document.createElement('button');x.type='button';x.className='sp-x';x.textContent='✕';x.title='הסר (נשמר בארכיון)';x.setAttribute('aria-label','הסר');x.onclick=()=>smallAnswer(t.id,'drop');r.appendChild(x);
+    }else{
+      const rb=document.createElement('button');rb.type='button';rb.className='sp-restore';rb.textContent='החזר';rb.onclick=()=>smallAnswer(t.id,'restore');r.appendChild(rb);
+    }
+    return r;
+  };
+  open.forEach(t=>box.appendChild(row(t,false)));
+  if(arch.length){
+    const tg=document.createElement('button');tg.type='button';tg.className='sp-arch-toggle';tg.textContent=(_smallShowArchive?'הסתר ארכיון':'ארכיון ('+arch.length+')');tg.onclick=()=>{_smallShowArchive=!_smallShowArchive;renderSmallPool();};box.appendChild(tg);
+    if(_smallShowArchive)arch.forEach(t=>box.appendChild(row(t,true)));
+  }
+}
+// Maya screen: "don't forget" reminders + ONE small batch of "still relevant?" per day.
+function renderSmallMayaCards(box){
+  const today=STATE_ACTIVE.meta.today,wk=planningWeekId(parseISO(today)),all=STATE_ACTIVE.microTasks?.tasks||[];
+  const mk=(cls)=>{const d=document.createElement('div');d.className='maya-card '+cls;return d;};
+  const rem=smallReminders(all,today,wk,3);
+  if(rem.length){
+    const c=mk('maya-small');const h=document.createElement('div');h.className='ms-h';h.textContent='🧷 כדאי לא לשכוח';c.appendChild(h);
+    rem.forEach(t=>{
+      const r=document.createElement('div');r.className='ms-row';const tx=document.createElement('span');tx.textContent=t.title;r.appendChild(tx);
+      const a=document.createElement('button');a.type='button';a.className='ms-btn';a.textContent='מתי?';a.onclick=()=>{_aiAskAbout_small(t.title);};r.appendChild(a);
+      const d=document.createElement('button');d.type='button';d.className='ms-btn ms-ok';d.textContent='✓';d.setAttribute('aria-label','בוצע');d.onclick=()=>smallAnswer(t.id,'done');r.appendChild(d);
+      c.appendChild(r);
+    });
+    box.appendChild(c);
+  }
+  if(_smallBatchDismissedToday())return;
+  const q=smallCheckIn(all,today,wk,SMALL_BATCH_MAX);
+  if(!q.length)return;
+  const c=mk('maya-small maya-ask');const h=document.createElement('div');h.className='ms-h';h.textContent='🤔 עדיין רלוונטי?';c.appendChild(h);
+  q.forEach(t=>{
+    const r=document.createElement('div');r.className='ms-q';const tx=document.createElement('div');tx.className='ms-qt';tx.textContent='"'+t.title+'" — פתוחה כבר '+smallAgeDays(t,today)+' ימים';r.appendChild(tx);
+    const bs=document.createElement('div');bs.className='ms-bs';
+    [['keep','להשאיר'],['later','לדחות'],['drop','להוריד'],['done','כבר עשיתי']].forEach(([k,l])=>{const b=document.createElement('button');b.type='button';b.className='ms-btn';b.textContent=l;b.onclick=()=>smallAnswer(t.id,k);bs.appendChild(b);});
+    r.appendChild(bs);c.appendChild(r);
+  });
+  const nn=document.createElement('button');nn.type='button';nn.className='ms-later';nn.textContent='לא עכשיו';nn.onclick=smallBatchDismiss;c.appendChild(nn);
+  box.appendChild(c);
+}
+function _aiAskAbout_small(title){const i=document.getElementById('aiChatInput');if(!i)return;i.value='מתי כדאי לעשות את "'+title+'"?';sendAIMessage();}
+
+
 function renderMicroTasks(){
   const mt=STATE_ACTIVE.microTasks||{categories:[],tasks:[]};
   const cats=mt.categories||[];
@@ -8602,7 +8793,7 @@ function setMicroCat(cat){
 function addMicroTask(){
   const inp=document.getElementById('microTaskInput');
   if(!inp||!inp.value.trim())return;
-  const task={id:'mt_'+Date.now(),title:inp.value.trim(),category:_microActiveCat,doneWeeks:[]};
+  const task=smallNew(inp.value.trim(),STATE_ACTIVE.meta.today,{category:_microActiveCat});
   const s=structuredClone(STATE_ACTIVE);
   if(!s.microTasks)s.microTasks={categories:['כספים','בירוקרטיה','שיחות','שגרה','כללי'],tasks:[]};
   s.microTasks.tasks.push(task);
@@ -9003,13 +9194,7 @@ function qaGo(){
     // Small task → micro engine (grouped by category, 5=1hr block)
     const s=structuredClone(STATE_ACTIVE);
     if(!s.microTasks)s.microTasks={categories:['כספים','בירוקרטיה','שיחות','שגרה','כללי'],tasks:[]};
-    s.microTasks.tasks.push({
-      id:'mt'+Date.now(),title:name,
-      category:_microActiveCat||'כללי',
-      urgency:_qu,
-      calId:_qCal||ACTIVE_CALENDAR,
-      doneWeeks:[]
-    });
+    s.microTasks.tasks.push(smallNew(name,s.meta.today,{category:_microActiveCat||'כללי',urgency:_qu,calId:_qCal||ACTIVE_CALENDAR}));
     STATE_ACTIVE=commitState(s,'quick-add-microtask',{save:false,render:false});
 
   } else if(_qt==='exam'){
