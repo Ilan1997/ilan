@@ -557,3 +557,11 @@ Tasks page: header + "➕ משימה חדשה" + search/filter + one table per w
 - **התנהגות:** `smallReminders` (ציון ≥55, עד 3) → כרטיס "כדאי לא לשכוח" במסך מאיה עם "מתי?" (פותח שיחה לשיבוץ) ו-✓. `smallCheckIn` → כרטיס "עדיין רלוונטי?" אחד ליום, עד 3 משימות פתוחות ≥10 ימים, לא חשובות, שלא נשאלו ב-7 הימים האחרונים; תשובות: להשאיר / לדחות (שבוע) / להוריד (ארכיון, לא מחיקה) / כבר עשיתי; "לא עכשיו" מבטל את הכרטיס עד מחר (`maya_small_batch`). לא נשאלות משימות חשובות.
 - **שיחה:** בלוק מוסתר חדש `SMALL_ADD` (`_aiExtractSmallAdd`, עד 6, ללא כפילויות) מוסיף למאגר דברים קטנים שהוזכרו; הפרומפט מבדיל בין אירוע בזמן קבוע (CAL_CREATE) למשימה קטנה, ומשימות קטנות מופיעות בהקשר של מאיה (כולל "מסומנת כחשובה").
 - **החלטה מודעת:** אין ארכוב אוטומטי — מאיה רק מציעה. בדיקה: `small-task pool` ב-`tests/run.js`. לא נבדק מול Gemini אמיתי (האם המודל באמת פולט `SMALL_ADD`).
+
+## 49. Maya places a meeting (step 2)
+- User says "I need to schedule X" → the model emits only a hidden `MEETING_REQUEST {title,durationMin,domain,date?,after?}` block (never hours). `_aiExtractMeeting` validates/clamps it (duration 15–480, domain work|life, ISO date, HH:MM).
+- Hours are computed in JS by the pure, deterministic `suggestSlots` (engine-legal free hours from `buildEngine().derived.allFreeSlots` minus assignments, minute-precision busy intervals from events; 30-min grid, 08:00–20:00, not in the past, ≥30 min from now today). Scoring: lighter day, daytime hours, buffer ≥10 min from neighbours, requested date/after-hour; one best slot per day first for variety. Each option carries a short reason string.
+- `_aiOfferMeeting` renders up to 3 option buttons + "לא עכשיו". A click creates the event: Google (`gcalCreateEvent` with domain) when write is enabled, otherwise a local `ADD_GLOBAL_EVENT` with startMin/endMin. Afterwards a "↩️ בטל" button deletes it (`gcalDeleteEvent` / `REMOVE_GLOBAL_EVENT`).
+- Hour granularity: the engine is hour-based, so options start on :00/:30 but never overlap engine-blocked hours.
+- Not verified live: Gemini actually emitting `MEETING_REQUEST`; real Google POST/DELETE round trip.
+- Tests: "maya meeting placement" in `tests/run.js`.

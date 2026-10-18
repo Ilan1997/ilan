@@ -137,6 +137,58 @@ const w=dom.window;
       return o;})()`);
     const oks=Object.values(r).every(Boolean);rows.push(['small-task pool',String(oks)+(oks?'':' '+JSON.stringify(r))]);if(!oks)failed=true;
   }catch(e){rows.push(['small-task pool','THROW '+e.message]);failed=true;}
+  // step 2: Maya places a meeting — pure suggester + request extractor + one-click create + undo
+  try{
+    const r=await w.eval(`(async()=>{const o={};const T='2026-10-19';
+      const free=(d,a,b)=>{const x=[];for(let h=a;h<b;h++)x.push(h);return x;};
+      const fh={'2026-10-19':free(0,8,20),'2026-10-20':free(0,8,20),'2026-10-21':free(0,8,20),'2026-10-22':[9,10]};
+      const busy={'2026-10-19':[[600,660],[720,780],[840,900]],'2026-10-20':[]};
+      const A=()=>suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:fh,busy,days:7,count:3});
+      const a=A();
+      o.three=a.length===3&&JSON.stringify(a)===JSON.stringify(A());
+      o.noOverlap=a.every(x=>!(busy[x.date]||[]).some(b=>x.startMin<b[1]&&x.endMin>b[0]));
+      o.freeOnly=a.every(x=>{for(let h=Math.floor(x.startMin/60);h<Math.ceil(x.endMin/60);h++)if(!fh[x.date].includes(h))return false;return true;});
+      o.variety=new Set(a.map(x=>x.date)).size===3;
+      o.quietFirst=a.some(x=>x.date==='2026-10-20'&&x.reason==='יום בלי אירועים אחרים');
+      const pn=suggestSlots({today:T,nowMin:15*60,durationMin:60,freeHours:fh,busy:{},days:1,count:3});
+      o.future=pn.length===1&&pn[0].startMin>=15*60+30;
+      const pd=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:fh,busy,days:7,count:2,preferDate:'2026-10-21'});
+      o.prefer=pd.some(x=>x.date==='2026-10-21'&&x.reason==='ביום שביקשת');
+      const af=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:fh,busy:{},days:1,count:1,afterMin:16*60});
+      o.after=af.length===1&&af[0].startMin>=16*60;
+      o.tooLong=suggestSlots({today:T,nowMin:0,durationMin:180,freeHours:{'2026-10-22':[9,10]},busy:{},days:7}).length===0;
+      o.badToday=suggestSlots({today:'x',freeHours:fh}).length===0;
+      const ex=_aiExtractMeeting('בודקת\\n\`\`\`MEETING_REQUEST\\n{"title":"  רואה חשבון ","durationMin":45,"domain":"work","date":"2026-10-21","after":"14:30"}\\n\`\`\`');
+      o.ext=ex&&ex.title==='רואה חשבון'&&ex.durationMin===45&&ex.domain==='work'&&ex.date==='2026-10-21'&&ex.afterMin===870;
+      const ex2=_aiExtractMeeting('\`\`\`MEETING_REQUEST\\n{"title":"x","durationMin":99999,"domain":"?","date":"נכשל","after":"25:00"}\\n\`\`\`');
+      o.extClamp=ex2.durationMin===480&&ex2.domain==='life'&&ex2.date===null&&ex2.afterMin===null;
+      o.extBad=_aiExtractMeeting('אין')===null&&_aiExtractMeeting('\`\`\`MEETING_REQUEST\\nלא json\\n\`\`\`')===null&&_aiExtractMeeting('\`\`\`MEETING_REQUEST\\n{"title":""}\\n\`\`\`')===null;
+      o.hidden=_aiStripHidden('בודקת\\n\`\`\`MEETING_REQUEST\\n{"title":"x"}\\n\`\`\`').trim()==='בודקת';
+      o.prompt=AI_SYSTEM_PROMPT_BASE.includes('MEETING_REQUEST');
+      const sa=STATE_ACTIVE,prevPrefs=localStorage.getItem(GCAL_PREF_KEY);
+      try{
+        localStorage.removeItem(GCAL_PREF_KEY);
+        const s0=structuredClone(STATE_ACTIVE);s0.meta.onboarded=true;STATE_ACTIVE=commitState(s0,'t',{save:false,render:false});
+        switchTab('ai');
+        const before=(STATE_ACTIVE.constraintsGlobal.events||[]).length;
+        const card=_aiOfferMeeting({title:'פגישת בדיקה',durationMin:60,domain:'work',date:null,afterMin:null});
+        const bs=card?[...card.querySelectorAll('button')]:[];
+        o.card=!!card&&bs.length>=2&&/פגישת בדיקה/.test(card.textContent);
+        bs[0].click();await new Promise(r=>setTimeout(r,20));
+        const evs=STATE_ACTIVE.constraintsGlobal.events||[];
+        const ne=evs.find(e=>e.title==='פגישת בדיקה');
+        o.created=evs.length===before+1&&!!ne&&Number.isInteger(ne.startMin)&&ne.domain==='work'&&ne.endMin-ne.startMin===60;
+        const ub=[...card.querySelectorAll('button')].find(b=>/בטל/.test(b.textContent));
+        o.undoBtn=!!ub;
+        ub.click();await new Promise(r=>setTimeout(r,20));
+        o.undone=(STATE_ACTIVE.constraintsGlobal.events||[]).length===before&&!(STATE_ACTIVE.constraintsGlobal.events||[]).some(e=>e.title==='פגישת בדיקה');
+        const c2=_aiOfferMeeting({title:'עוד',durationMin:60,domain:'life',date:null,afterMin:null});
+        [...c2.querySelectorAll('button')].pop().click();
+        o.dismiss=!c2.querySelector('button')&&/לא קבעתי/.test(c2.textContent);
+      }finally{if(sa)STATE_ACTIVE=commitState(sa,'test-restore',{save:false,render:false});if(prevPrefs)localStorage.setItem(GCAL_PREF_KEY,prevPrefs);}
+      return o;})()`);
+    const okm=Object.values(r).every(Boolean);rows.push(['maya meeting placement',String(okm)+(okm?'':' '+JSON.stringify(r))]);if(!okm)failed=true;
+  }catch(e){rows.push(['maya meeting placement','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);
