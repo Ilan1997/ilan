@@ -1,0 +1,432 @@
+{
+ "S01_after_meeting_chain": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "נסיעה לאריאל",
+    "kind": "travel",
+    "place": "אריאל",
+    "anchor": {
+     "rel": "after",
+     "target": {
+      "text": "הפגישה בפתח תקווה",
+      "date": "2026-11-16"
+     }
+    }
+   },
+   {
+    "ref": "i2",
+    "title": "בית מדרש",
+    "kind": "religious",
+    "durationMin": 60,
+    "afterItem": "i1"
+   },
+   {
+    "ref": "i3",
+    "title": "עבודה",
+    "kind": "work",
+    "afterItem": "i2"
+   },
+   {
+    "ref": "i4",
+    "title": "קניות",
+    "kind": "shopping",
+    "afterItem": "i3"
+   },
+   {
+    "ref": "i5",
+    "title": "תורה בחווה",
+    "kind": "religious",
+    "place": "חווה",
+    "window": {
+     "from": "18:00",
+     "to": "22:00"
+    },
+    "afterItem": "i4"
+   }
+  ]
+ },
+ "S02_today_set": {
+  "op": "arrange",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "זום",
+    "kind": "meeting"
+   },
+   {
+    "ref": "i2",
+    "title": "בית מדרש",
+    "kind": "religious"
+   },
+   {
+    "ref": "i3",
+    "title": "קניות",
+    "kind": "shopping"
+   },
+   {
+    "ref": "i4",
+    "title": "תורה בחווה",
+    "kind": "religious",
+    "place": "חווה"
+   }
+  ]
+ },
+ "S03_move_work_tue_wed": {
+  "op": "move",
+  "filter": {
+   "kind": "work"
+  },
+  "targetDays": [
+   "2026-11-17",
+   "2026-11-18"
+  ],
+  "items": []
+ },
+ "S03b_move_without_days": {
+  "op": "move",
+  "filter": {
+   "kind": "work"
+  },
+  "targetDays": [],
+  "items": []
+ },
+ "S04_no_time_what_drops": {
+  "op": "prune",
+  "items": []
+ },
+ "S05_already_in_talpiot": {
+  "op": "create",
+  "context": {
+   "currentPlace": "תלפיות"
+  },
+  "items": [
+   {
+    "ref": "i1",
+    "title": "בנק",
+    "kind": "errand",
+    "place": "תלפיות"
+   },
+   {
+    "ref": "i2",
+    "title": "אופנוע",
+    "kind": "errand",
+    "place": "תלפיות"
+   }
+  ]
+ },
+ "S06_arrive_early": {
+  "op": "preference",
+  "preference": {
+   "bufferBeforeMin": 30
+  },
+  "items": []
+ },
+ "S06b_arrive_early_global": {
+  "op": "preference",
+  "scope": "global",
+  "preference": {
+   "bufferBeforeMin": 30
+  },
+  "items": []
+ },
+ "S07_dont_know_duration": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "שיחה לביטוח לאומי",
+    "kind": "phone_call",
+    "durationUnknown": true
+   }
+  ]
+ },
+ "S08_dont_overload_monday": {
+  "op": "preference",
+  "preference": {
+   "dayRule": {
+    "dow": 1,
+    "mode": "light"
+   }
+  },
+  "items": []
+ },
+ "S09_when_best": {
+  "op": "find",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "לימוד סטטיסטיקה",
+    "kind": "study"
+   }
+  ]
+ },
+ "S10_five_things_today": {
+  "op": "arrange",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "לשלם ארנונה",
+    "kind": "admin"
+   },
+   {
+    "ref": "i2",
+    "title": "להתקשר לרופא",
+    "kind": "phone_call"
+   },
+   {
+    "ref": "i3",
+    "title": "ללכת לסופר",
+    "kind": "shopping"
+   },
+   {
+    "ref": "i4",
+    "title": "לסיים דוח",
+    "kind": "deep_work"
+   },
+   {
+    "ref": "i5",
+    "title": "להתאמן",
+    "kind": "fitness"
+   }
+  ]
+ },
+ "S11_ambiguous_meeting": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "קניות",
+    "kind": "shopping",
+    "anchor": {
+     "rel": "after",
+     "target": {
+      "text": "הפגישה",
+      "date": "2026-11-16"
+     }
+    }
+   }
+  ]
+ },
+ "S12_low_confidence_kind": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "לבדוק את זה עם דנה",
+    "kind": "personal"
+   }
+  ]
+ },
+ "S13_meeting_at_12_no_duration": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "פגישה עם רואה החשבון",
+    "kind": "meeting",
+    "window": {
+     "from": "12:00",
+     "to": null
+    }
+   }
+  ]
+ },
+ "S14_late_bias": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "פגישה בבנק",
+    "kind": "meeting",
+    "place": "בנק",
+    "window": {
+     "from": "10:00",
+     "to": null
+    }
+   }
+  ]
+ },
+ "S15_user_default_duration": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "קניות",
+    "kind": "shopping"
+   }
+  ]
+ },
+ "E16_call_tomorrow": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "להתקשר לאמא",
+    "kind": "phone_call",
+    "date": "2026-11-16"
+   }
+  ]
+ },
+ "E17_after_zoom": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "הליכה",
+    "kind": "fitness",
+    "durationMin": 30,
+    "anchor": {
+     "rel": "after",
+     "target": {
+      "text": "הזום",
+      "date": "2026-11-17"
+     }
+    }
+   }
+  ]
+ },
+ "E18_before_treatment": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "נסיעה",
+    "kind": "travel",
+    "anchor": {
+     "rel": "before",
+     "target": {
+      "text": "הטיפול",
+      "date": "2026-11-18"
+     }
+    }
+   }
+  ]
+ },
+ "E19_find_dentist": {
+  "op": "find",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "תור לרופא שיניים",
+    "kind": "meeting"
+   }
+  ]
+ },
+ "E20_three_things": {
+  "op": "arrange",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "לכתוב דוח",
+    "kind": "work"
+   },
+   {
+    "ref": "i2",
+    "title": "לשלם חשבון חשמל",
+    "kind": "admin"
+   },
+   {
+    "ref": "i3",
+    "title": "להחזיר ספר לספרייה",
+    "kind": "errand"
+   }
+  ]
+ },
+ "E21_meeting_with_place": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "פגישה עם ארז",
+    "kind": "meeting",
+    "place": "תל אביב",
+    "date": "2026-11-18",
+    "window": {
+     "from": "14:00"
+    }
+   }
+  ]
+ },
+ "E22_drop_less_important": {
+  "op": "prune",
+  "items": []
+ },
+ "E23_move_shopping": {
+  "op": "move",
+  "filter": {
+   "kind": "shopping"
+  },
+  "targetDays": [
+   "2026-11-16"
+  ],
+  "items": []
+ },
+ "E24_while_in_ariel": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "קניות",
+    "kind": "shopping",
+    "anchor": {
+     "rel": "while_in",
+     "target": {
+      "text": "אריאל"
+     }
+    }
+   },
+   {
+    "ref": "i2",
+    "title": "דואר",
+    "kind": "errand",
+    "anchor": {
+     "rel": "while_in",
+     "target": {
+      "text": "אריאל"
+     }
+    }
+   }
+  ]
+ },
+ "E25_motorcycle_then_bank": {
+  "op": "create",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "שיעור אופנוע",
+    "kind": "study",
+    "place": "תלפיות",
+    "date": "2026-11-17",
+    "window": {
+     "from": "17:00"
+    }
+   },
+   {
+    "ref": "i2",
+    "title": "בנק",
+    "kind": "errand",
+    "afterItem": "i1"
+   }
+  ]
+ },
+ "E26_no_saturday": {
+  "op": "preference",
+  "preference": {
+   "dayRule": {
+    "dow": 6,
+    "mode": "rest"
+   }
+  },
+  "items": []
+ },
+ "E27_late_bias": {
+  "op": "preference",
+  "scope": "global",
+  "preference": {
+   "lateBiasMin": 15
+  },
+  "items": []
+ }
+}

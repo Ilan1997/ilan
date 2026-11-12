@@ -221,6 +221,195 @@ const w=dom.window;
       return o;})()`);
     const okm=Object.values(r).every(Boolean);rows.push(['maya meeting placement',String(okm)+(okm?'':' '+JSON.stringify(r))]);if(!okm)failed=true;
   }catch(e){rows.push(['maya meeting placement','THROW '+e.message]);failed=true;}
+  // judgment layer: kinds, places, batching suggestions, overload
+  try{
+    const r=await w.eval(`(async()=>{const o={};const T='2026-10-19';
+      o.kinds=taskKindOf('להתקשר לרואה חשבון')==='phone_call'&&taskKindOf('לקנות חלב')==='errand'&&taskKindOf('לשלם ארנונה')==='admin'&&taskKindOf('פגישה עם דנה')==='meeting'&&taskKindOf('ללמוד לסטטיסטיקה')==='study'&&taskKindOf('לחכות לתשובה מהבנק')==='waiting_for_response'&&taskKindOf('משהו כללי')==='personal';
+      o.travel=taskTravelCompatible({title:'להתקשר לאמא'})&&!taskTravelCompatible({title:'לקנות חלב'});
+      o.place=taskPlaceOf('בנק בתלפיות')==='תלפיות'&&taskPlaceOf('לקנות חלב בבוקר')===''&&taskPlaceOf('לקחת חבילה ב-אריאל')==='אריאל'&&taskPlaceOf('להתקשר')==='';
+      const mk=(id,title)=>({id,title,category:'כללי',doneWeeks:[],createdAt:T});
+      const b=smallBatches([mk('1','להתקשר לרואה חשבון'),mk('2','להתקשר לרופא'),mk('3','בנק בתלפיות'),mk('4','לקחת חבילה בתלפיות'),mk('5','לשלם ארנונה'),mk('6','לעדכן ביטוח'),mk('7','לסדר מסמכים')],T,'W');
+      o.batchCalls=b.some(x=>x.type==='calls'&&x.ids.length===2&&/2 שיחות/.test(x.text));
+      o.batchPlace=b.some(x=>x.type==='place'&&x.place==='תלפיות'&&/2 דברים בתלפיות/.test(x.text));
+      o.batchAdmin=b.some(x=>x.type==='admin'&&x.ids.length===3);
+      o.noBatchSingle=smallBatches([mk('1','להתקשר לרופא'),mk('3','בנק בתלפיות')],T,'W').length===0;
+      o.snoozedIgnored=smallBatches([mk('1','להתקשר לרופא'),{...mk('2','להתקשר לאמא'),snoozedUntil:'2026-12-01'}],T,'W').length===0;
+      o.overFull=dayOverloadVerdict({busyMin:600,addMin:30,capacityMin:720}).level==='full'&&dayOverloadVerdict({busyMin:400,addMin:300,capacityMin:720}).level==='swap'&&dayOverloadVerdict({busyMin:120,addMin:60,capacityMin:720}).level==='ok';
+      const fh={'2026-10-19':[8,9,10,11,12,13,14,15,16,17,18,19],'2026-10-20':[8,9,10,11,12,13,14,15,16,17,18,19]};
+      const full=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:fh,busy:{'2026-10-19':[[480,1020]]},days:2,count:3});
+      o.fullDaySkipped=full.length===1&&full[0].date==='2026-10-20';
+      o.fullDayIfAsked=suggestSlots({today:T,nowMin:0,durationMin:60,freeHours:fh,busy:{'2026-10-19':[[480,1020]]},days:2,count:3,preferDate:'2026-10-19'}).some(x=>x.date==='2026-10-19');
+      o.promptJudg=['שיקול דעת','היום הזה כבר מלא','שמתי שעה','Brain Dump','מצומצמת'].every(k=>AI_SYSTEM_PROMPT_BASE.includes(k));
+      const sa=STATE_ACTIVE;
+      try{
+        const s0=structuredClone(STATE_ACTIVE);s0.meta.onboarded=true;s0.microTasks={categories:['כללי'],tasks:[]};STATE_ACTIVE=commitState(s0,'t',{save:false,render:false});
+        const a=smallAdd('להתקשר לרואה חשבון');smallAdd('להתקשר לרופא');
+        o.kindStored=a.kind==='phone_call';
+        switchTab('ai');renderMayaScreen();
+        o.card=/אפשר לרכז/.test(document.getElementById('mayaInsights').textContent)&&/2 שיחות/.test(document.getElementById('mayaInsights').textContent);
+      }finally{if(sa)STATE_ACTIVE=commitState(sa,'test-restore',{save:false,render:false});}
+      return o;})()`);
+    const okj=Object.values(r).every(Boolean);rows.push(['judgment layer',String(okj)+(okj?'':' '+JSON.stringify(r))]);if(!okj)failed=true;
+  }catch(e){rows.push(['judgment layer','THROW '+e.message]);failed=true;}
+  // planning model (step A) + real-conversation fixtures
+  try{
+    const fx=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures','scenarios.json'),'utf8'));
+    const r=await w.eval(`(async()=>{const FX=${JSON.stringify(fx)};const o={};const fails=[];
+      const sub=(a,b)=>Object.keys(b).every(k=>b[k]&&typeof b[k]==='object'?(a&&a[k]&&sub(a[k],b[k])):a&&a[k]===b[k]);
+      let pending=0,checked=0;
+      FX.scenarios.forEach(sc=>{
+        const E=sc.expect||{};Object.keys(E).forEach(st=>{if(st!=='A'&&E[st].status==='pending')pending++;});
+        const A=E.A;if(!A)return;checked++;
+        const rules=normalizeUserRules(sc.rules);const intent=normalizeIntent(sc.parsed);const g=planningGaps(intent,rules);
+        const bad=(m)=>fails.push(sc.id+': '+m);
+        const askSet=g.ask.map(a=>a.ref+'.'+a.field).sort().join();
+        if(A.ask&&askSet!==A.ask.slice().sort().join())bad('ask '+askSet+' vs '+A.ask);
+        const it=ref=>g.items.find(x=>x.ref===ref);
+        if(A.duration)Object.keys(A.duration).forEach(k=>{const x=it(k);if(!x||x.duration.min!==A.duration[k])bad('duration '+k+'='+(x&&x.duration.min));});
+        if(A.assumedDuration){const got=g.assumptions.filter(a=>a.field==='duration').map(a=>a.ref).sort().join();if(got!==A.assumedDuration.slice().sort().join())bad('assumedDuration '+got);}
+        if(A.durationSource)Object.keys(A.durationSource).forEach(k=>{if(!it(k)||it(k).duration.source!==A.durationSource[k])bad('durationSource '+k);});
+        if(A.rigidity)Object.keys(A.rigidity).forEach(k=>{if(!it(k)||it(k).rigidityResolved.value!==A.rigidity[k])bad('rigidity '+k+'='+(it(k)&&it(k).rigidityResolved.value));});
+        if(A.buffer)Object.keys(A.buffer).forEach(k=>{if(!it(k)||it(k).buffer.min!==A.buffer[k])bad('buffer '+k);});
+        if(A.departureOffset!=null&&(!g.items[0]||g.items[0].departureOffsetMin!==A.departureOffset))bad('departureOffset');
+        if(A.assumptionTextContains)Object.keys(A.assumptionTextContains).forEach(k=>{if(!g.assumptions.some(a=>a.ref===k&&a.field==='duration'&&a.text.includes(A.assumptionTextContains[k])))bad('text '+k);});
+        if(A.rulesPatch&&!sub(g.rulesPatch,A.rulesPatch))bad('rulesPatch '+JSON.stringify(g.rulesPatch));
+        if(A.calendarRigidity)Object.keys(A.calendarRigidity).forEach(id=>{const ev=sc.calendar.find(e=>e.id===id);if(inferRigidity(ev).rigidity!==A.calendarRigidity[id])bad('calRigidity '+id+'='+inferRigidity(ev).rigidity);});
+        // every assumption must say where it came from
+        g.assumptions.forEach(a=>{if(!a.source||!a.text)bad('assumption without source/text '+a.ref+'.'+a.field);});
+      });
+      o.fixtures=fails.length===0;o.fixturesFails=fails;o.nScen=FX.scenarios.length>=15;o.checked=checked;o.pending=pending;
+      // unit-level
+      const g0=normalizeUserRules('garbage');o.defaults=g0.lateBiasMin===0&&g0.bufferBeforeMin===null&&g0.maxLoadMin===null&&g0.assertiveness==='normal'&&g0.travelCompatibleKinds.join()==='phone_call'&&Object.keys(g0.dayModes).length===0;
+      const nr=normalizeUserRules({dayModes:{1:'light',2:'bogus',9:'work'},anchors:[{type:'prayer',days:[0,1],startMin:480,endMin:540},{type:'x',days:[],startMin:1,endMin:2},{days:[1],startMin:600,endMin:500}],durationDefaults:{errand:45,bogus:9,study:99999},bufferBeforeMin:500,colorMap:{meeting:'9',work:'99'},zones:[{id:'a',name:'מרכז'},{id:'b',name:'אריאל'},{name:' '}],travelMatrix:{'b|a':40,'a|zz':5},evil:1});
+        o.normalize=nr.dayModes[1]==='light'&&!nr.dayModes[2]&&!nr.dayModes[9]&&nr.anchors.length===1&&nr.anchors[0].rigidity==='hard'&&nr.durationDefaults.errand===45&&!nr.durationDefaults.bogus&&nr.durationDefaults.study===480&&nr.bufferBeforeMin===120&&nr.colorMap.meeting==='9'&&!nr.colorMap.work&&nr.zones.length===2&&nr.travelMatrix['a|b']===40&&Object.keys(nr.travelMatrix).length===1&&!('evil' in nr);
+      o.idempotent=JSON.stringify(normalizeUserRules(nr))===JSON.stringify(nr);
+      let lr=normalizeUserRules(null);o.dur1=resolveDuration('errand',lr).source==='system_default'&&resolveDuration('errand',lr,30).source==='user_said'&&resolveDuration('errand',lr,30).assumed===false;
+      lr=learnDuration(lr,'errand',60);lr=learnDuration(lr,'errand',60);o.learn2=resolveDuration('errand',lr).source==='system_default';
+      lr=learnDuration(lr,'errand',90);o.learn3=resolveDuration('errand',lr).source==='learned'&&resolveDuration('errand',lr).min===70;
+      lr=normalizeUserRules({...lr,durationDefaults:{errand:25}});o.userWins=resolveDuration('errand',lr).source==='user_default'&&resolveDuration('errand',lr).min===25;
+      o.buf=resolveBuffer('meeting',normalizeUserRules(null)).min===10&&resolveBuffer('meeting',normalizeUserRules({bufferBeforeMin:30})).min===30&&resolveBuffer('meeting',normalizeUserRules({bufferBeforeMin:30,bufferByKind:{meeting:5}})).min===5;
+      const R1=inferRigidity({title:'ישיבה',attendees:3}),R2=inferRigidity({title:'משהו',transparency:'transparent'}),R3=inferRigidity({title:'משהו'}),R4=inferRigidity({title:'תור לרופא',transparency:'transparent'}),R5=inferRigidity({title:'פגישה',rigidity:'flexible',rigiditySource:'explicit_user'});
+      o.rigid=R1.rigidity==='hard'&&R1.source==='inferred'&&R2.rigidity==='flexible'&&R3.rigidity==='unknown'&&R3.source==='calendar_default'&&R4.rigidity==='hard'&&R5.rigidity==='flexible'&&R5.source==='explicit_user';
+      const rl=normalizeUserRules(null);
+      o.mobHard=!mobilityFor('meeting','hard',rl).canMove&&!mobilityFor('study','hard',rl).canShorten;
+      o.mobUnknown=(()=>{const m=mobilityFor('study','unknown',rl);return !m.canMove&&!m.canShorten&&!m.canDrop&&m.needsConfirm===true;})();
+      o.mobStudy=(()=>{const m=mobilityFor('study','flexible',rl);return m.canMove&&!m.canDrop&&m.canShorten;})();
+      o.mobShop=(()=>{const m=mobilityFor('shopping','flexible',rl);return m.canShorten&&m.minDurationMin===20;})();
+      o.mobFitness=mobilityFor('fitness','flexible',rl).minDurationMin===30;
+      o.mobOptional=(()=>{const m=mobilityFor('admin','optional',rl);return m.canDrop&&m.canMove;})();
+      o.mobOverride=mobilityFor('study','flexible',normalizeUserRules({mobilityByKind:{study:{canDrop:true}}})).canDrop===true;
+      o.mobWindow=mobilityFor('errand','flexible',rl,{earliest:'10:00',latest:'14:00'}).latest==='14:00';
+      o.confDefaults=(()=>{const it=normalizeParsedItem({title:'x',kind:'errand'},0);return it.confidence.kind===0.7&&it.confidence.duration===null&&it.confidence.place===null;})();
+      o.badKind=normalizeParsedItem({title:'x',kind:'wizard'},0).confidence.kind===0;
+      o.intentEmpty=normalizeIntent(null).op==='create'&&normalizeIntent({items:[{title:''}]}).items.length===0;
+      o.reducer=(()=>{const st=applyEvent(structuredClone(STATE_ACTIVE),'personal',{type:'SET_USER_RULES',patch:{lateBiasMin:20,dayModes:{1:'light'}}});const st2=applyEvent(st,'personal',{type:'SET_USER_RULES',patch:{bufferBeforeMin:30}});const u=getUserRules(st2);return u.lateBiasMin===20&&u.dayModes[1]==='light'&&u.bufferBeforeMin===30&&STATE_ACTIVE.userRules!==st.userRules;})();
+      o.stateHasRules=typeof STATE_ACTIVE.userRules==='object';
+      return o;})()`);
+    const okp=Object.entries(r).every(([k,v])=>k==='fixturesFails'||k==='checked'||k==='pending'||v===true)&&(r.fixturesFails||[]).length===0;
+    rows.push(['planning model (A) + '+r.checked+' fixtures ('+r.pending+' later-stage contracts pending)',String(okp)+(okp?'':' '+JSON.stringify(r))]);if(!okp)failed=true;
+  }catch(e){rows.push(['planning model (A)','THROW '+e.message]);failed=true;}
+  // step B: realistic calendar -> immutable context snapshot, resolveAnchor, travel matrix, demo chain
+  try{
+    const cal=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures','calendar_realistic.json'),'utf8'));
+    const r=await w.eval(`(async()=>{const CAL=${JSON.stringify(cal)};const o={};
+      const mkState=(events,rules)=>{const s=structuredClone(STATE_ACTIVE);s.meta.today=CAL.today;s.constraintsGlobal.events=structuredClone(events);s.userRules=rules||{};return s;};
+      const st=mkState(CAL.events);const snap=buildContextSnapshot(st);
+      const at=(date,t)=>({rel:'after',target:{text:t,date}});
+      // context
+      const dups=snap.events.filter(e=>e.date==='2026-11-16'&&e.startMin===540);
+      o.dedupe=dups.length===1&&dups[0].source==='gcal'&&dups[0].mergedLocal.includes('ev_local_dup');
+      o.unified=snap.events.some(e=>e.source==='local')===false&&snap.events.length===CAL.events.length-1;
+      o.fields=(()=>{const e=snap.events.find(x=>x.gid==='g1');return e.place==='פתח תקווה'&&e.attendees===2&&e.rigidity.rigidity==='hard'&&e.rigidity.source==='inferred';})();
+      o.rigidKinds=snap.events.find(x=>x.gid==='g5').rigidity.rigidity==='unknown'&&snap.events.find(x=>x.gid==='g6').rigidity.rigidity==='flexible'&&snap.events.find(x=>x.gid==='g4').rigidity.rigidity==='hard';
+      // immutable
+      o.frozen=Object.isFrozen(snap)&&Object.isFrozen(snap.events)&&Object.isFrozen(snap.events[0])&&Object.isFrozen(snap.rules);
+      try{snap.events[0].title='HACK';snap.events.push({});}catch(_e){}
+      o.immutable=snap.events[0].title!=='HACK'&&snap.events.length===CAL.events.length-1;
+      o.notStale=contextIsStale(snap,st)===false;
+      const st2=mkState(CAL.events.concat([{id:'new1',title:'חדש',date:'2026-11-16',startH:10,endH:11,startMin:600,endMin:660}]));
+      o.stale=contextIsStale(snap,st2)===true;
+      // resolveAnchor
+      const a1=resolveAnchor(snap,at('2026-11-16','הפגישה בפתח תקווה'));
+      o.exact=a1.status==='resolved'&&a1.event.gid==='g1'&&a1.anchorMin===600&&a1.confidence>=0.85;
+      const a2=resolveAnchor(snap,{rel:'after',target:{text:'הפגישה בפתח תקווה',date:null}});
+      o.ambiguous=a2.status==='ambiguous'&&a2.candidates.length===2&&/איזו/.test(a2.question)&&a2.question.includes('09:00');
+      const a3=resolveAnchor(snap,at('2026-11-17','הזום'));o.online=a3.status==='resolved'&&a3.event.gid==='g3';
+      const a4=resolveAnchor(snap,at('2026-11-18','הטיפול'));o.treat=a4.status==='resolved'&&a4.event.gid==='g4'&&a4.anchorMin===1020;
+      const a4b=resolveAnchor(snap,{rel:'before',target:{text:'הטיפול',date:'2026-11-18'}});o.before=a4b.status==='resolved'&&a4b.anchorMin===960;
+      const a5=resolveAnchor(snap,{rel:'after',target:{text:'הפגישה עם ארז',date:null}});o.person=a5.status==='resolved'&&a5.event.gid==='g7';
+      const a6=resolveAnchor(snap,at('2026-11-17','האירוע של 12'));o.timeRef=a6.status==='resolved'&&a6.event.gid==='g9';
+      const a7=resolveAnchor(snap,at('2026-11-16','הפגישה עם דנה'));o.notFound=a7.status==='not_found'&&/לא מצאתי/.test(a7.message)&&!a7.event;
+      const a8=resolveAnchor(snap,{rel:'while_in',target:{text:'כשאני כבר באריאל',date:null}});o.placeOnly=a8.status==='place_only'&&a8.place==='אריאל';
+      const a9=resolveAnchor(snap,at('2026-11-16','הפגישה'));o.genericTwo=a9.status==='ambiguous';
+      const a10=resolveAnchor(snap,at('2026-11-18','משהו'));o.noLocationEvent=a10.status==='resolved'&&a10.event.gid==='g5';
+      o.noAnchor=resolveAnchor(snap,null).status==='not_found';
+      // hidden titles
+      const hs=mkState(CAL.events.filter(e=>e.id!=='ev_local_dup').map(e=>e.id.startsWith('gcal_')?{...e,title:'תפוס (יומן גוגל)',place:'',descr:''}:e));const hsnap=buildContextSnapshot(hs);
+      const hr=resolveAnchor(hsnap,at('2026-11-16','הפגישה בפתח תקווה'));o.hidden=hr.status==='not_found'&&/מוסתרות/.test(hr.message)&&hsnap.hiddenTitles>0;
+      // travel matrix
+      const R0=normalizeUserRules(null);
+      o.noMatrix=travelMinutes(R0,'פתח תקווה','אריאל').min===null&&travelMinutes(R0,'אריאל','אריאל').min===0;
+      const patch=travelAnswerPatch(R0,'פתח תקווה','אריאל',40);const R1=normalizeUserRules({...R0,...patch});
+      o.matrix=travelMinutes(R1,'פתח תקווה','אריאל').min===40&&travelMinutes(R1,'אריאל','פתח תקווה').min===40&&travelMinutes(R1,'ירושלים','אריאל').min===null;
+      // the demo
+      const parsed={op:'create',items:[{ref:'i1',title:'נסיעה לאריאל',kind:'travel',place:'אריאל',anchor:{rel:'after',target:{text:'הפגישה בפתח תקווה',date:'2026-11-16'}},confidence:{kind:0.95,place:0.95,anchor:0.9}},{ref:'i2',title:'בית מדרש',kind:'religious',durationMin:60,afterItem:'i1',confidence:{kind:0.85,duration:0.95}}]};
+      const run=(rules)=>{const stx=mkState(CAL.events,rules);const sn=buildContextSnapshot(stx);const intent=normalizeIntent(parsed);const g=planningGaps(intent,getUserRules(stx));return{res:planChainBasic(sn,intent,g),sn,stx};};
+      const d1=run({});
+      o.demoAsks=d1.res.status==='ask'&&d1.res.ask.field==='travel'&&d1.res.ask.question.includes('פתח תקווה')&&d1.res.ask.question.includes('אריאל');
+      const d2=run(patch);
+      o.demoOk=d2.res.status==='ok'&&d2.res.anchor.title==='פגישה בפתח תקווה'&&d2.res.anchor.endMin===600&&d2.res.items.length===2&&d2.res.items[0].startMin===600&&d2.res.items[0].endMin===640&&d2.res.items[0].durationSource==='matrix'&&d2.res.items[1].startMin===640&&d2.res.items[1].endMin===700&&d2.res.items[1].date==='2026-11-16';
+      const txt=chainSummaryText(d2.res);o.demoText=txt.includes('שעת סיום 10:00')&&txt.includes('10:00–10:40')&&txt.includes('לפי המטריצה')&&txt.includes('10:40–11:40');
+      o.demoNoConflict=d2.res.conflicts.length===0&&d2.res.snapshotSig===d2.sn.sig;
+      // ambiguous / not found stop the chain with one question and never invent
+      const parsedAmb=JSON.parse(JSON.stringify(parsed));parsedAmb.items[0].anchor.target.date=null;
+      {const stx=mkState(CAL.events,patch);const sn=buildContextSnapshot(stx);const g=planningGaps(normalizeIntent(parsedAmb),getUserRules(stx));const rr=planChainBasic(sn,normalizeIntent(parsedAmb),g);o.chainAmb=rr.status==='ask'&&rr.ask.field==='anchor'&&!rr.items;}
+      {const pnf=JSON.parse(JSON.stringify(parsed));pnf.items[0].anchor.target.text='הפגישה עם דנה';const stx=mkState(CAL.events,patch);const sn=buildContextSnapshot(stx);const rr=planChainBasic(sn,normalizeIntent(pnf),planningGaps(normalizeIntent(pnf),getUserRules(stx)));o.chainNotFound=rr.status==='not_found'&&!rr.items;}
+      // conflict + revalidate
+      {const stx=mkState(CAL.events.concat([{id:'blk',title:'חוסם',date:'2026-11-16',startH:10,endH:11,startMin:630,endMin:660}]),patch);const sn=buildContextSnapshot(stx);const rr=planChainBasic(sn,normalizeIntent(parsed),planningGaps(normalizeIntent(parsed),getUserRules(stx)));o.conflictFound=rr.status==='ok'&&rr.conflicts.length===2&&rr.conflicts.every(c=>c.title==='חוסם');}
+      {const rv0=revalidatePlan(d2.sn,d2.stx,d2.res);o.revalFresh=rv0.stale===false&&rv0.ok===true;
+       const changed=mkState(CAL.events.concat([{id:'late',title:'התווסף',date:'2026-11-16',startH:10,endH:11,startMin:620,endMin:680}]),patch);
+       const rv1=revalidatePlan(d2.sn,changed,d2.res);o.revalStale=rv1.stale===true&&rv1.ok===false&&rv1.conflicts[0].title==='התווסף';}
+      // same-place implicit travel + window
+      {const p2={op:'create',items:[{ref:'a',title:'קניות',kind:'shopping',place:'אריאל',anchor:{rel:'after',target:{text:'הפגישה בפתח תקווה',date:'2026-11-16'}},confidence:{kind:0.9,place:0.9}},{ref:'b',title:'תורה בחווה',kind:'religious',place:'אריאל',window:{from:'18:00',to:'22:00'},confidence:{kind:0.8,place:0.8}}]};
+       const stx=mkState(CAL.events,patch);const sn=buildContextSnapshot(stx);const rr=planChainBasic(sn,normalizeIntent(p2),planningGaps(normalizeIntent(p2),getUserRules(stx)));
+       o.implicitTravel=rr.status==='ok'&&rr.items[0].implicit===true&&rr.items[0].endMin===640&&rr.items[1].title==='קניות'&&rr.items[1].startMin===640&&rr.items[2].startMin===1080;}
+      // google import: new context fields, privacy
+      {const it=[{id:'q1',summary:'פגישה',location:'חיפה',description:'<b>פרטים</b> זום',attendees:[{self:true},{email:'a@x'},{email:'r@x',resource:true}],hangoutLink:'x',start:{dateTime:'2026-11-16T09:00:00'},end:{dateTime:'2026-11-16T10:00:00'}},{id:'q2',summary:'שקוף',transparency:'transparent',start:{dateTime:'2026-11-16T11:00:00'},end:{dateTime:'2026-11-16T12:00:00'}}];
+       const vis=gcalItemsToBlocks(it,false),hid=gcalItemsToBlocks(it,true);
+       o.importFields=vis.length===1&&vis[0].place==='חיפה'&&vis[0].attendees===1&&vis[0].online===true&&vis[0].descr==='פרטים זום';
+       o.importPrivacy=hid.length===1&&!hid[0].place&&!hid[0].descr&&!hid[0].online&&hid[0].attendees===1&&hid[0].title==='תפוס (יומן גוגל)';
+       o.transparentSkipped=vis.every(b=>b.gid!=='q2');}
+      return o;})()`);
+    const okb=Object.values(r).every(v=>v===true);
+    rows.push(['context + anchors + demo chain (B)',String(okb)+(okb?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okb)failed=true;
+  }catch(e){rows.push(['context + anchors + demo chain (B)','THROW '+e.message]);failed=true;}
+  // intent-eval harness self-check (NOT model quality — that needs a live run, see tests/intent-eval/README.md)
+  try{
+    const {compareIntent,summarize}=require('./intent-eval/compare.js');
+    const cases=JSON.parse(fs.readFileSync(path.join(__dirname,'intent-eval','cases.json'),'utf8')).cases;
+    const golden=JSON.parse(fs.readFileSync(path.join(__dirname,'intent-eval','mock_golden.json'),'utf8'));
+    const o={};
+    o.enough=cases.length>=25&&new Set(cases.map(c=>c.id)).size===cases.length;
+    o.goldenAll=summarize(cases.map(c=>compareIntent(golden[c.id],c.expected))).pass===cases.length;
+    const mut=(id,fn)=>{const c=cases.find(x=>x.id===id);const a=JSON.parse(JSON.stringify(golden[id]));fn(a);return compareIntent(a,c.expected);};
+    o.catchKind=!mut('S01_after_meeting_chain',a=>{a.items[1].kind='errand';}).pass;
+    o.catchInventedDuration=!mut('S01_after_meeting_chain',a=>{a.items[2].durationMin=120;}).pass;
+    o.catchInventedAnchor=!mut('S09_when_best',a=>{a.items[0].anchor={rel:'after',target:{text:'משהו'}};}).pass;
+    o.catchMissingAnchor=!mut('S01_after_meeting_chain',a=>{delete a.items[0].anchor;}).pass;
+    o.catchWrongRel=!mut('E18_before_treatment',a=>{a.items[0].anchor.rel='after';}).pass;
+    o.catchWrongOp=!mut('S04_no_time_what_drops',a=>{a.op='create';}).pass;
+    o.catchScope=!mut('S06_arrive_early',a=>{a.scope='global';}).pass;
+    o.catchDay=!mut('E21_meeting_with_place',a=>{a.items[0].date='2026-11-19';}).pass;
+    o.tolerant=mut('S01_after_meeting_chain',a=>{a.items[0].anchor.target.text='הפגישה שבפתח תקווה';a.items[1].durationMin=62;}).pass;
+    const r=await w.eval(`(()=>{const o={};const c=${JSON.stringify(cases)};
+      o.prompt=AI_INTENT_PROMPT.includes('לעולם אל תחשבי שעות')&&PLAN_KINDS.every(k=>AI_INTENT_PROMPT.includes(k));
+      o.system=buildIntentSystem('2026-11-15').includes('"מחר" = 2026-11-16')&&buildIntentSystem('2026-11-15').includes('יום ראשון');
+      o.normalizes=c.every(x=>{const it=normalizeIntent(x.expected);return it.items.length===(x.expected.items||[]).length;});
+      return o;})()`);
+    Object.assign(o,r);
+    const oki=Object.values(o).every(v=>v===true);
+    rows.push(['intent-eval harness self-check ('+cases.length+' cases)',String(oki)+(oki?'':' '+JSON.stringify(Object.fromEntries(Object.entries(o).filter(([k,v])=>v!==true))))]);if(!oki)failed=true;
+  }catch(e){rows.push(['intent-eval harness self-check','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

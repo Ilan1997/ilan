@@ -1890,7 +1890,8 @@ const STATE={
   microTasks:{
     categories:['כספים','בירוקרטיה','שיחות','שגרה','כללי'],
     tasks:[]
-  }
+  },
+  userRules:{}
 };
 
 // ══════════════════════════════════════════════════════
@@ -3377,6 +3378,11 @@ function _applyEventInner(state,calendarId,event){
     const wins=(Array.isArray(event.windows)?event.windows:[]).filter(w=>w&&Number.isInteger(w.dow)&&w.dow>=0&&w.dow<=6&&_validRange(w.startH,w.endH))
       .map(w=>({dow:w.dow,startH:w.startH,endH:w.endH}));
     return{...state,weeklyWorkPlan:{...(state.weeklyWorkPlan||{weeks:{}}),defaultWorkWindows:wins}};
+  }
+  // SET_USER_RULES: merge a validated patch into state.userRules (patch keys replace; unknown keys are dropped by normalizeUserRules)
+  if(event.type==='SET_USER_RULES'){
+    const merged=normalizeUserRules({...(state.userRules||{}),...(event.patch||{})});
+    return{...state,userRules:merged};
   }
   // SET_SACRED_HOURS: replaces ALL previously-set sacred closures (flagged sacred:true)
   // inside constraintsGlobal.weeklyClosed — the existing recurring-closure mechanism
@@ -5787,6 +5793,12 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 7ג. נסיעות: את/ה לא יודעת מרחקים. אם הפגישה נראית מחוץ לבית/למקום הרגיל (משרד, רופא, לקוח, עיר אחרת) ולא נאמר זמן נסיעה — שאלי שאלה אחת קצרה "כמה זמן נסיעה לשם בערך?" לפני שאת שולחת את הבלוק, ואז שלחי אותו עם travelMin. לעולם אל תנחשי מרחק בעצמך.
 7ג2. קביעת פגישה/אירוע בלי שעה מוכנה ("אני צריך לקבוע פגישה עם הרואה חשבון"): אל תמציא/י שעות בטקסט. צרף/י בסוף התשובה בלוק מוסתר \`\`\`MEETING_REQUEST {"title":"שם","durationMin":60,"domain":"work"|"life","date":"YYYY-MM-DD" (רק אם ביקש/ה יום מסוים),"after":"HH:MM" (רק אם ביקש/ה אחרי שעה),"travelMin":דקות נסיעה לכיוון אחד (רק אם המשתמש/ת אמר/ה)} \`\`\` — האפליקציה תחשב בעצמה 2–3 חלונות פנויים אמיתיים ותציג ככפתורים. בטקסט הגלוי כתבי רק משפט קצר כמו "בודקת מתי נוח לך". לא לכתוב שעות בעצמך.
 7א. הוספה ליומן: כשהמשתמש/ת מבקש/ת להוסיף אירוע/רצף אירועים ליומן — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","kind":"event"|"travel","domain":"work"|"life"}]} (עד 12 אירועים, תאריכים שונים מותרים; כל קטע נסיעה הוא אירוע נפרד עם kind=travel וכותרת כמו "נסיעה לאריאל"). חשבי בעצמך את השעות ברצף מהזמנים שנמסרו (התחלה + משך כל קטע), בלי לשאול על כל פרט; שאלי רק על דבר חיוני אחד שחסר (למשל שעת התחלה) ורק אם אי אפשר להסיק אותו. "מחר"/"ביום ג׳" – חשבי לפי התאריך של היום שמופיע בהקשר. בטקסט הגלוי תני סיכום קצר של הרצף ואל תטעני שכבר נוצר — האירועים ייווצרו רק אחרי שהמשתמש/ת יאשר בכרטיס (ביומן גוגל אם מחובר, ואחרת ביומן של האפליקציה). אל תסרבי ואל תפני לחשבון: תמיד צרפי את הבלוק.
+8. שיקול דעת (את מזכירה, לא מכונה שמציתת): החליטי יחד עם המשתמש/ת מה חשוב היום, מה יכול לחכות ומה לא נכנס ליום הזה בכלל. אל תמלאי זמן פנוי רק כי הוא קיים. כשיום כבר עמוס אמרי ישר: "היום הזה כבר מלא" או "אם מוסיפים את זה, משהו אחר חייב לצאת" והציעי יום אחר.
+9. סגנון תשובה: בביצוע — קצר, ישיר, פעולה אחת ברורה, בלי הרצאות ("קיבלתי. זה נכנס לשלישי."). בתכנון אפשר להסביר יותר.
+10. שאלות מיותרות: אם פרט חסר ולא משנה מהותית — הניחי הנחה סבירה ואמרי אותה ("שמתי שעה, אפשר לשנות"). שאלי רק על פרט שמשנה את האירוע מהותית.
+11. ריכוז: שיחות טלפון מתאימות לזמן נסיעה; סידורים באותו אזור — ליציאה אחת; הודעות/וואטסאפ — בלוק אחד; משימות עומק — בלוק רציף; משימות קטנות — חלון אדמיניסטרציה אחד. הציעי ריכוז כשזה רלוונטי ("יש לך 3 דברים בתלפיות — עדיף ליציאה אחת").
+12. כשאין מספיק זמן: הציעי גרסה מקוצרת במקום "לעשות/לא לעשות" — מלאה / מצומצמת / מינימום (למשל סדר חדר → 15 דקות, אימון → 10 דקות).
+13. שפיכת משימות (Brain Dump): כשהמשתמש/ת זורק/ת הרבה דברים ברצף או אומר/ת שהוא/היא "זורק/ת הכול" — אל תקטעי ואל תשאלי באמצע. אחרי שסיים/ה, אל תחזירי רשימה שטוחה אלא מבנה: היום בערב / מחר בבוקר / בנסיעה / גמיש / מה לדחות — ושמרי משימות בלי זמן קבוע ב-SMALL_ADD.
 7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
 let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting explicit user approval
@@ -8006,6 +8018,15 @@ function gcalItemsToBlocks(items,hideTitles){
       const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),color:gcalColorOf(it)};
       if(it.extendedProperties&&it.extendedProperties.private&&it.extendedProperties.private.maya_domain==='work')blk.domain='work';
       {const tv=it.extendedProperties&&it.extendedProperties.private&&parseInt(it.extendedProperties.private.maya_travel,10);if(tv>0&&tv<=240)blk.travelMin=tv;}
+      // context fields (title-like data is dropped when the user chose to hide titles)
+      {const at=(it.attendees||[]).filter(a=>a&&!a.self&&!a.resource).length;if(at>0)blk.attendees=at;}
+      if(it.transparency==='transparent')blk.transparency='transparent';
+      if(it.eventType&&it.eventType!=='default')blk.eventType=String(it.eventType).slice(0,24);
+      if(!hideTitles){
+        if(it.location)blk.place=String(it.location).slice(0,80);
+        if(it.description)blk.descr=String(it.description).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,160);
+        if(it.hangoutLink||it.conferenceData||_CTX_ONLINE.test(String(it.location||'')+' '+String(it.description||'')))blk.online=true;
+      }
       if(sMin<eMin){blk.startMin=sMin;blk.endMin=eMin;}
       out.push(blk);
     }
@@ -8367,7 +8388,11 @@ function _aiOfferCalCreate(list){
   const hh=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
   const toG=gcalWriteEnabled();
   const byDate={};list.forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e);});
-  const txt=(toG?'להוסיף ליומן גוגל?':'להוסיף ליומן באפליקציה? (כדי שזה יופיע גם בגוגל — חבר/י את היומן ב-👤 החשבון שלי)')+'\n'+list.map(e=>`• ${e.title} — ${e.date} ${hh(e.startMin)}–${hh(e.endMin)}`).join('\n');
+  let warn='';
+  try{const inp=_suggestInputs('life',STATE_ACTIVE),cap=720;const seen=new Set();
+    Object.keys(byDate).sort().forEach(d=>{const busy=(inp.busy[d]||[]).reduce((t,b)=>t+Math.max(0,b[1]-b[0]),0),add=byDate[d].reduce((t,e)=>t+(e.endMin-e.startMin),0);
+      const v=dayOverloadVerdict({busyMin:busy,addMin:add,capacityMin:cap});if(v.level!=='ok'&&!seen.has(v.level+d))warn+='\n⚠️ '+d+': '+v.text;});}catch(_e){}
+  const txt=(toG?'להוסיף ליומן גוגל?':'להוסיף ליומן באפליקציה? (כדי שזה יופיע גם בגוגל — חבר/י את היומן ב-👤 החשבון שלי)')+warn+'\n'+list.map(e=>`• ${e.title} — ${e.date} ${hh(e.startMin)}–${hh(e.endMin)}`).join('\n');
   return _aiAppendActionBubble(txt,[
     {label:toG?'✅ הוסף ליומן גוגל':'✅ הוסף ליומן',style:'background:#2563eb;color:#fff;',onclick:async(div)=>{
       div.querySelectorAll('button').forEach(b=>b.disabled=true);
@@ -8406,6 +8431,7 @@ function suggestSlots(o){
     const date=addD(today,i),fh=new Set(freeHours[date]||[]);if(!fh.size)continue;
     const bz=(busy[date]||[]).slice().sort((a,b)=>a[0]-b[0]);
     const load=bz.reduce((t,b)=>t+Math.max(0,b[1]-b[0]),0);
+    if(date!==prefDate&&load/Math.max(60,dayEnd-dayStart)>=0.75)continue; // a day that is already full is not offered
     const cands=[];
     for(let s=dayStart;s+dur<=dayEnd;s+=30){
       const e=s+dur;
@@ -8791,7 +8817,413 @@ function smallEnsureMeta(state){
 }
 function smallNew(title,today,opts){
   opts=opts||{};const ti=String(title||'').trim().slice(0,120);
-  return{id:'mt_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),title:ti,category:opts.category||'כללי',urgency:opts.urgency||'normal',calId:opts.calId||'personal',doneWeeks:[],createdAt:today,important:!!(opts.important||smallImportantFromText(ti)),...(opts.due?{due:opts.due}:{})};
+  return{id:'mt_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),title:ti,category:opts.category||'כללי',urgency:opts.urgency||'normal',calId:opts.calId||'personal',doneWeeks:[],createdAt:today,important:!!(opts.important||smallImportantFromText(ti)),kind:opts.kind||taskKindOf(ti),...(opts.due?{due:opts.due}:{})};
+}
+// ══════════════════════════════════════════════════════
+//  PLANNING MODEL (step A) — data model for Context + Planning. PURE: no DOM, no state writes.
+//  Capture(model→Intent) → Context → Plan → Validate → Confirm → Execute → Replan. The model only INTERPRETS (Intent);
+//  every time/duration/rigidity below is computed by code and carries assumed/source so the card can show it.
+// ══════════════════════════════════════════════════════
+const PLAN_KINDS=['travel','meeting','work','deep_work','errand','shopping','phone_call','admin','study','creative','religious','fitness','personal','waiting_for_response'];
+const PLAN_DURATION_DEFAULTS={errand:45,phone_call:20,meeting:60,study:90,work:90,deep_work:90,shopping:45,admin:30,creative:60,religious:60,fitness:60,personal:30,travel:0,waiting_for_response:0};
+const PLAN_BUFFER_DEFAULTS={meeting:10,errand:5,shopping:5,religious:10,study:5,fitness:10,work:0,deep_work:0,phone_call:0,admin:0,creative:0,personal:0,travel:0,waiting_for_response:0};
+const PLAN_DAY_MODES=['work','study','flexible','errands','field','rest','spirit','light'];
+const PLAN_ANCHOR_TYPES=['sleep','prayer','fitness','study','family','personal','therapy','relationship','hobby','other'];
+const PLAN_RIGIDITIES=['hard','flexible','optional'];
+const PLAN_CONF_CRITICAL=0.6,PLAN_CONF_SOFT=0.5;
+// Mobility defaults by kind for NON-hard items (hard is always immovable). minDurationMin = shortest useful version.
+const PLAN_MOBILITY_DEFAULTS={
+  study:{canMove:true,canShorten:true,canDrop:false,minDurationMin:30},
+  work:{canMove:true,canShorten:true,canDrop:false,minDurationMin:45},
+  deep_work:{canMove:true,canShorten:true,canDrop:false,minDurationMin:45},
+  errand:{canMove:true,canShorten:true,canDrop:false,minDurationMin:15},
+  shopping:{canMove:true,canShorten:true,canDrop:false,minDurationMin:20},
+  phone_call:{canMove:true,canShorten:false,canDrop:false},
+  fitness:{canMove:true,canShorten:true,canDrop:false,minDurationMin:30},
+  religious:{canMove:true,canShorten:true,canDrop:false,minDurationMin:30},
+  admin:{canMove:true,canShorten:true,canDrop:true,minDurationMin:15},
+  creative:{canMove:true,canShorten:true,canDrop:true,minDurationMin:30},
+  personal:{canMove:true,canShorten:true,canDrop:true,minDurationMin:15},
+  meeting:{canMove:true,canShorten:false,canDrop:false},
+  travel:{canMove:true,canShorten:false,canDrop:false},
+  waiting_for_response:{canMove:true,canShorten:false,canDrop:true}
+};
+function _pm_int(v,lo,hi,d){if(v===null||v===undefined||v==='')return d;const n=Math.round(Number(v));return Number.isFinite(n)?Math.max(lo,Math.min(hi,n)):d;}
+// PURE: a stable, validated UserRules object from anything (state.userRules, a patch, garbage). Unknown keys dropped.
+function normalizeUserRules(raw){
+  const r=raw&&typeof raw==='object'?raw:{};
+  const dayModes={};for(let d=0;d<7;d++){const m=r.dayModes&&r.dayModes[d];if(PLAN_DAY_MODES.includes(m))dayModes[d]=m;}
+  const anchors=(Array.isArray(r.anchors)?r.anchors:[]).slice(0,30).map((a,i)=>{
+    if(!a||typeof a!=='object')return null;
+    const days=(Array.isArray(a.days)?a.days:[]).filter(d=>Number.isInteger(d)&&d>=0&&d<=6);
+    const st=_pm_int(a.startMin,0,1440,NaN),en=_pm_int(a.endMin,0,1440,NaN);
+    if(!days.length||!(st<en))return null;
+    return{id:String(a.id||'an'+i),type:PLAN_ANCHOR_TYPES.includes(a.type)?a.type:'other',title:String(a.title||'').slice(0,60),days:[...new Set(days)],startMin:st,endMin:en,rigidity:PLAN_RIGIDITIES.includes(a.rigidity)?a.rigidity:'hard'};
+  }).filter(Boolean);
+  const kmap=(src,lo,hi)=>{const o={};if(src&&typeof src==='object')Object.keys(src).forEach(k=>{if(!PLAN_KINDS.includes(k))return;const v=_pm_int(src[k],lo,hi,NaN);if(Number.isFinite(v))o[k]=v;});return o;};
+  const colorMap={};if(r.colorMap&&typeof r.colorMap==='object')Object.keys(r.colorMap).forEach(k=>{if(PLAN_KINDS.includes(k)&&/^(1[01]|[1-9])$/.test(String(r.colorMap[k])))colorMap[k]=String(r.colorMap[k]);});
+  const zones=(Array.isArray(r.zones)?r.zones:[]).slice(0,20).map((z,i)=>z&&String(z.name||'').trim()?{id:String(z.id||'z'+i),name:String(z.name).trim().slice(0,40)}:null).filter(Boolean);
+  const zoneIds=new Set(zones.map(z=>z.id));
+  const travelMatrix={};if(r.travelMatrix&&typeof r.travelMatrix==='object')Object.keys(r.travelMatrix).forEach(k=>{const [a,b]=String(k).split('|');if(a&&b&&zoneIds.has(a)&&zoneIds.has(b)&&a!==b){const v=_pm_int(r.travelMatrix[k],1,600,NaN);if(Number.isFinite(v))travelMatrix[[a,b].sort().join('|')]=v;}});
+  const mob={};if(r.mobilityByKind&&typeof r.mobilityByKind==='object')Object.keys(r.mobilityByKind).forEach(k=>{if(!PLAN_KINDS.includes(k))return;const m=r.mobilityByKind[k]||{},o={};['canMove','canShorten','canDrop'].forEach(f=>{if(typeof m[f]==='boolean')o[f]=m[f];});const md=_pm_int(m.minDurationMin,5,480,NaN);if(Number.isFinite(md))o.minDurationMin=md;mob[k]=o;});
+  const learned={duration:{}};if(r.learned&&r.learned.duration&&typeof r.learned.duration==='object')Object.keys(r.learned.duration).forEach(k=>{const e=r.learned.duration[k];if(PLAN_KINDS.includes(k)&&e&&Number.isFinite(+e.avg)&&Number.isFinite(+e.n)&&e.n>0)learned.duration[k]={avg:Math.max(5,Math.min(480,+e.avg)),n:Math.min(1000,Math.round(+e.n))};});
+  return{
+    dayModes,anchors,
+    durationDefaults:kmap(r.durationDefaults,5,480),
+    bufferByKind:kmap(r.bufferByKind,0,120),
+    bufferBeforeMin:_pm_int(r.bufferBeforeMin,0,120,null),   // user-wide "arrive early" (null = per-kind defaults)
+    lateBiasMin:_pm_int(r.lateBiasMin,0,60,0),               // leave this many minutes earlier than the computed departure
+    travelCompatibleKinds:(Array.isArray(r.travelCompatibleKinds)?r.travelCompatibleKinds.filter(k=>PLAN_KINDS.includes(k)):['phone_call']),
+    colorMap,zones,travelMatrix,mobilityByKind:mob,
+    maxLoadMin:_pm_int(r.maxLoadMin,60,960,null),             // null → system overload thresholds
+    assertiveness:['soft','normal','firm'].includes(r.assertiveness)?r.assertiveness:'normal',
+    learned
+  };
+}
+function getUserRules(state){return normalizeUserRules(state&&state.userRules);}
+// PURE: how long, and why we think so. Order: said > user default > learned (≥3 samples) > system default.
+function resolveDuration(kind,rules,explicitMin){
+  rules=rules||normalizeUserRules(null);
+  if(Number.isFinite(explicitMin)&&explicitMin>0)return{min:Math.round(explicitMin),assumed:false,source:'user_said'};
+  if(rules.durationDefaults&&rules.durationDefaults[kind])return{min:rules.durationDefaults[kind],assumed:true,source:'user_default'};
+  const L=rules.learned&&rules.learned.duration&&rules.learned.duration[kind];
+  if(L&&L.n>=3)return{min:Math.max(5,Math.round(L.avg/5)*5),assumed:true,source:'learned'};
+  return{min:PLAN_DURATION_DEFAULTS[kind]!=null?PLAN_DURATION_DEFAULTS[kind]:30,assumed:true,source:'system_default'};
+}
+// PURE: running-average learning from what actually happened (e.g. the user edits a duration). Returns NEW rules.
+function learnDuration(rules,kind,observedMin){
+  const r=normalizeUserRules(rules);if(!PLAN_KINDS.includes(kind)||!(observedMin>0))return r;
+  const L=r.learned.duration[kind]||{avg:observedMin,n:0};
+  r.learned.duration[kind]={avg:(L.avg*L.n+observedMin)/(L.n+1),n:L.n+1};
+  return r;
+}
+// PURE: minutes to keep free BEFORE an event of this kind. Per-kind user value > user-wide comfort > system default.
+function resolveBuffer(kind,rules){
+  rules=rules||normalizeUserRules(null);
+  if(rules.bufferByKind&&rules.bufferByKind[kind]!=null)return{min:rules.bufferByKind[kind],source:'user_default'};
+  if(rules.bufferBeforeMin!=null)return{min:rules.bufferBeforeMin,source:'user_default'};
+  return{min:PLAN_BUFFER_DEFAULTS[kind]!=null?PLAN_BUFFER_DEFAULTS[kind]:0,source:'system_default'};
+}
+// PURE: rigidity of an EXISTING calendar event, with where the answer came from. Unknown is a valid answer (never silently hard).
+function inferRigidity(ev){
+  ev=ev||{};
+  if(PLAN_RIGIDITIES.includes(ev.rigidity)&&ev.rigiditySource==='explicit_user')return{rigidity:ev.rigidity,source:'explicit_user',reason:'הוגדר על ידך'};
+  const t=String(ev.title||'');
+  if((ev.attendees||0)>0)return{rigidity:'hard',source:'inferred',reason:'יש משתתפים'};
+  if(/טיפול|תור\b|תור ל|רופא|פגישה|ראיון|בית משפט|טיסה|הרצאה|מבחן|בחינה|חתונה|לוויה|ברית/.test(t))return{rigidity:'hard',source:'inferred',reason:'אירוע חיצוני / תור'};
+  if(/בלוק|פוקוס|focus|עבודה עמוקה|זמן אישי|כושר|אימון|ללמוד|לימוד|תזכורת|reminder|hold|שמור/i.test(t)||ev.eventType==='focusTime')return{rigidity:'flexible',source:'inferred',reason:'בלוק אישי / עבודה'};
+  if(ev.transparency==='transparent')return{rigidity:'flexible',source:'inferred',reason:'מסומן כזמן פנוי'};
+  return{rigidity:'unknown',source:'calendar_default',reason:'אין מספיק מידע'};
+}
+// PURE: what Replan/proposeCuts may do with an item. Hard & unknown are never changed silently.
+function mobilityFor(kind,rigidity,rules,item){
+  rules=rules||normalizeUserRules(null);item=item||{};
+  const win={};if(item.earliest)win.earliest=item.earliest;if(item.latest)win.latest=item.latest;
+  if(rigidity==='hard')return{canMove:false,canShorten:false,canDrop:false,...win};
+  if(rigidity==='unknown')return{canMove:false,canShorten:false,canDrop:false,needsConfirm:true,...win};
+  const base=PLAN_MOBILITY_DEFAULTS[kind]||{canMove:true,canShorten:false,canDrop:false};
+  const m={...base,...((rules.mobilityByKind||{})[kind]||{}),...win};
+  if(rigidity==='optional'){m.canMove=true;m.canDrop=true;if(PLAN_MOBILITY_DEFAULTS[kind]&&PLAN_MOBILITY_DEFAULTS[kind].minDurationMin)m.canShorten=true;}
+  return m;
+}
+function _pm_kindRigidity(kind){return kind==='meeting'?'hard':'flexible';}
+function _pm_conf(v,present){if(!present)return null;const n=Number(v);return Number.isFinite(n)?Math.max(0,Math.min(1,n)):0.7;}
+// PURE: validated ParsedItem from the model's JSON. A present field without a confidence is treated as 0.7.
+function normalizeParsedItem(raw,i){
+  const x=raw&&typeof raw==='object'?raw:{};const c=x.confidence&&typeof x.confidence==='object'?x.confidence:{};
+  const kindOk=PLAN_KINDS.includes(x.kind);
+  const dur=Number(x.durationMin);const hasDur=Number.isFinite(dur)&&dur>0;
+  const anc=x.anchor&&typeof x.anchor==='object'&&['after','before','at','while_in'].includes(x.anchor.rel)?{rel:x.anchor.rel,target:{text:String((x.anchor.target&&x.anchor.target.text)||'').trim().slice(0,80),date:(x.anchor.target&&x.anchor.target.date)||null}}:null;
+  const place=String(x.place||'').trim().slice(0,40)||null;
+  return{
+    ref:String(x.ref||'i'+(i+1)),title:String(x.title||'').trim().slice(0,100),
+    kind:kindOk?x.kind:'personal',durationMin:hasDur?Math.min(720,Math.round(dur)):null,durationUnknown:!!x.durationUnknown,
+    place,date:/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||''))?String(x.date):null,anchor:anc,afterItem:x.afterItem?String(x.afterItem):null,
+    window:x.window&&typeof x.window==='object'?{from:x.window.from||null,to:x.window.to||null}:null,
+    rigidity:PLAN_RIGIDITIES.includes(x.rigidity)?x.rigidity:null,
+    confidence:{kind:kindOk?_pm_conf(c.kind,true):0,duration:_pm_conf(c.duration,hasDur),place:_pm_conf(c.place,!!place),rigidity:_pm_conf(c.rigidity,PLAN_RIGIDITIES.includes(x.rigidity)),anchor:_pm_conf(c.anchor,!!anc)}
+  };
+}
+// PURE: a validated Intent. op: create | move | find | prune | arrange | preference.
+function normalizeIntent(raw){
+  const x=raw&&typeof raw==='object'?raw:{};
+  const op=['create','move','find','prune','arrange','preference'].includes(x.op)?x.op:'create';
+  const items=(Array.isArray(x.items)?x.items:[]).slice(0,20).map(normalizeParsedItem).filter(it=>it.title);
+  const td=(Array.isArray(x.targetDays)?x.targetDays:[]).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d)));
+  return{op,items,filter:x.filter&&typeof x.filter==='object'?{kind:PLAN_KINDS.includes(x.filter.kind)?x.filter.kind:null}:null,
+    targetDays:td,scope:['event','global'].includes(x.scope)?x.scope:null,
+    preference:x.preference&&typeof x.preference==='object'?x.preference:null,
+    context:{currentPlace:x.context&&x.context.currentPlace?String(x.context.currentPlace).slice(0,40):null}};
+}
+// PURE: decide what is worth ASKING (critical + low confidence/missing) vs what to ASSUME (and show). Returns
+//  {ask:[{ref,field,question}] — ask only ask[0] at a time, assumptions:[{ref,field,value,source,text}], items:[resolved items], rulesPatch}
+function planningGaps(intent,rules){
+  rules=rules||normalizeUserRules(null);
+  const out={ask:[],assumptions:[],items:[],rulesPatch:null};
+  if(intent.op==='move'&&!intent.targetDays.length)out.ask.push({ref:'op',field:'targetDays',question:'לאיזה ימים להעביר?'});
+  if(intent.op==='preference'&&intent.preference){
+    const p=intent.preference;
+    if(p.bufferBeforeMin!=null&&!intent.scope)out.ask.push({ref:'op',field:'scope',question:'לכל האירועים או רק לזה?'});
+    if(p.dayRule&&Number.isInteger(p.dayRule.dow)&&PLAN_DAY_MODES.includes(p.dayRule.mode))out.rulesPatch={dayModes:{[p.dayRule.dow]:p.dayRule.mode}};
+    if(p.bufferBeforeMin!=null&&intent.scope==='global')out.rulesPatch=Object.assign(out.rulesPatch||{},{bufferBeforeMin:p.bufferBeforeMin});
+    if(p.lateBiasMin!=null)out.rulesPatch=Object.assign(out.rulesPatch||{},{lateBiasMin:p.lateBiasMin});
+  }
+  const DN=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  intent.items.forEach(it=>{
+    const r={...it};
+    // 1) critical: kind (everything downstream is built on it)
+    if(it.confidence.kind!==null&&it.confidence.kind<PLAN_CONF_CRITICAL)out.ask.push({ref:it.ref,field:'kind',question:'"'+it.title+'" — איזה סוג זה (פגישה, סידור, עבודה…)?'});
+    // 2) critical: an anchor we cannot even name; place for travel / "while in X"
+    if(it.anchor&&!it.anchor.target.text&&it.anchor.rel!=='while_in')out.ask.push({ref:it.ref,field:'anchor',question:'אחרי איזה אירוע בדיוק?'});
+    if((it.kind==='travel'||(it.anchor&&it.anchor.rel==='while_in'))&&!it.place&&!(intent.context&&intent.context.currentPlace))out.ask.push({ref:it.ref,field:'place',question:'לאן?'});
+    if(it.place&&it.confidence.place!==null&&it.confidence.place<PLAN_CONF_CRITICAL&&(it.kind==='travel'||it.kind==='errand'))out.ask.push({ref:it.ref,field:'place',question:'"'+it.title+'" — באיזה מקום?'});
+    // 3) non-critical: assume and say so
+    if(it.kind==='travel'&&!it.durationMin){r.duration={min:null,assumed:true,source:'pending_travel_matrix'};}
+    else{
+      const d=resolveDuration(it.kind,rules,it.durationUnknown?NaN:it.durationMin);
+      r.duration=d;
+      if(it.durationMin&&!it.durationUnknown&&it.confidence.duration!==null&&it.confidence.duration<PLAN_CONF_SOFT){r.duration={...d,assumed:true,source:'user_said_uncertain'};}
+      if(r.duration.assumed)out.assumptions.push({ref:it.ref,field:'duration',value:r.duration.min,source:r.duration.source,text:(it.kind==='meeting'&&r.duration.min===60?'שמתי שעה':'שמתי '+r.duration.min+' דק׳')+' ל"'+it.title+'", אפשר לשנות'});
+    }
+    const b=resolveBuffer(it.kind,rules);r.buffer=b;
+    r.departureOffsetMin=rules.lateBiasMin||0;
+    if(it.rigidity&&!(it.confidence.rigidity!==null&&it.confidence.rigidity<PLAN_CONF_SOFT)){r.rigidityResolved={value:it.rigidity,source:'explicit_user',assumed:false};}
+    else{const v=it.rigidity||_pm_kindRigidity(it.kind);r.rigidityResolved={value:v,source:it.rigidity?'low_confidence_input':'kind_default',assumed:true};out.assumptions.push({ref:it.ref,field:'rigidity',value:v,source:r.rigidityResolved.source,text:'"'+it.title+'" — '+(v==='hard'?'קבוע':'גמיש')+' (הנחה)'});}
+    r.mobility=mobilityFor(it.kind,r.rigidityResolved.value,rules,{earliest:it.window&&it.window.from,latest:it.window&&it.window.to});
+    out.items.push(r);
+  });
+  return out;
+}
+// ══════════════════════════════════════════════════════
+//  CONTEXT (step B) — one immutable picture of the calendar + anchor resolution + a minimal linear chain. PURE.
+// ══════════════════════════════════════════════════════
+function _hnorm(s){return String(s||'').toLowerCase().replace(/[֑-ׇ]/g,'').replace(/וו/g,'ו').replace(/יי/g,'י').replace(/["'׳״`.,!?()\-–—:;/]/g,' ').replace(/\s+/g,' ').trim();}
+const _H_STOP=new Set(['את','של','עם','על','אל','מה','אני','כבר','זה','הזה','הזאת','לי','אחרי','לפני','כש','כשאני','אירוע','היום','מחר','ביום','שעה']);
+function _htok(s){return _hnorm(s).split(' ').filter(Boolean).map(w=>w.replace(/^(ה|ב|ל|ו|ש|מ|כ)(?=[א-ת]{3,})/,'')).filter(w=>w.length>=2&&!_H_STOP.has(w));}
+const _CTX_MEETINGISH=/פגיש|ישיב|meeting/i,_CTX_ONLINE=/זום|zoom|teams|meet\.google|hangout|וובינר|webinar/i;
+function _ctxMin(ev){return Number.isInteger(ev.startMin)?ev.startMin:(ev.startH||0)*60;}
+function _ctxEnd(ev){return Number.isInteger(ev.endMin)?ev.endMin:(ev.endH||0)*60;}
+function _ctxHash(str){let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))|0;return (h>>>0).toString(36);}
+function _deepFreeze(o){if(o&&typeof o==='object'&&!Object.isFrozen(o)){Object.freeze(o);Object.values(o).forEach(_deepFreeze);}return o;}
+function _isoAdd(iso,n){const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+// PURE: Google + local events as ONE list in the same shape, duplicates merged (same title, same day, start/end within 5 min → keep the Google one).
+function contextEvents(state){
+  const raw=((state&&state.constraintsGlobal&&state.constraintsGlobal.events)||[]);
+  const norm=raw.map(e=>{
+    const ev={id:String(e.id),gid:e.gid||null,source:String(e.id).indexOf('gcal_')===0||e.source==='gcal'?'gcal':'local',title:String(e.title||''),date:e.date,startMin:_ctxMin(e),endMin:_ctxEnd(e),
+      place:e.place||'',attendees:e.attendees||0,transparency:e.transparency||'opaque',descr:e.descr||'',online:!!e.online,color:e.color||null,domain:e.domain||null,travelMin:e.travelMin||0};
+    ev.rigidity=inferRigidity({title:ev.title,attendees:ev.attendees,transparency:ev.transparency,eventType:e.eventType,rigidity:e.rigidity,rigiditySource:e.rigiditySource});
+    return ev;
+  }).filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(e.date)&&e.endMin>e.startMin);
+  const out=[];
+  norm.filter(e=>e.source==='gcal').forEach(e=>out.push(e));
+  norm.filter(e=>e.source!=='gcal').forEach(l=>{
+    const dup=out.find(g=>g.source==='gcal'&&g.date===l.date&&_hnorm(g.title)===_hnorm(l.title)&&Math.abs(g.startMin-l.startMin)<=5&&Math.abs(g.endMin-l.endMin)<=5);
+    if(dup){dup.mergedLocal=(dup.mergedLocal||[]).concat(l.id);return;}
+    out.push(l);
+  });
+  return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
+}
+// PURE: an immutable (deep-frozen) snapshot. All planning runs against ONE snapshot; `sig` detects any later change.
+function buildContextSnapshot(state,o){
+  o=o||{};const today=state.meta.today,from=o.from||today,to=o.to||_isoAdd(from,13);
+  const events=contextEvents(state).filter(e=>e.date>=from&&e.date<=to);
+  const rules=getUserRules(state);
+  const hiddenTitles=events.filter(e=>e.source==='gcal'&&/^תפוס \(יומן גוגל\)$/.test(e.title)).length;
+  const sig=_ctxHash(JSON.stringify([today,from,to,events.map(e=>[e.id,e.title,e.date,e.startMin,e.endMin,e.place]),rules]));
+  return _deepFreeze({v:1,today,from,to,events,rules,sig,hiddenTitles});
+}
+function contextIsStale(snap,state){return buildContextSnapshot(state,{from:snap.from,to:snap.to}).sig!==snap.sig;}
+const _CTX_DN=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+function _ctxDayName(iso){return 'יום '+_CTX_DN[new Date(iso+'T12:00:00Z').getUTCDay()];}
+// PURE: bind a spoken reference ("הפגישה בפתח תקווה", "הזום", "הטיפול", "הפגישה עם ארז", "האירוע של 12", "כשאני באריאל") to a REAL event.
+//  → {status:'resolved'|'ambiguous'|'not_found'|'place_only', event?, candidates?, confidence, anchorMin?, question?, message?}
+function resolveAnchor(snap,anchor){
+  if(!anchor||!anchor.target)return{status:'not_found',confidence:0,message:'לא ציינת אחרי איזה אירוע.'};
+  const text=String(anchor.target.text||'');
+  if(anchor.rel==='while_in'){const pl=text.replace(/^(כש|כשאני|ש)?\s*(אני)?\s*(כבר)?\s*/,'').trim()||text;return{status:'place_only',place:pl.replace(/^[בל]-?(?=[א-ת]{3,})/,''),confidence:0.9};}
+  const date=/^\d{4}-\d{2}-\d{2}$/.test(String(anchor.target.date||''))?anchor.target.date:null;
+  const wFrom=date||snap.today,wTo=date||_isoAdd(snap.today,6);
+  const pool=snap.events.filter(e=>e.date>=wFrom&&e.date<=wTo);
+  const toks=_htok(text);if(!toks.length&&!/\d/.test(text))return{status:'not_found',confidence:0,message:'לא הבנתי לאיזה אירוע הכוונה.'};
+  const tm=/(?:של|ב-?|בשעה)\s*(\d{1,2})(?::(\d{2}))?\s*$/.exec(text);
+  const timeRef=tm?(+tm[1])*60+(+(tm[2]||0)):null;
+  const GENERIC=new Set(['פגישה','פגישות','ישיבה','meeting']);
+  const specific=toks.filter(t=>!GENERIC.has(t)&&!/^\d+$/.test(t));
+  const wantsOnline=toks.some(t=>/^(זום|zoom|teams|וובינר)$/.test(t));
+  const scored=pool.map(ev=>{
+    const tt=new Set(_htok(ev.title)),pt=new Set(_htok(ev.place)),dt=new Set(_htok(ev.descr));
+    let sc=0;const why=[];
+    toks.forEach(t=>{
+      if(GENERIC.has(t)){if(_CTX_MEETINGISH.test(ev.title)||ev.attendees>0){sc+=1;why.push('סוג');}return;}
+      if(/^\d+$/.test(t))return;
+      if(/^(זום|zoom|teams|וובינר)$/.test(t)){if(ev.online||_CTX_ONLINE.test(ev.title+' '+ev.place+' '+ev.descr)){sc+=3;why.push('מקוון');}return;}
+      if(tt.has(t)){sc+=3;why.push('כותרת');}
+      if(pt.has(t)){sc+=3;why.push('מיקום');}
+      if(dt.has(t)){sc+=1;why.push('תיאור');}
+    });
+    if(timeRef!=null&&Math.abs(ev.startMin-timeRef)<=30){sc+=4;why.push('שעה');}
+    return{event:ev,score:sc,why};
+  }).filter(c=>c.score>0);
+  const needed=(specific.length||wantsOnline||timeRef!=null)?3:1;
+  const cands=scored.filter(c=>c.score>=needed).sort((a,b)=>b.score-a.score||(a.event.date<b.event.date?-1:a.event.date>b.event.date?1:a.event.startMin-b.event.startMin));
+  if(!cands.length){
+    const hid=snap.hiddenTitles>0&&specific.length?' (כותרות היומן מוסתרות לפי הגדרת הפרטיות, ולכן קשה לי לזהות לפי שם)':'';
+    return{status:'not_found',confidence:0,candidates:[],message:'לא מצאתי ביומן "'+text+'"'+(date?' ב'+_ctxDayName(date):' בשבוע הקרוב')+hid+'.'};
+  }
+  const edge=ev=>anchor.rel==='before'||anchor.rel==='at'?ev.startMin:ev.endMin;
+  const top=cands[0],close=cands.filter(c=>c.score>=top.score-1);
+  if(close.length===1){
+    const conf=top.score>=6?0.95:top.score>=3?0.85:0.7;
+    return{status:'resolved',event:top.event,candidates:[top],confidence:conf,anchorMin:edge(top.event),why:top.why};
+  }
+  const lst=close.slice(0,3);
+  return{status:'ambiguous',candidates:lst,confidence:0.4,
+    question:'מצאתי '+close.length+' אפשרויות: '+lst.map(c=>'"'+c.event.title+'" '+_ctxDayName(c.event.date)+' '+_fmtMin(c.event.startMin)).join(' / ')+' — איזו?'};
+}
+// PURE: travel minutes between two places from the user's matrix. Never guesses: missing → {min:null,missing:{from,to}}.
+function _zoneOf(rules,place){
+  const p=_hnorm(place);if(!p)return null;
+  return (rules.zones||[]).find(z=>{const n=_hnorm(z.name);return n===p||n.indexOf(p)>=0||p.indexOf(n)>=0;})||null;
+}
+function travelMinutes(rules,fromPlace,toPlace){
+  const a=_hnorm(fromPlace),b=_hnorm(toPlace);
+  if(!a||!b)return{min:null,missing:{from:fromPlace||'',to:toPlace||''}};
+  if(a===b)return{min:0,source:'same_place'};
+  const za=_zoneOf(rules,fromPlace),zb=_zoneOf(rules,toPlace);
+  if(za&&zb){if(za.id===zb.id)return{min:0,source:'same_zone'};const v=(rules.travelMatrix||{})[[za.id,zb.id].sort().join('|')];if(v)return{min:v,source:'matrix'};}
+  return{min:null,missing:{from:fromPlace,to:toPlace}};
+}
+// PURE: the user's answer to "how long from A to B?" → a rules patch (zones + matrix), remembered for next time.
+function travelAnswerPatch(rules,fromPlace,toPlace,min){
+  const r=normalizeUserRules(rules);const zones=r.zones.slice();
+  const ensure=(name)=>{let z=_zoneOf(r,name)||zones.find(x=>_hnorm(x.name)===_hnorm(name));if(!z){z={id:'z'+_ctxHash(_hnorm(name)),name:String(name).trim()};zones.push(z);}return z;};
+  const A=ensure(fromPlace),B=ensure(toPlace);
+  const m={...r.travelMatrix};if(A.id!==B.id&&min>0)m[[A.id,B.id].sort().join('|')]=Math.round(min);
+  return{zones,travelMatrix:m};
+}
+function _hhmm(s){const m=/^(\d{1,2}):(\d{2})$/.exec(String(s||''));return m?(+m[1])*60+(+m[2]):null;}
+// PURE: minimal LINEAR chain ("after X: travel, then Y, then Z"). Anchor from the real calendar; travel from the matrix;
+// asks at most ONE question; reports technical overlaps (semantic validation is step D). Not the full planner (step C).
+function planChainBasic(snap,intent,gaps){
+  const items=gaps.items;if(!items.length)return{status:'empty'};
+  const first=items[0];let date=first.date||null,cursor=null,place=intent.context&&intent.context.currentPlace||null,anchorInfo=null;
+  if(first.anchor){
+    if(first.anchor.rel==='before')return{status:'unsupported_yet',message:'תכנון "לפני" ייבנה בשלב הבא.'};
+    const ar=resolveAnchor(snap,first.anchor);
+    if(ar.status==='ambiguous')return{status:'ask',ask:{field:'anchor',ref:first.ref,question:ar.question,candidates:ar.candidates.map(c=>c.event.id)},anchor:ar};
+    if(ar.status==='not_found')return{status:'not_found',message:ar.message,anchor:ar};
+    if(ar.status==='resolved'){date=ar.event.date;cursor=ar.anchorMin;place=ar.event.place||place;anchorInfo={eventId:ar.event.id,title:ar.event.title,date:ar.event.date,startMin:ar.event.startMin,endMin:ar.event.endMin,place:ar.event.place||null,confidence:ar.confidence};}
+    else if(ar.status==='place_only'){place=ar.place;}
+  }
+  if(cursor==null){const w=_hhmm(first.window&&first.window.from);if(w!=null)cursor=w;}
+  if(cursor==null)return{status:'ask',ask:{field:'start',ref:first.ref,question:'מתי להתחיל?'}};
+  if(!date)date=snap.today;
+  const plan=[],assumptions=gaps.assumptions.slice();
+  const leg=(toPlace,ref,title)=>{
+    const t=travelMinutes(snap.rules,place,toPlace);
+    if(t.min===null)return{ask:{field:'travel',ref,from:t.missing.from||place||'',to:t.missing.to||toPlace,question:place?('כמה זמן נסיעה מ'+place+' ל'+toPlace+'? (אזכור לפעם הבאה)'):('מאיפה יוצאים לנסיעה ל'+toPlace+'?')}};
+    return{min:t.min,source:t.source};
+  };
+  for(const it of items){
+    if(it.kind==='travel'){
+      const dest=it.place;if(!dest)return{status:'ask',ask:{field:'place',ref:it.ref,question:'לאן הנסיעה?'}};
+      let min=it.durationMin;let src='user_said';
+      if(!min){const L=leg(dest,it.ref,it.title);if(L.ask)return{status:'ask',ask:L.ask,planned:plan,anchor:anchorInfo};min=L.min;src=L.source;}
+      plan.push({ref:it.ref,title:it.title,kind:'travel',place:dest,date,startMin:cursor,endMin:cursor+min,durationSource:src});
+      cursor+=min;place=dest;continue;
+    }
+    if(it.place&&place&&_hnorm(it.place)!==_hnorm(place)&&(!_zoneOf(snap.rules,it.place)||!_zoneOf(snap.rules,place)||_zoneOf(snap.rules,it.place).id!==_zoneOf(snap.rules,place).id)){
+      const L=leg(it.place,it.ref,'נסיעה');if(L.ask)return{status:'ask',ask:L.ask,planned:plan,anchor:anchorInfo};
+      if(L.min>0){plan.push({ref:it.ref+'_travel',title:'נסיעה ל'+it.place,kind:'travel',place:it.place,date,startMin:cursor,endMin:cursor+L.min,durationSource:L.source,implicit:true});assumptions.push({ref:it.ref,field:'travel',value:L.min,source:L.source,text:'הוספתי נסיעה ל'+it.place+' ('+L.min+' דק׳)'});cursor+=L.min;}
+      place=it.place;
+    }
+    let start=cursor;const w=_hhmm(it.window&&it.window.from);if(w!=null&&w>start)start=w;
+    const dur=it.duration.min||0;
+    plan.push({ref:it.ref,title:it.title,kind:it.kind,place:it.place||place||null,date,startMin:start,endMin:start+dur,durationSource:it.duration.source,assumed:it.duration.assumed});
+    cursor=start+dur;if(it.place)place=it.place;
+  }
+  const conflicts=[];
+  plan.forEach(p=>snap.events.forEach(e=>{if(e.date===p.date&&p.startMin<e.endMin&&p.endMin>e.startMin&&(!anchorInfo||e.id!==anchorInfo.eventId))conflicts.push({plan:p.ref,event:e.id,title:e.title});}));
+  return{status:'ok',date,anchor:anchorInfo,items:plan,assumptions,conflicts,snapshotSig:snap.sig};
+}
+// PURE: before creating anything — was the calendar changed since planning? If so re-check overlaps on the fresh data.
+function revalidatePlan(snap,state,plan){
+  if(!contextIsStale(snap,state))return{stale:false,ok:plan.conflicts.length===0,conflicts:plan.conflicts};
+  const fresh=buildContextSnapshot(state,{from:snap.from,to:snap.to});const conflicts=[];
+  plan.items.forEach(p=>fresh.events.forEach(e=>{if(e.date===p.date&&p.startMin<e.endMin&&p.endMin>e.startMin&&(!plan.anchor||e.id!==plan.anchor.eventId))conflicts.push({plan:p.ref,event:e.id,title:e.title});}));
+  return{stale:true,ok:conflicts.length===0,conflicts,snapshot:fresh};
+}
+// PURE: the Hebrew card text for a chain result (what Maya says before asking for confirmation).
+function chainSummaryText(res){
+  if(res.status==='ask')return res.ask.question;
+  if(res.status==='not_found')return res.message;
+  if(res.status!=='ok')return res.message||'';
+  const L=[];
+  if(res.anchor)L.push('זיהיתי את "'+res.anchor.title+'" — שעת סיום '+_fmtMin(res.anchor.endMin)+'.');
+  res.items.forEach(p=>L.push('• '+_fmtMin(p.startMin)+'–'+_fmtMin(p.endMin)+' '+p.title+(p.kind==='travel'?' ('+(p.endMin-p.startMin)+' דק׳'+(p.durationSource==='matrix'?', לפי המטריצה':'')+')':'')));
+  res.assumptions.filter(a=>a.field!=='rigidity').forEach(a=>L.push('הנחה: '+a.text));
+  if(res.conflicts.length)L.push('⚠️ חופף ל: '+res.conflicts.map(c=>c.title).join(', '));
+  return L.join('\n');
+}
+// ── Intent extraction prompt (Capture). The model ONLY interprets; it never computes hours. Used by tests/intent-eval now and by PLAN_REQUEST (step F). ──
+const AI_INTENT_PROMPT=`את מפענחת בקשות תכנון בעברית ומחזירה JSON בלבד — בלי טקסט, בלי הסברים, בלי בלוקי קוד.
+חוק ברזל: לעולם אל תחשבי שעות התחלה/סיום ואל תמציאי אירועים. רק תעתיקי מה שנאמר. אם לא נאמר משך — אל תנחשי (השאירי durationMin חסר; אם נאמר "לא יודע כמה זמן" שימי durationUnknown:true).
+הפורמט:
+{"op":"create|move|find|prune|arrange|preference","items":[{"ref":"i1","title":"...","kind":"travel|meeting|work|deep_work|errand|shopping|phone_call|admin|study|creative|religious|fitness|personal|waiting_for_response","durationMin":מספר (רק אם נאמר),"durationUnknown":true (רק אם נאמר שלא יודע),"place":"מקום","date":"YYYY-MM-DD","window":{"from":"HH:MM","to":"HH:MM"},"anchor":{"rel":"after|before|at|while_in","target":{"text":"הביטוי כפי שנאמר","date":"YYYY-MM-DD"}},"afterItem":"i1","rigidity":"hard|flexible|optional" (רק אם נאמר),"confidence":{"kind":0..1,"duration":0..1,"place":0..1,"rigidity":0..1,"anchor":0..1}}],"filter":{"kind":"..."},"targetDays":["YYYY-MM-DD"],"scope":"event|global","preference":{"bufferBeforeMin":מספר,"lateBiasMin":מספר,"dayRule":{"dow":0-6,"mode":"work|study|flexible|errands|field|rest|spirit|light"}},"context":{"currentPlace":"..."}}
+כללים: (1) op=create כשמבקשים להוסיף; move להעביר קיים; find כששואלים "מתי/איפה מתאים"; prune כשאין זמן ומבקשים מה להוריד; arrange כשזורקים כמה דברים ליום ומבקשים לסדר; preference כשמעדכנים כלל קבוע (מרווח, איחור, יום עמוס). (2) anchor: "אחרי/לפני X" → rel + target.text בדיוק כפי שנאמר ("הפגישה בפתח תקווה"); "כשאני כבר ב-X" → rel=while_in; את target.date מלאי רק אם נאמר יום (מחר/ביום שלישי…) לפי התאריך של היום. (3) רצף "אחרי X: א, ב, ג" → הפריט הראשון עם anchor, השאר עם afterItem לקודם. (4) confidence נמוך (<0.6) כשאת לא בטוחה בסוג/מקום — אל תנחשי בביטחון. (5) "קניות" = shopping, "בנק/סידור" = errand, "זום/פגישה" = meeting, "בית מדרש/תורה/תפילה" = religious, "נסיעה" = travel (place=היעד), "להתקשר" = phone_call, "ללמוד" = study, "עבודה/דוח" = work/deep_work, "אימון/ריצה/כושר" = fitness. (6) "תמיד/לכל דבר" → scope=global; אם לא ברור — השמיטי scope.`;
+function buildIntentSystem(todayISO){
+  const dn=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const d=new Date(todayISO+'T12:00:00Z');
+  return AI_INTENT_PROMPT+'\nהיום: '+todayISO+' (יום '+dn[d.getUTCDay()]+'). "מחר" = '+_isoAdd(todayISO,1)+'.';
+}
+// ── Interpretation layer for small tasks: kind (metadata), place, and "what can be done together" ──
+const TASK_KINDS=['deep_work','phone_call','admin','errand','travel_compatible','creative','meeting','study','personal','waiting_for_response'];
+// PURE: guess the kind from the title (Hebrew keywords). Order matters: waiting/call/meeting before generic errand.
+function taskKindOf(title){
+  const t=String(title||'');
+  if(/(מחכה|ממתין|ממתינה|לחכות)\s*(ל|מ)|עוד לא ענ|לחכות לתשובה/.test(t))return'waiting_for_response';
+  if(/להתקשר|לחייג|שיחה|טלפון|לדבר עם|להחזיר שיחה|לצלצל/.test(t))return'phone_call';
+  if(/פגישה|להיפגש|ישיבה|קפה עם|לפגוש/.test(t))return'meeting';
+  if(/ללמוד|לימוד|שיעור|מבחן|תרגיל|לקרוא פרק|סיכום|קורס/.test(t))return'study';
+  if(/לכתוב|לעצב|ליצור|רעיון|לתכנן מצגת|סרטון|ציור/.test(t))return'creative';
+  if(/לקנות|לאסוף|להביא|להחזיר|לשלוח חבילה|דואר|סופר|בנק|רופא|מספרה|תיקון|מוסך|להתאמן|קניות|לקחת/.test(t))return'errand';
+  if(/לשלם|חשבון|ארנונה|טופס|מיילים|לסדר|לארגן|לעדכן|להזמין|לברר|ביטוח|להגיש|מסמך|לסרוק|לשלוח/.test(t))return'admin';
+  if(/לעבוד על|לכתוב דוח|פרויקט|להתרכז|עבודה עמוקה|סמינריון/.test(t))return'deep_work';
+  return'personal';
+}
+// PURE: a kind can be done while travelling (calls) — "travel_compatible" in the spec
+function taskTravelCompatible(t){const k=(t&&t.kind)||taskKindOf(t&&t.title);return k==='phone_call'||k==='travel_compatible';}
+// PURE: "בתלפיות" / "ב-אריאל" at the end of the title → place name. Time-of-day words are not places.
+function taskPlaceOf(title){
+  const m=/\s([בל])[-־]?([א-ת"׳']{3,})\s*$/.exec(String(title||'').trim());if(!m)return'';
+  const full=m[1]+m[2];
+  // common nouns that merely start with ב/ל are not places
+  if(/^(ביטוח|בנק|בדיקה|בדיקות|בקשה|בית|ביקור|בישול|בחירה|ברכה|בגדים|בשר|בוקר|בירור|ביטול|בריאות|בנייה|לילה|לקוח|לקוחות|לימוד|לחם|לבוש)$/.test(full))return'';
+  const w=m[2].replace(/^ה(?=[א-ת]{3,})/,'');
+  if(/^(בוקר|ערב|צהריים|צהרים|היום|מחר|מחרתיים|שבוע|שבת|אחרונה|הקרוב|הבית|בית|לילה)$/.test(w)||/^(ראשון|שני|שלישי|רביעי|חמישי|שישי)$/.test(w))return'';
+  return w;
+}
+// PURE: batching suggestions over open small tasks. Each: {type,ids,text}. Never moves anything — only proposes.
+function smallBatches(tasks,today,wk){
+  const open=(tasks||[]).filter(t=>smallIsOpen(t,wk)&&!smallSnoozed(t,today));
+  const out=[];
+  const kd=t=>t.kind||taskKindOf(t.title);
+  const calls=open.filter(t=>kd(t)==='phone_call');
+  if(calls.length>=2)out.push({type:'calls',ids:calls.map(t=>t.id),text:`יש לך ${calls.length} שיחות — אפשר לעשות את כולן בנסיעה או בבלוק אחד של כ-${Math.min(40,calls.length*10)} דקות.`});
+  const byPlace={};open.filter(t=>['errand','admin'].includes(kd(t))).forEach(t=>{const pl=taskPlaceOf(t.title);if(pl)(byPlace[pl]=byPlace[pl]||[]).push(t);});
+  Object.keys(byPlace).sort().forEach(pl=>{if(byPlace[pl].length>=2)out.push({type:'place',place:pl,ids:byPlace[pl].map(t=>t.id),text:`יש לך ${byPlace[pl].length} דברים ב${pl} — עדיף לרכז אותם ליציאה אחת.`});});
+  const admin=open.filter(t=>kd(t)==='admin'&&!taskPlaceOf(t.title));
+  if(admin.length>=3)out.push({type:'admin',ids:admin.map(t=>t.id),text:`${admin.length} משימות אדמיניסטרציה קטנות — חלון אחד של חצי שעה יסגור את כולן.`});
+  return out;
+}
+// PURE: is a day too full? busyMin = already committed minutes, addMin = what is being added.
+// 'full' → refuse-style warning, 'swap' → "something has to leave", 'ok'.
+function dayOverloadVerdict(o){
+  o=o||{};const cap=Math.max(60,o.capacityMin||720),busy=Math.max(0,o.busyMin||0),add=Math.max(0,o.addMin||0);
+  if(busy/cap>=0.75)return{level:'full',text:'היום הזה כבר מלא. כדאי לבחור יום אחר.'};
+  if((busy+add)/cap>0.85)return{level:'swap',text:'אם מוסיפים את זה, משהו אחר חייב לצאת מהיום הזה.'};
+  return{level:'ok',text:''};
 }
 function _smallMutate(fn,tag){
   const s=structuredClone(STATE_ACTIVE);if(!s.microTasks)s.microTasks={categories:['כספים','בירוקרטיה','שיחות','שגרה','כללי'],tasks:[]};
@@ -8855,6 +9287,10 @@ function renderSmallMayaCards(box){
     });
     box.appendChild(c);
   }
+  {const bt=smallBatches(all,today,wk);
+    if(bt.length){const c=mk('maya-small');const h=document.createElement('div');h.className='ms-h';h.textContent='🧩 אפשר לרכז';c.appendChild(h);
+      bt.slice(0,3).forEach(b=>{const r=document.createElement('div');r.className='ms-row';const tx=document.createElement('span');tx.textContent=b.text;r.appendChild(tx);c.appendChild(r);});
+      box.appendChild(c);}}
   if(_smallBatchDismissedToday())return;
   const q=smallCheckIn(all,today,wk,SMALL_BATCH_MAX);
   if(!q.length)return;
