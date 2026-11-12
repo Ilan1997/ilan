@@ -497,6 +497,177 @@ const w=dom.window;
     const okc=Object.values(r).every(v=>v===true);
     rows.push(['plan: before-chain, departure, scheduleSet (C)',String(okc)+(okc?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okc)failed=true;
   }catch(e){rows.push(['plan: before-chain, departure, scheduleSet (C)','THROW '+e.message]);failed=true;}
+  // ---- step D: validatePlan + proposeCuts (acceptance tests 1–8 + validation checks) ----
+  try{
+    const r=await w.eval(`(async()=>{const o={};
+      const mk=(events,rules)=>{const s=structuredClone(STATE_ACTIVE);s.meta.today='2026-11-15';s.constraintsGlobal.events=structuredClone(events);s.userRules=rules||{};return s;};
+      const ev=(id,title,date,sm,em,x)=>({id,title,date,startH:Math.floor(sm/60),endH:Math.ceil(em/60),startMin:sm,endMin:em,...(x||{})});
+      const snapOf=(events,rules)=>buildContextSnapshot(mk(events,rules),{engine:false});
+      const P=(ref,title,kind,date,sm,em,x)=>({ref,title,kind,place:null,date,startMin:sm,endMin:em,origDurationMin:em-sm,rigidity:'flexible',canMove:true,canShorten:false,canDrop:false,minDurationMin:null,earliest:null,latest:null,bufferMin:0,inTravel:false,chain:null,chainIdx:null,chainAnchor:null,...(x||{})});
+      const MON='2026-11-16',TUE='2026-11-17';
+      const HARD=(id,title,sm,em,x)=>ev(id,title,MON,sm,em,{attendees:2,...(x||{})});
+      const mat=(a,b,m,base)=>({...(base||{}),...travelAnswerPatch(normalizeUserRules(base||{}),a,b,m)});
+      const blocksOf=(v)=>v.blocks.map(b=>b.code);
+      const clean=(res)=>res.options.every(op=>validatePlan(snapOf([],{}),[]).ok);
+      // ===== 1. overloaded day → optional items leave first, flexible untouched =====
+      {const E=[HARD('m','פגישה',540,660)];
+       const items=[P('s','לימוד','study',MON,720,840,{canShorten:true,minDurationMin:30}),P('sh','קניות','shopping',MON,840,900,{rigidity:'optional',canDrop:true}),P('ad','אדמין','admin',MON,900,960,{rigidity:'optional',canDrop:true,canShorten:true,minDurationMin:15}),P('w','עבודה','work',MON,960,1140,{canShorten:true,minDurationMin:45})];
+       const sn=snapOf(E,{maxLoadMin:480});const v=validatePlan(sn,items);
+       o.t1_detects=!v.ok&&blocksOf(v).join()==='load_exceeded'&&v.blocks[0].data.load===540&&v.blocks[0].data.cap===480;
+       const res=proposeCuts(sn,items);
+       o.t1_repaired=res.status==='repaired'&&res.best.steps.length===1&&res.best.steps[0].type==='drop';
+       o.t1_optionalFirst=res.best.steps[0].ref==='sh'&&res.best.plan.some(x=>x.ref==='s')&&res.best.plan.some(x=>x.ref==='w')&&res.best.plan.length===3;
+       o.t1_cost=res.best.steps[0].costScore<PLAN_REPAIR_COST.shorten;
+       o.t1_alt=res.options.length>=2&&res.options[1].totalCost>=res.options[0].totalCost&&res.options[1].steps[0].ref!=='sh'&&res.options[1].complete;}
+      // ===== 2. fitness 90 does not fit → offer 30 if allowed =====
+      {const E=[HARD('a','פגישה א',540,600),HARD('b','פגישה ב',630,720)];
+       const mkFit=x=>[P('f','כושר','fitness',MON,600,690,{canShorten:true,minDurationMin:30,...(x||{})})];
+       const sn=snapOf(E,{});const v=validatePlan(sn,mkFit());
+       o.t2_detects=blocksOf(v).join()==='overlap';
+       const res=proposeCuts(sn,mkFit());const st=res.best&&res.best.steps[0];
+       o.t2_shorten30=res.status==='repaired'&&st.type==='shorten'&&st.to.endMin-st.to.startMin===30&&st.from.endMin-st.from.startMin===90&&/90/.test(st.text)&&/30/.test(st.text);
+       o.t2_cheapestIsShorten=res.options[0].steps[0].type==='shorten';
+       const noShort=proposeCuts(sn,mkFit({canShorten:false}));
+       o.t2_notAllowed=noShort.status==='repaired'&&noShort.options.every(op=>op.steps.every(s=>s.type!=='shorten'));
+       const minHigh=proposeCuts(sn,mkFit({minDurationMin:45}));
+       o.t2_minRespected=minHigh.options.every(op=>op.steps.every(s=>s.type!=='shorten'||(s.to.endMin-s.to.startMin)>=45));}
+      // ===== 3. study does not fit → move to another day, never delete =====
+      {const E=[HARD('a','אימון קבוע',480,600),HARD('b','פגישות',620,1200)];
+       const items=[P('st','לימוד','study',MON,600,690,{canShorten:true,minDurationMin:30})];
+       const sn=snapOf(E,{});const res=proposeCuts(sn,items);
+       o.t3_moveNotDelete=res.status==='repaired'&&res.best.steps.length===1&&res.best.steps[0].type==='move_day'&&res.best.steps[0].to.date!==MON&&res.best.plan.length===1&&res.options.every(op=>op.steps.every(s=>s.type!=='drop'));
+       o.t3_validDay=new Date(res.best.steps[0].to.date+'T12:00:00Z').getUTCDay()!==6&&res.best.steps[0].costScore>=PLAN_REPAIR_COST.move_day;}
+      // ===== 4. "must be home by 21:00" (hard) → every plan ending later is blocked =====
+      {const rules=mat('פתח תקווה','בית',40,{anchors:[{id:'home',type:'family',title:'בבית ב-21:00',mode:'curfew',days:[0,1,2,3,4,5,6],startMin:1260,enforcement:'hard'}]});
+       const sn=snapOf([],rules);
+       o.t4_anchorModel=sn.rules.anchors[0].mode==='curfew'&&sn.rules.anchors[0].enforcement==='hard'&&sn.rules.anchors[0].endMin===1440;
+       const late=[P('e','סידור','errand',MON,1170,1290,{canShorten:true,minDurationMin:15})];
+       const v=validatePlan(sn,late);o.t4_blocksLate=!v.ok&&blocksOf(v).join()==='curfew'&&v.blocks[0].data.enforcement==='hard';
+       const withTravel=[P('e','סידור','errand',MON,1110,1230,{place:'פתח תקווה',canShorten:true,minDurationMin:15})];
+       const v2=validatePlan(sn,withTravel);o.t4_countsDriveHome=!v2.ok&&blocksOf(v2).join()==='curfew'&&v2.blocks[0].data.backMin===40;
+       const early=[P('e','סידור','errand',MON,1080,1140,{canShorten:true,minDurationMin:15})];o.t4_okEarly=validatePlan(sn,early).ok;
+       const res=proposeCuts(sn,late);
+       o.t4_repairsWithin=res.status==='repaired'&&res.options.every(op=>validatePlan(sn,op.plan).ok&&op.plan.every(x=>x.endMin<=1260));
+       const fixedLate=[P('t','טיפול','personal',MON,1200,1290,{rigidity:'hard',canMove:false})];
+       const r2=proposeCuts(sn,fixedLate);o.t4_fixedAskUser=r2.status==='needs_decision'&&r2.options.length===0&&r2.decisions.length===1&&r2.decisions[0].code==='curfew'&&fixedLate[0].startMin===1200;}
+      // ===== 5. "prefer to be home by 21:00" (soft) → warning, not a block =====
+      {const rules={anchors:[{id:'home',type:'family',title:'מעדיף בבית ב-21:00',mode:'curfew',days:[0,1,2,3,4,5,6],startMin:1260,enforcement:'soft'}]};
+       const sn=snapOf([],rules);const late=[P('e','סידור','errand',MON,1170,1290)];
+       const v=validatePlan(sn,late);o.t5_warnNotBlock=v.ok&&v.warnings.some(x=>x.code==='curfew'&&x.severity==='warn');
+       const res=proposeCuts(sn,late);o.t5_okWithWarning=res.status==='ok'&&res.options.length===0&&/21:00/.test(repairSummaryText(res));
+       const dflt=normalizeUserRules({anchors:[{id:'x',days:[1],startMin:900,endMin:960}]}).anchors[0];o.t5_defaults=dflt.enforcement==='hard'&&dflt.mode==='busy';
+       const soft=normalizeUserRules({anchors:[{id:'x',days:[1],startMin:900,endMin:960,enforcement:'soft'}]}).anchors[0];o.t5_softKept=soft.enforcement==='soft';
+       // busy anchor: hard (therapy 15:00) blocks, soft warns; scheduleSet only avoids HARD anchors
+       const th=(enf)=>snapOf([],{anchors:[{id:'th',type:'therapy',title:'טיפול',days:[1],startMin:900,endMin:960,enforcement:enf}]});
+       const it=[P('x','עבודה','work',MON,870,930,{canShorten:true,minDurationMin:15})];
+       o.t5_busyHard=!validatePlan(th('hard'),it).ok&&validatePlan(th('hard'),it).blocks[0].code==='anchor_conflict';
+       o.t5_busySoft=validatePlan(th('soft'),it).ok&&validatePlan(th('soft'),it).warnings[0].code==='anchor_conflict';
+       const free=(enf)=>ctxFreeIntervals(th(enf),MON,[]).some(iv=>iv[0]<900&&iv[1]>960||iv[1]>=960&&iv[0]<=900);
+       o.t5_freeAvoidsHardOnly=ctxFreeIntervals(th('hard'),MON,[]).every(iv=>iv[1]<=900||iv[0]>=960)&&ctxFreeIntervals(th('soft'),MON,[]).some(iv=>iv[0]<=900&&iv[1]>=960);}
+      // ===== 6. two hard events overlap → no auto fix, user decides =====
+      {const E=[HARD('t','טיפול',900,960),HARD('p','פגישה עם דנה',930,990)];
+       const items=[P('x','סידור','errand',MON,540,570,{canShorten:true,minDurationMin:15})];
+       const sn=snapOf(E,{});const v=validatePlan(sn,items);
+       o.t6_detects=!v.ok&&blocksOf(v).join()==='hard_conflict';
+       const res=proposeCuts(sn,items);
+       o.t6_needsUser=res.status==='needs_decision'&&res.best===null&&res.options.length===0&&res.decisions.length===1&&res.decisions[0].choices.map(c=>c.id).join()==='move_a,move_b,keep_overlap'&&/טיפול/.test(res.decisions[0].choices[0].label);
+       o.t6_noEventMoved=JSON.stringify(sn.events.map(e=>[e.id,e.startMin,e.endMin]))===JSON.stringify(E.map(e=>[e.id,e.startMin,e.endMin]));
+       // a HARD plan item over a hard event is the same: never auto-moved
+       const hardItem=[P('h','ישיבה','meeting',MON,900,960,{rigidity:'hard',canMove:false})];
+       const r2=proposeCuts(snapOf([HARD('t','טיפול',900,960)],{}),hardItem);o.t6_hardItemVsEvent=r2.status==='needs_decision'&&r2.options.length===0;}
+      // ===== 7. a chain with travel that does not fit → shorten, or shift_chain =====
+      {const E=[ev('pt','פגישה בפתח תקווה',MON,540,600,{place:'פתח תקווה',attendees:2}),HARD('tr','טיפול',680,740)];
+       const intentRaw={op:'create',items:[{ref:'i1',title:'נסיעה לאריאל',kind:'travel',place:'אריאל',anchor:{rel:'after',target:{text:'הפגישה בפתח תקווה',date:MON}},confidence:{kind:0.95,place:0.95,anchor:0.9}},{ref:'i2',title:'בית מדרש',kind:'religious',durationMin:60,afterItem:'i1',confidence:{kind:0.85,duration:0.95}}]};
+       const run=(rules)=>{const st=mk(E,mat('פתח תקווה','אריאל',40,rules));const sn=buildContextSnapshot(st,{engine:false});const it=normalizeIntent(intentRaw);const g=planningGaps(it,getUserRules(st));const ch=planChain(sn,it,g);return{sn,ch,items:planItemsFrom(sn,g,ch,{chain:true})};};
+       const A=run({});
+       o.t7_planned=A.ch.status==='ok'&&A.items.length===2&&A.items[0].startMin===600&&A.items[1].endMin===700&&A.items[0].chain==='c1'&&A.items[0].chainAnchor.rel==='after'&&A.items[0].chainAnchor.min===600;
+       const v=validatePlan(A.sn,A.items);o.t7_detects=!v.ok&&blocksOf(v).join()==='overlap'&&v.blocks[0].refs.indexOf('i2')>=0;
+       const res=proposeCuts(A.sn,A.items);const st=res.best.steps[0];
+       o.t7_shortens=res.status==='repaired'&&st.type==='shorten'&&st.ref==='i2'&&st.to.endMin===680&&(st.to.endMin-st.to.startMin)>=30&&res.best.plan.every((x,i,a)=>i===0||x.startMin===a[i-1].endMin);
+       const alt=res.options.find(op=>op.steps[0].type==='shift_chain');
+       o.t7_altShiftChain=!!alt&&alt.complete&&validatePlan(A.sn,alt.plan).ok&&alt.plan[0].startMin>=600&&alt.plan[0].endMin===alt.plan[0].startMin+40&&alt.plan[1].startMin===alt.plan[0].endMin&&alt.steps[0].costScore>st.costScore;
+       const B=run({mobilityByKind:{religious:{canShorten:false}}});
+       const rb=proposeCuts(B.sn,B.items);
+       o.t7_noShortenShiftChain=rb.status==='repaired'&&rb.best.steps.length===1&&rb.best.steps[0].type==='shift_chain'&&rb.best.plan[0].startMin>=740&&rb.best.plan[0].startMin>=600&&rb.best.plan[1].startMin===rb.best.plan[0].endMin&&rb.best.plan[1].endMin-rb.best.plan[1].startMin===60&&rb.best.steps[0].costScore>=PLAN_REPAIR_COST.shift_chain;
+       // travel that does not fit between two places (no explicit travel item)
+       const sn2=snapOf([],mat('פתח תקווה','אריאל',40,{}));
+       const two=[P('a','פגישה א','errand',MON,540,600,{place:'פתח תקווה',canShorten:true,minDurationMin:15}),P('b','סידור','errand',MON,620,680,{place:'אריאל',canShorten:true,minDurationMin:15})];
+       const v2=validatePlan(sn2,two);o.t7_travelGap=blocksOf(v2).join()==='travel_gap'&&v2.blocks[0].data.need===40&&v2.blocks[0].data.gap===20;
+       const r2=proposeCuts(sn2,two);o.t7_travelGapRepaired=r2.status==='repaired'&&validatePlan(sn2,r2.best.plan).ok;
+       const sn3=snapOf([],{});const v3=validatePlan(sn3,two);o.t7_travelUnknownWarns=v3.ok&&v3.warnings.some(x=>x.code==='travel_unknown'&&x.data.from==='פתח תקווה');
+       // explicit travel item shorter than the known drive
+       const shortTrip=[P('p','פגישה','errand',MON,540,600,{place:'פתח תקווה'}),P('t','נסיעה לאריאל','travel',MON,600,620,{place:'אריאל',canMove:true})];
+       o.t7_travelTooShort=blocksOf(validatePlan(sn2,shortTrip)).indexOf('travel_too_short')>=0;
+       // broken chain
+       const mkc=(g)=>[P('c1','נסיעה','travel',MON,600,640,{chain:'c',chainIdx:0,place:'אריאל'}),P('c2','בית מדרש','religious',MON,640+g,700+g,{chain:'c',chainIdx:1,canShorten:true,minDurationMin:30})];
+       const vb=validatePlan(sn3,mkc(60));o.t7_chainBroken=blocksOf(vb).indexOf('chain_broken')>=0;
+       const rc=proposeCuts(sn3,mkc(60));o.t7_chainRepaired=rc.status==='repaired'&&rc.best.plan[1].startMin===640&&rc.best.steps[0].type==='shift_chain';
+       const vd=validatePlan(sn3,[P('c1','נסיעה','travel',MON,600,640,{chain:'c',chainIdx:0}),P('c2','בית מדרש','religious',TUE,640,700,{chain:'c',chainIdx:1})]);o.t7_chainSplitDays=blocksOf(vd).indexOf('chain_broken')>=0;
+       const vm=validatePlan(sn3,[P('c1','נסיעה','travel',MON,600,640,{chain:'c',chainIdx:0}),P('c3','סיום','religious',MON,640,700,{chain:'c',chainIdx:2})]);o.t7_chainMissing=blocksOf(vm).indexOf('chain_broken')>=0;}
+      // ===== 8. an item outside its window → block =====
+      {const sn=snapOf([],{});const it=[P('w','שיחה עם הבנק','errand',MON,780,840,{earliest:540,latest:720,canShorten:true,minDurationMin:15})];
+       const v=validatePlan(sn,it);o.t8_blocks=!v.ok&&blocksOf(v).join()==='outside_window';
+       const res=proposeCuts(sn,it);o.t8_repairInWindow=res.status==='repaired'&&res.options.every(op=>op.plan.every(x=>x.startMin>=540&&x.endMin<=720)&&validatePlan(sn,op.plan).ok);
+       const busy=snapOf([HARD('m','פגישה',540,720)],{});const r2=proposeCuts(busy,it);
+       o.t8_noRoomSameDay=r2.status==='repaired'&&r2.best.steps[0].type==='move_day'&&r2.best.plan[0].date!==MON&&r2.best.plan[0].startMin>=540&&r2.best.plan[0].endMin<=720;
+       const inWin=[P('w','x','errand',MON,600,660,{earliest:540,latest:720})];o.t8_okInside=validatePlan(sn,inWin).ok;}
+      // ===== other validation: min duration, buffers, late bias, technical overlap, load/soft =====
+      {const sn=snapOf([],{});
+       const tooShort=[P('s','לימוד','study',MON,600,620,{origDurationMin:90,canShorten:true,minDurationMin:30})];o.v_belowMin=blocksOf(validatePlan(sn,tooShort)).join()==='below_min_duration';
+       const noShort=[P('m','פגישה','meeting',MON,600,630,{origDurationMin:60,canShorten:false})];o.v_shortenNotAllowed=blocksOf(validatePlan(sn,noShort)).join()==='shorten_not_allowed';
+       const ok=[P('s','לימוד','study',MON,600,640,{origDurationMin:90,canShorten:true,minDurationMin:30})];o.v_shortenOkAboveMin=validatePlan(sn,ok).ok;
+       const sn2=snapOf([ev('x','קפה',MON,540,600)],{});
+       const clash=[P('a','סידור','errand',MON,570,630)];const vc=validatePlan(sn2,clash);o.v_overlapEvent=blocksOf(vc).join()==='overlap'&&vc.blocks[0].refs.indexOf('ev:x')>=0;
+       const buf=[P('m','פגישה','meeting',MON,605,665,{rigidity:'hard',canMove:false,bufferMin:10})];const vb=validatePlan(sn2,buf);o.v_bufferWarn=vb.ok&&vb.warnings.map(x=>x.code).join()==='buffer_before'&&vb.warnings[0].data.gap===5;
+       const sn3=snapOf([],{lateBiasMin:10});
+       const lb=[P('t','נסיעה','travel',MON,540,580,{place:'אריאל'}),P('m','פגישה','meeting',MON,590,650,{place:'אריאל',rigidity:'hard',canMove:false,bufferMin:10})];
+       const vl=validatePlan(sn3,lb);o.v_lateBiasWarn=vl.ok&&vl.warnings.map(x=>x.code).join()==='late_bias'&&vl.warnings[0].data.need===20;
+       const lb2=[P('t','נסיעה','travel',MON,540,570,{place:'אריאל'}),P('m','פגישה','meeting',MON,590,650,{place:'אריאל',rigidity:'hard',canMove:false,bufferMin:10})];o.v_lateBiasSatisfied=validatePlan(sn3,lb2).warnings.length===0;
+       const day=[P('a','א','work',MON,480,780,{canShorten:true,minDurationMin:30}),P('b','ב','work',MON,780,1080,{canShorten:true,minDurationMin:30})];
+       const lc=validatePlan(snapOf([],{maxLoadMin:480}),day);o.v_load=blocksOf(lc).join()==='load_exceeded';
+       const ls=validatePlan(snapOf([],{maxLoadMin:480,assertiveness:'soft'}),day);o.v_loadSoft=ls.ok&&ls.warnings[0].code==='load_exceeded';
+       const lightCap=validatePlan(snapOf([],{maxLoadMin:480,dayModes:{1:'light'}}),[P('a','א','work',MON,480,780)]);o.v_lightHalvesCap=blocksOf(lightCap).join()==='load_exceeded';
+       const dm=validatePlan(snapOf([],{dayModes:{1:'rest'}}),[P('a','עבודה','work',MON,600,660)]);o.v_dayModeWarn=dm.ok&&dm.warnings[0].code==='day_mode';
+       // calls placed inside a travel block are NOT overlaps
+       const inT=[P('c','שיחה','phone_call',MON,600,620,{inTravel:true})];const sn4=snapOf([ev('tr','נסיעה לסופר',MON,600,645)],{});o.v_callInTravelOk=validatePlan(sn4,inT).ok;}
+      // ===== repair invariants: hard never moved, inputs untouched, deterministic, ranked by cost =====
+      {const E=[HARD('m','פגישה',540,660)];
+       const items=[P('h','טיפול','personal',MON,700,760,{rigidity:'hard',canMove:false}),P('s','לימוד','study',MON,720,840,{canShorten:true,minDurationMin:30}),P('sh','קניות','shopping',MON,840,900,{rigidity:'optional',canDrop:true}),P('w','עבודה','work',MON,900,1140,{canShorten:true,minDurationMin:45})];
+       const sn=snapOf(E,{maxLoadMin:420});const before=JSON.stringify(items),sig=sn.sig;
+       const a=proposeCuts(sn,items),b=proposeCuts(sn,items);
+       o.i_inputUntouched=JSON.stringify(items)===before&&sn.sig===sig&&Object.isFrozen(sn);
+       o.i_deterministic=JSON.stringify(a)===JSON.stringify(b);
+       o.i_hardStays=a.options.length>0&&a.options.every(op=>{const h=op.plan.find(x=>x.ref==='h');return h&&h.date===MON&&h.startMin===700&&h.endMin===760;})&&a.options.every(op=>op.steps.every(s=>s.ref!=='h'));
+       o.i_rankedByCost=a.options.every((op,i,arr)=>i===0||arr[i-1].complete!==op.complete||arr[i-1].totalCost<=op.totalCost);
+       o.i_stepsHaveCosts=a.options.every(op=>op.steps.every(s=>s.costScore>0&&s.text&&s.fixes)&&op.totalCost===op.steps.reduce((t,s)=>t+s.costScore,0));
+       o.i_ladder=PLAN_REPAIR_COST.drop<PLAN_REPAIR_COST.shorten&&PLAN_REPAIR_COST.shorten<PLAN_REPAIR_COST.shift&&PLAN_REPAIR_COST.shift<PLAN_REPAIR_COST.shift_chain&&PLAN_REPAIR_COST.shift_chain<PLAN_REPAIR_COST.move_day&&PLAN_REPAIR_COST.move_day<PLAN_REPAIR_COST.ask_user;
+       o.i_noDropOfNonOptional=a.options.every(op=>op.steps.every(s=>s.type!=='drop'||s.ref==='sh'));}
+      // ===== FULL: Intent → Context → Plan → Validate → Repair (and the calendar changing after the plan) =====
+      {const E=[HARD('m','פגישה',540,720)];
+       const st=mk(E,mat('בית','אריאל',30,{maxLoadMin:540}));const sn=buildContextSnapshot(st,{engine:false});
+       const it=normalizeIntent({op:'arrange',targetDays:[MON],items:[
+         {ref:'a',title:'ללמוד סטטיסטיקה',kind:'study',durationMin:120,confidence:{kind:0.9,duration:0.9}},
+         {ref:'b',title:'קניות',kind:'shopping',durationMin:60,rigidity:'optional',confidence:{kind:0.9,rigidity:0.9}},
+         {ref:'c',title:'לסדר מסמכים',kind:'admin',durationMin:45,rigidity:'optional',confidence:{kind:0.9,rigidity:0.9}},
+         {ref:'d',title:'עבודה על הדוח',kind:'deep_work',durationMin:120,confidence:{kind:0.9,duration:0.9}}]});
+       const g=planningGaps(it,getUserRules(st));const sc=scheduleSet(sn,it,g);
+       const items=planItemsFrom(sn,g,sc);
+       o.f_planned=sc.placed.length===4&&items.length===4&&validatePlan(sn,items).ok&&items.find(x=>x.ref==='b').canDrop===true&&items.find(x=>x.ref==='a').canDrop===false;
+       // a new hard meeting lands in the calendar after the plan was made
+       const E2=E.concat([HARD('new','ישיבת הנהלה',780,960)]);const st2=mk(E2,st.userRules);const sn2=buildContextSnapshot(st2,{engine:false});
+       o.f_stale=contextIsStale(sn,st2)===true;
+       const v=validatePlan(sn2,items);const res=proposeCuts(sn2,items);
+       o.f_blocksOnNewCalendar=!v.ok&&res.status==='repaired'&&res.best.complete&&validatePlan(sn2,res.best.plan).ok;
+       o.f_hardEventsUntouched=sn2.events.length===E2.length&&res.options.every(op=>op.plan.every(x=>!x.isEvent));
+       o.f_textSaysWhat=/הוצא|לקצר|להזיז|להעביר/.test(repairSummaryText(res))&&/הצעה/.test(repairSummaryText(res));
+       // regression: a partial relief of an overload counts as progress, so the plan is NOT repaired with a dozen 15-minute trims
+       const best=res.best;o.f_fewSteps=best.steps.length<=4&&best.totalCost<=150;
+       o.f_noRepeatedTrims=best.steps.every((s,i,a)=>a.filter(t=>t.ref===s.ref&&t.type===s.type).length===1);
+       o.f_optionalLeaveFirst=best.steps.filter(s=>s.type==='drop').every(s=>s.ref==='b'||s.ref==='c')&&best.steps.some(s=>s.type==='drop');}
+      return o;})()`);
+    const okd=Object.values(r).every(v=>v===true);
+    rows.push(['validate + proposeCuts (D)',String(okd)+(okd?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okd)failed=true;
+  }catch(e){rows.push(['validate + proposeCuts (D)','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

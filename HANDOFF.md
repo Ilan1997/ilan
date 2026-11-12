@@ -23,7 +23,7 @@
 - משימות קטנות: ללא ארכוב אוטומטי — שואלים "עדיין רלוונטי?".
 
 ## סטטוס שלבים
-A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיסית+intent-eval harness · C ✅ planChain מלא (גם "לפני X") + departureFor + scheduleSet · **D הבא**: Validate+proposeCuts (כולל התנגשות סמנטית) · E Replan · F החלפת הפרומפט ל-`PLAN_REQUEST`, ואז UI.
+A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיסית+intent-eval harness · C ✅ planChain מלא (גם "לפני X") + departureFor + scheduleSet · D ✅ Validate+proposeCuts (enforcement hard/soft, costScore, 8 בדיקות קבלה) · **ה׳ הבא (רק אחרי שהתרחיש המלא נבדק)**: Replan · E Replan · F החלפת הפרומפט ל-`PLAN_REQUEST`, ואז UI.
 דמו: `node tests/demo-chain.js`. תרחישי אמת: `tests/fixtures/scenarios.json` (חוזים B–F "pending" יופעלו עם כל שלב).
 
 ## פעולות שנשארו אצל המשתמש
