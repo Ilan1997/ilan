@@ -5,189 +5,757 @@
     {
       "id": "S01_after_meeting_chain",
       "utterance": "אחרי הפגישה בפתח תקווה תכניס לי נסיעה לאריאל, שעה בית מדרש, אחר כך עבודה, קניות ותורה בחווה בערב",
-      "calendar": [{"id":"e1","title":"פגישה בפתח תקווה","date":"2026-11-16","startMin":540,"endMin":600,"place":"פתח תקווה","attendees":2}],
-      "parsed": {"op":"create","items":[
-        {"ref":"i1","title":"נסיעה לאריאל","kind":"travel","place":"אריאל","anchor":{"rel":"after","target":{"text":"הפגישה בפתח תקווה","date":"2026-11-16"}},"confidence":{"kind":0.95,"place":0.95,"anchor":0.9}},
-        {"ref":"i2","title":"בית מדרש","kind":"religious","durationMin":60,"afterItem":"i1","confidence":{"kind":0.85,"duration":0.95}},
-        {"ref":"i3","title":"עבודה","kind":"work","afterItem":"i2","confidence":{"kind":0.95}},
-        {"ref":"i4","title":"קניות","kind":"shopping","afterItem":"i3","confidence":{"kind":0.95}},
-        {"ref":"i5","title":"תורה בחווה","kind":"religious","place":"חווה","window":{"from":"18:00","to":"22:00"},"afterItem":"i4","confidence":{"kind":0.8,"place":0.8}}
-      ]},
+      "calendar": [
+        {
+          "id": "e1",
+          "title": "פגישה בפתח תקווה",
+          "date": "2026-11-16",
+          "startMin": 540,
+          "endMin": 600,
+          "place": "פתח תקווה",
+          "attendees": 2
+        }
+      ],
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "נסיעה לאריאל",
+            "kind": "travel",
+            "place": "אריאל",
+            "anchor": {
+              "rel": "after",
+              "target": {
+                "text": "הפגישה בפתח תקווה",
+                "date": "2026-11-16"
+              }
+            },
+            "confidence": {
+              "kind": 0.95,
+              "place": 0.95,
+              "anchor": 0.9
+            }
+          },
+          {
+            "ref": "i2",
+            "title": "בית מדרש",
+            "kind": "religious",
+            "durationMin": 60,
+            "afterItem": "i1",
+            "confidence": {
+              "kind": 0.85,
+              "duration": 0.95
+            }
+          },
+          {
+            "ref": "i3",
+            "title": "עבודה",
+            "kind": "work",
+            "afterItem": "i2",
+            "confidence": {
+              "kind": 0.95
+            }
+          },
+          {
+            "ref": "i4",
+            "title": "קניות",
+            "kind": "shopping",
+            "afterItem": "i3",
+            "confidence": {
+              "kind": 0.95
+            }
+          },
+          {
+            "ref": "i5",
+            "title": "תורה בחווה",
+            "kind": "religious",
+            "place": "חווה",
+            "window": {
+              "from": "18:00",
+              "to": "22:00"
+            },
+            "afterItem": "i4",
+            "confidence": {
+              "kind": 0.8,
+              "place": 0.8
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":null,"i2":60,"i3":90,"i4":45,"i5":60},"assumedDuration":["i3","i4","i5"],"rigidity":{"i2":"flexible","i3":"flexible"}},
-        "B": {"status":"pending","anchorResolves":{"i1":"e1"},"chainStartsAtMin":600},
-        "C": {"status":"pending","order":["i1","i2","i3","i4","i5"],"travelFirstStartsAfterMin":600},
-        "D": {"status":"pending","note":"אם הרצף חורג מהעומס/מהערב — מציעה לקצר/להוציא קניות או עבודה, לא את תורה בחווה (חלון קבוע בערב)"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": null,
+            "i2": 60,
+            "i3": 90,
+            "i4": 45,
+            "i5": 60
+          },
+          "assumedDuration": [
+            "i3",
+            "i4",
+            "i5"
+          ],
+          "rigidity": {
+            "i2": "flexible",
+            "i3": "flexible"
+          }
+        },
+        "B": {
+          "status": "pending",
+          "anchorResolves": {
+            "i1": "e1"
+          },
+          "chainStartsAtMin": 600
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "order": [
+            "i1",
+            "i2",
+            "i3",
+            "i4",
+            "i5"
+          ],
+          "travelFirstStartsAfterMin": 600
+        },
+        "D": {
+          "status": "pending",
+          "note": "אם הרצף חורג מהעומס/מהערב — מציעה לקצר/להוציא קניות או עבודה, לא את תורה בחווה (חלון קבוע בערב)"
+        }
       }
     },
     {
       "id": "S02_today_set",
       "utterance": "יש לי היום זום, בית מדרש, קניות ותורה בחווה",
       "calendar": [],
-      "parsed": {"op":"arrange","items":[
-        {"ref":"i1","title":"זום","kind":"meeting","confidence":{"kind":0.9}},
-        {"ref":"i2","title":"בית מדרש","kind":"religious","confidence":{"kind":0.85}},
-        {"ref":"i3","title":"קניות","kind":"shopping","confidence":{"kind":0.95}},
-        {"ref":"i4","title":"תורה בחווה","kind":"religious","place":"חווה","confidence":{"kind":0.8,"place":0.85}}
-      ]},
+      "parsed": {
+        "op": "arrange",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "זום",
+            "kind": "meeting",
+            "confidence": {
+              "kind": 0.9
+            }
+          },
+          {
+            "ref": "i2",
+            "title": "בית מדרש",
+            "kind": "religious",
+            "confidence": {
+              "kind": 0.85
+            }
+          },
+          {
+            "ref": "i3",
+            "title": "קניות",
+            "kind": "shopping",
+            "confidence": {
+              "kind": 0.95
+            }
+          },
+          {
+            "ref": "i4",
+            "title": "תורה בחווה",
+            "kind": "religious",
+            "place": "חווה",
+            "confidence": {
+              "kind": 0.8,
+              "place": 0.85
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":60,"i2":60,"i3":45,"i4":60},"assumedDuration":["i1","i2","i3","i4"],"rigidity":{"i1":"hard","i3":"flexible"},"assumptionTextContains":{"i1":"שמתי שעה"}},
-        "C": {"status":"pending","uses":"scheduleSet","note":"אוסף בלי סדר — ממקמת בחלונות פנויים, זום קשיח קודם"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 60,
+            "i2": 60,
+            "i3": 45,
+            "i4": 60
+          },
+          "assumedDuration": [
+            "i1",
+            "i2",
+            "i3",
+            "i4"
+          ],
+          "rigidity": {
+            "i1": "hard",
+            "i3": "flexible"
+          },
+          "assumptionTextContains": {
+            "i1": "שמתי שעה"
+          }
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "uses": "scheduleSet",
+          "note": "אוסף בלי סדר — ממקמת בחלונות פנויים, זום קשיח קודם"
+        }
       }
     },
     {
       "id": "S03_move_work_tue_wed",
       "utterance": "תעביר את כל משימות העבודה לשלישי ורביעי",
       "calendar": [],
-      "parsed": {"op":"move","filter":{"kind":"work"},"targetDays":["2026-11-17","2026-11-18"],"items":[]},
+      "parsed": {
+        "op": "move",
+        "filter": {
+          "kind": "work"
+        },
+        "targetDays": [
+          "2026-11-17",
+          "2026-11-18"
+        ],
+        "items": []
+      },
       "expect": {
-        "A": {"ask":[]},
-        "C": {"status":"pending","uses":"scheduleSet","note":"רק משימות עם mobility.canMove; אירוע קשיח לא זז"},
-        "D": {"status":"pending","note":"אם שלישי+רביעי לא מספיקים — מציעה לפצל לחמישי, לא להעמיס"}
+        "A": {
+          "ask": []
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "uses": "scheduleSet",
+          "note": "רק משימות עם mobility.canMove; אירוע קשיח לא זז"
+        },
+        "D": {
+          "status": "pending",
+          "note": "אם שלישי+רביעי לא מספיקים — מציעה לפצל לחמישי, לא להעמיס"
+        }
       }
     },
     {
       "id": "S03b_move_without_days",
       "utterance": "תעביר את העבודה",
       "calendar": [],
-      "parsed": {"op":"move","filter":{"kind":"work"},"targetDays":[],"items":[]},
-      "expect": {"A": {"ask":["op.targetDays"]}}
+      "parsed": {
+        "op": "move",
+        "filter": {
+          "kind": "work"
+        },
+        "targetDays": [],
+        "items": []
+      },
+      "expect": {
+        "A": {
+          "ask": [
+            "op.targetDays"
+          ]
+        }
+      }
     },
     {
       "id": "S04_no_time_what_drops",
       "utterance": "אין לי זמן להכול, מה יורד",
       "calendar": [
-        {"id":"e1","title":"טיפול","date":"2026-11-15","startMin":600,"endMin":660},
-        {"id":"e2","title":"בלוק עבודה","date":"2026-11-15","startMin":720,"endMin":840},
-        {"id":"e3","title":"אימון כושר","date":"2026-11-15","startMin":1020,"endMin":1110,"rigiditySource":"explicit_user","rigidity":"flexible"}
+        {
+          "id": "e1",
+          "title": "טיפול",
+          "date": "2026-11-15",
+          "startMin": 600,
+          "endMin": 660
+        },
+        {
+          "id": "e2",
+          "title": "בלוק עבודה",
+          "date": "2026-11-15",
+          "startMin": 720,
+          "endMin": 840
+        },
+        {
+          "id": "e3",
+          "title": "אימון כושר",
+          "date": "2026-11-15",
+          "startMin": 1020,
+          "endMin": 1110,
+          "rigiditySource": "explicit_user",
+          "rigidity": "flexible"
+        }
       ],
-      "parsed": {"op":"prune","items":[]},
+      "parsed": {
+        "op": "prune",
+        "items": []
+      },
       "expect": {
-        "A": {"ask":[],"calendarRigidity":{"e1":"hard","e2":"flexible","e3":"flexible"}},
-        "D": {"status":"pending","proposeCuts":"קודם אופציונלי, אחר כך קיצור (כושר 90→30, בלוק עבודה), הטיפול לעולם לא"}
+        "A": {
+          "ask": [],
+          "calendarRigidity": {
+            "e1": "hard",
+            "e2": "flexible",
+            "e3": "flexible"
+          }
+        },
+        "D": {
+          "status": "pending",
+          "proposeCuts": "קודם אופציונלי, אחר כך קיצור (כושר 90→30, בלוק עבודה), הטיפול לעולם לא"
+        }
       }
     },
     {
       "id": "S05_already_in_talpiot",
       "utterance": "אני כבר בתלפיות, תכניס לי גם בנק וגם אופנוע",
       "calendar": [],
-      "parsed": {"op":"create","context":{"currentPlace":"תלפיות"},"items":[
-        {"ref":"i1","title":"בנק","kind":"errand","place":"תלפיות","confidence":{"kind":0.9,"place":0.9}},
-        {"ref":"i2","title":"אופנוע","kind":"errand","place":"תלפיות","confidence":{"kind":0.5,"place":0.9}}
-      ]},
+      "parsed": {
+        "op": "create",
+        "context": {
+          "currentPlace": "תלפיות"
+        },
+        "items": [
+          {
+            "ref": "i1",
+            "title": "בנק",
+            "kind": "errand",
+            "place": "תלפיות",
+            "confidence": {
+              "kind": 0.9,
+              "place": 0.9
+            }
+          },
+          {
+            "ref": "i2",
+            "title": "אופנוע",
+            "kind": "errand",
+            "place": "תלפיות",
+            "confidence": {
+              "kind": 0.5,
+              "place": 0.9
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":["i2.kind"],"duration":{"i1":45}},
-        "C": {"status":"pending","note":"שני הסידורים באותה יציאה, בלי נסיעה ביניהם"}
+        "A": {
+          "ask": [
+            "i2.kind"
+          ],
+          "duration": {
+            "i1": 45
+          }
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "note": "שני הסידורים באותה יציאה, בלי נסיעה ביניהם"
+        }
       }
     },
     {
       "id": "S06_arrive_early",
       "utterance": "אני רוצה להגיע חצי שעה מוקדם",
       "calendar": [],
-      "parsed": {"op":"preference","preference":{"bufferBeforeMin":30},"items":[]},
-      "expect": {"A": {"ask":["op.scope"]}}
+      "parsed": {
+        "op": "preference",
+        "preference": {
+          "bufferBeforeMin": 30
+        },
+        "items": []
+      },
+      "expect": {
+        "A": {
+          "ask": [
+            "op.scope"
+          ]
+        }
+      }
     },
     {
       "id": "S06b_arrive_early_global",
       "utterance": "תמיד, אני רוצה להגיע חצי שעה מוקדם לכל דבר",
       "calendar": [],
-      "parsed": {"op":"preference","scope":"global","preference":{"bufferBeforeMin":30},"items":[]},
-      "expect": {"A": {"ask":[],"rulesPatch":{"bufferBeforeMin":30}}}
+      "parsed": {
+        "op": "preference",
+        "scope": "global",
+        "preference": {
+          "bufferBeforeMin": 30
+        },
+        "items": []
+      },
+      "expect": {
+        "A": {
+          "ask": [],
+          "rulesPatch": {
+            "bufferBeforeMin": 30
+          }
+        }
+      }
     },
     {
       "id": "S07_dont_know_duration",
       "utterance": "אני צריך להתקשר לביטוח לאומי, לא יודע כמה זמן זה לוקח",
       "calendar": [],
-      "parsed": {"op":"create","items":[{"ref":"i1","title":"שיחה לביטוח לאומי","kind":"phone_call","durationUnknown":true,"confidence":{"kind":0.95}}]},
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "שיחה לביטוח לאומי",
+            "kind": "phone_call",
+            "durationUnknown": true,
+            "confidence": {
+              "kind": 0.95
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":20},"assumedDuration":["i1"],"durationSource":{"i1":"system_default"}},
-        "E": {"status":"pending","note":"אחרי שבוצע — לומדת את המשך בפועל (learnDuration)"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 20
+          },
+          "assumedDuration": [
+            "i1"
+          ],
+          "durationSource": {
+            "i1": "system_default"
+          }
+        },
+        "E": {
+          "status": "pending",
+          "note": "אחרי שבוצע — לומדת את המשך בפועל (learnDuration)"
+        }
       }
     },
     {
       "id": "S08_dont_overload_monday",
       "utterance": "אל תעמיס לי את יום שני",
       "calendar": [],
-      "parsed": {"op":"preference","preference":{"dayRule":{"dow":1,"mode":"light"}},"items":[]},
+      "parsed": {
+        "op": "preference",
+        "preference": {
+          "dayRule": {
+            "dow": 1,
+            "mode": "light"
+          }
+        },
+        "items": []
+      },
       "expect": {
-        "A": {"ask":[],"rulesPatch":{"dayModes":{"1":"light"}}},
-        "D": {"status":"pending","note":"בימי light: אזהרה/סירוב מוקדם מהסף הרגיל"}
+        "A": {
+          "ask": [],
+          "rulesPatch": {
+            "dayModes": {
+              "1": "light"
+            }
+          }
+        },
+        "D": {
+          "status": "pending",
+          "note": "בימי light: אזהרה/סירוב מוקדם מהסף הרגיל"
+        }
       }
     },
     {
       "id": "S09_when_best",
       "utterance": "מתי הכי נכון לעשות את הלימוד לסטטיסטיקה?",
       "calendar": [],
-      "parsed": {"op":"find","items":[{"ref":"i1","title":"לימוד סטטיסטיקה","kind":"study","confidence":{"kind":0.95}}]},
+      "parsed": {
+        "op": "find",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "לימוד סטטיסטיקה",
+            "kind": "study",
+            "confidence": {
+              "kind": 0.95
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":90},"assumedDuration":["i1"]},
-        "C": {"status":"pending","uses":"scheduleSet","note":"שעות ריכוז, יום לימודים/גמיש, לא יום מלא"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 90
+          },
+          "assumedDuration": [
+            "i1"
+          ]
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "uses": "scheduleSet",
+          "note": "שעות ריכוז, יום לימודים/גמיש, לא יום מלא"
+        }
       }
     },
     {
       "id": "S10_five_things_today",
       "utterance": "יש לי היום 5 דברים: לשלם ארנונה, להתקשר לרופא, ללכת לסופר, לסיים דוח ולהתאמן. תסדר לי",
       "calendar": [],
-      "parsed": {"op":"arrange","items":[
-        {"ref":"i1","title":"לשלם ארנונה","kind":"admin","confidence":{"kind":0.9}},
-        {"ref":"i2","title":"להתקשר לרופא","kind":"phone_call","confidence":{"kind":0.95}},
-        {"ref":"i3","title":"ללכת לסופר","kind":"shopping","confidence":{"kind":0.9}},
-        {"ref":"i4","title":"לסיים דוח","kind":"deep_work","confidence":{"kind":0.85}},
-        {"ref":"i5","title":"להתאמן","kind":"fitness","confidence":{"kind":0.95}}
-      ]},
+      "parsed": {
+        "op": "arrange",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "לשלם ארנונה",
+            "kind": "admin",
+            "confidence": {
+              "kind": 0.9
+            }
+          },
+          {
+            "ref": "i2",
+            "title": "להתקשר לרופא",
+            "kind": "phone_call",
+            "confidence": {
+              "kind": 0.95
+            }
+          },
+          {
+            "ref": "i3",
+            "title": "ללכת לסופר",
+            "kind": "shopping",
+            "confidence": {
+              "kind": 0.9
+            }
+          },
+          {
+            "ref": "i4",
+            "title": "לסיים דוח",
+            "kind": "deep_work",
+            "confidence": {
+              "kind": 0.85
+            }
+          },
+          {
+            "ref": "i5",
+            "title": "להתאמן",
+            "kind": "fitness",
+            "confidence": {
+              "kind": 0.95
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":30,"i2":20,"i3":45,"i4":90,"i5":60}},
-        "C": {"status":"pending","uses":"scheduleSet","note":"שיחה בנסיעה לסופר (travel_compatible); דוח בבלוק רציף בשעות ריכוז"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 30,
+            "i2": 20,
+            "i3": 45,
+            "i4": 90,
+            "i5": 60
+          }
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "uses": "scheduleSet",
+          "note": "שיחה בנסיעה לסופר (travel_compatible); דוח בבלוק רציף בשעות ריכוז"
+        }
       }
     },
     {
       "id": "S11_ambiguous_meeting",
       "utterance": "אחרי הפגישה מחר תכניס לי קניות",
       "calendar": [
-        {"id":"e1","title":"פגישה עם דנה","date":"2026-11-16","startMin":540,"endMin":600,"attendees":1},
-        {"id":"e2","title":"פגישה עם יוסי","date":"2026-11-16","startMin":840,"endMin":900,"attendees":1}
+        {
+          "id": "e1",
+          "title": "פגישה עם דנה",
+          "date": "2026-11-16",
+          "startMin": 540,
+          "endMin": 600,
+          "attendees": 1
+        },
+        {
+          "id": "e2",
+          "title": "פגישה עם יוסי",
+          "date": "2026-11-16",
+          "startMin": 840,
+          "endMin": 900,
+          "attendees": 1
+        }
       ],
-      "parsed": {"op":"create","items":[{"ref":"i1","title":"קניות","kind":"shopping","anchor":{"rel":"after","target":{"text":"הפגישה","date":"2026-11-16"}},"confidence":{"kind":0.95,"anchor":0.7}}]},
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "קניות",
+            "kind": "shopping",
+            "anchor": {
+              "rel": "after",
+              "target": {
+                "text": "הפגישה",
+                "date": "2026-11-16"
+              }
+            },
+            "confidence": {
+              "kind": 0.95,
+              "anchor": 0.7
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":45}},
-        "B": {"status":"pending","ask":["i1.anchor"],"note":"שתי פגישות מחר — שואלת איזו, לא מנחשת"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 45
+          }
+        },
+        "B": {
+          "status": "pending",
+          "ask": [
+            "i1.anchor"
+          ],
+          "note": "שתי פגישות מחר — שואלת איזו, לא מנחשת"
+        }
       }
     },
     {
       "id": "S12_low_confidence_kind",
       "utterance": "תכניס לי לבדוק את זה עם דנה",
       "calendar": [],
-      "parsed": {"op":"create","items":[{"ref":"i1","title":"לבדוק את זה עם דנה","kind":"personal","confidence":{"kind":0.4}}]},
-      "expect": {"A": {"ask":["i1.kind"]}}
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "לבדוק את זה עם דנה",
+            "kind": "personal",
+            "confidence": {
+              "kind": 0.4
+            }
+          }
+        ]
+      },
+      "expect": {
+        "A": {
+          "ask": [
+            "i1.kind"
+          ]
+        }
+      }
     },
     {
       "id": "S13_meeting_at_12_no_duration",
       "utterance": "פגישה מחר ב-12 עם רואה החשבון",
       "calendar": [],
-      "parsed": {"op":"create","items":[{"ref":"i1","title":"פגישה עם רואה החשבון","kind":"meeting","window":{"from":"12:00","to":null},"confidence":{"kind":0.95}}]},
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "פגישה עם רואה החשבון",
+            "kind": "meeting",
+            "window": {
+              "from": "12:00",
+              "to": null
+            },
+            "confidence": {
+              "kind": 0.95
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":60},"assumedDuration":["i1"],"assumptionTextContains":{"i1":"שמתי שעה"},"rigidity":{"i1":"hard"}},
-        "B": {"status":"pending","note":"12:00 קבוע; רק משך נבחר"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 60
+          },
+          "assumedDuration": [
+            "i1"
+          ],
+          "assumptionTextContains": {
+            "i1": "שמתי שעה"
+          },
+          "rigidity": {
+            "i1": "hard"
+          }
+        },
+        "B": {
+          "status": "pending",
+          "note": "12:00 קבוע; רק משך נבחר"
+        }
       }
     },
     {
       "id": "S14_late_bias",
       "utterance": "פגישה בבנק מחר ב-10",
       "calendar": [],
-      "rules": {"lateBiasMin": 15, "bufferByKind": {"meeting": 20}},
-      "parsed": {"op":"create","items":[{"ref":"i1","title":"פגישה בבנק","kind":"meeting","place":"בנק","window":{"from":"10:00","to":null},"confidence":{"kind":0.95,"place":0.9}}]},
+      "rules": {
+        "lateBiasMin": 15,
+        "bufferByKind": {
+          "meeting": 20
+        }
+      },
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "פגישה בבנק",
+            "kind": "meeting",
+            "place": "בנק",
+            "window": {
+              "from": "10:00",
+              "to": null
+            },
+            "confidence": {
+              "kind": 0.95,
+              "place": 0.9
+            }
+          }
+        ]
+      },
       "expect": {
-        "A": {"ask":[],"duration":{"i1":60},"buffer":{"i1":20},"departureOffset":15},
-        "C": {"status":"pending","note":"שעת יציאה = התחלה − נסיעה − buffer 20 − הטיית איחור 15"}
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 60
+          },
+          "buffer": {
+            "i1": 20
+          },
+          "departureOffset": 15
+        },
+        "C": {
+          "status": "covered_by_tests",
+          "note": "שעת יציאה = התחלה − נסיעה − buffer 20 − הטיית איחור 15"
+        }
       }
     },
     {
       "id": "S15_user_default_duration",
       "utterance": "תכניס לי קניות",
       "calendar": [],
-      "rules": {"durationDefaults": {"shopping": 30}},
-      "parsed": {"op":"create","items":[{"ref":"i1","title":"קניות","kind":"shopping","confidence":{"kind":0.95}}]},
-      "expect": {"A": {"ask":[],"duration":{"i1":30},"durationSource":{"i1":"user_default"}}}
+      "rules": {
+        "durationDefaults": {
+          "shopping": 30
+        }
+      },
+      "parsed": {
+        "op": "create",
+        "items": [
+          {
+            "ref": "i1",
+            "title": "קניות",
+            "kind": "shopping",
+            "confidence": {
+              "kind": 0.95
+            }
+          }
+        ]
+      },
+      "expect": {
+        "A": {
+          "ask": [],
+          "duration": {
+            "i1": 30
+          },
+          "durationSource": {
+            "i1": "user_default"
+          }
+        }
+      }
     }
   ]
 }

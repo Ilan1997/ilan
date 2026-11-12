@@ -410,6 +410,93 @@ const w=dom.window;
     const oki=Object.values(o).every(v=>v===true);
     rows.push(['intent-eval harness self-check ('+cases.length+' cases)',String(oki)+(oki?'':' '+JSON.stringify(Object.fromEntries(Object.entries(o).filter(([k,v])=>v!==true))))]);if(!oki)failed=true;
   }catch(e){rows.push(['intent-eval harness self-check','THROW '+e.message]);failed=true;}
+  // step C: planChain (before / departure) + scheduleSet
+  try{
+    const cal=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures','calendar_realistic.json'),'utf8'));
+    const r=await w.eval(`(async()=>{const CAL=${JSON.stringify(cal)};const o={};
+      const R0=normalizeUserRules(null);
+      const mkState=(events,rules)=>{const s=structuredClone(STATE_ACTIVE);s.meta.today='2026-11-15';s.constraintsGlobal.events=structuredClone(events);s.userRules=rules||{};return s;};
+      const ev=(id,title,date,sm,em,x)=>({id,title,date,startH:Math.floor(sm/60),endH:Math.ceil(em/60),startMin:sm,endMin:em,...(x||{})});
+      const mat=(a,b,m,base)=>({...(base||{}),...travelAnswerPatch(normalizeUserRules(base||{}),a,b,m)});
+      // ---- planChain: before ----
+      const beforeIntent=(extra)=>({op:'create',context:extra,items:[{ref:'t',title:'נסיעה',kind:'travel',anchor:{rel:'before',target:{text:'הפגישה בפתח תקווה',date:'2026-11-16'}},confidence:{kind:0.95,anchor:0.9}}]});
+      const chain=(rules,intentRaw)=>{const st=mkState(CAL.events,rules);const sn=buildContextSnapshot(st,{engine:false});const it=normalizeIntent(intentRaw);return planChain(sn,it,planningGaps(it,getUserRules(st)));};
+      {const rules=mat('אריאל','פתח תקווה',40);const b=chain(rules,beforeIntent({currentPlace:'אריאל'}));
+       o.beforeOk=b.status==='ok'&&b.direction==='before'&&b.arriveBy===530&&b.items[0].startMin===490&&b.items[0].endMin===530&&b.items[0].departAt===490&&b.items[0].place==='פתח תקווה'&&b.conflicts.length===0;
+       const b2=chain({...rules,lateBiasMin:15},beforeIntent({currentPlace:'אריאל'}));o.beforeLate=b2.status==='ok'&&b2.arriveBy===515&&b2.items[0].endMin===515&&b2.items[0].startMin===475&&b2.assumptions.some(a=>a.field==='lateBias');
+       const b3=chain({...rules,bufferByKind:{meeting:30}},beforeIntent({currentPlace:'אריאל'}));o.beforeBuf=b3.arriveBy===510;
+       const multi=chain(rules,{op:'create',items:[{ref:'i1',title:'בית מדרש',kind:'religious',durationMin:60,place:'אריאל',anchor:{rel:'before',target:{text:'הפגישה בפתח תקווה',date:'2026-11-16'}},confidence:{kind:0.9}},{ref:'i2',title:'נסיעה',kind:'travel',afterItem:'i1',confidence:{kind:0.9}}]});
+       o.beforeMulti=multi.status==='ok'&&multi.items.length===2&&multi.items[0].startMin===430&&multi.items[0].endMin===490&&multi.items[1].startMin===490&&multi.items[1].endMin===530;
+       o.beforeText=chainSummaryText(b).includes('08:10–08:50')||chainSummaryText(b).includes('08:10');}
+      {const a1=chain({},beforeIntent({currentPlace:'אריאל'}));o.beforeAsksTravel=a1.status==='ask'&&a1.ask.field==='travel'&&a1.ask.to==='פתח תקווה';
+       const a2=chain(mat('אריאל','פתח תקווה',40),beforeIntent(null));o.beforeAsksOrigin=a2.status==='ask'&&a2.ask.field==='origin';
+       const a3=chain({},{op:'create',context:{currentPlace:'אריאל'},items:[{ref:'t',title:'נסיעה',kind:'travel',anchor:{rel:'before',target:{text:'הטיפול',date:'2026-11-18'}},confidence:{kind:0.95}}]});o.beforeAsksPlace=a3.status==='ask'&&a3.ask.field==='place';
+       const a4=chain(mat('אריאל','פתח תקווה',40),{op:'create',context:{currentPlace:'אריאל'},items:[{ref:'t',title:'נסיעה',kind:'travel',anchor:{rel:'before',target:{text:'הפגישה בפתח תקווה'}},confidence:{kind:0.95}}]});o.beforeAmbiguous=a4.status==='ask'&&a4.ask.field==='anchor';
+       const a5=chain(mat('אריאל','פתח תקווה',40),{op:'create',context:{currentPlace:'אריאל'},items:[{ref:'t',title:'נסיעה',kind:'travel',anchor:{rel:'before',target:{text:'הפגישה עם דנה',date:'2026-11-16'}},confidence:{kind:0.95}}]});o.beforeNotFound=a5.status==='not_found'&&!a5.items;}
+      o.aliasKept=planChain===planChainBasic;
+      // ---- departure time ----
+      {const sn=buildContextSnapshot(mkState([],mat('בית','בנק',25,{bufferByKind:{meeting:20},lateBiasMin:15})),{engine:false});
+       const d=departureFor(sn,{kind:'meeting',origin:'בית',place:'בנק',startMin:600});o.depart=d.status==='ok'&&d.departAt===540&&d.travelMin===25&&d.bufferMin===20&&d.lateBiasMin===15&&d.arriveAt===565;
+       const sn2=buildContextSnapshot(mkState([],{}),{engine:false});o.departAsks=departureFor(sn2,{kind:'meeting',origin:'בית',place:'בנק',startMin:600}).ask.field==='travel'&&departureFor(sn2,{kind:'meeting',place:'בנק',startMin:600}).ask.field==='origin';}
+      // ---- scheduleSet ----
+      const run=(items,x)=>{x=x||{};const st=mkState(x.events||[],x.rules||{});const sn=buildContextSnapshot(st,{engine:!!x.engine});
+        const intent=normalizeIntent({op:x.op||'arrange',items,targetDays:x.targetDays||[],context:x.context||null});const g=planningGaps(intent,getUserRules(st));
+        return scheduleSet(sn,intent,g,{existing:x.existing});};
+      const it=(ref,title,kind,x)=>({ref,title,kind,confidence:{kind:0.9,place:0.9},...(x||{})});
+      const overlaps=(pl)=>pl.some((a,i)=>pl.some((b,j)=>j>i&&a.date===b.date&&a.startMin<b.endMin&&b.startMin<a.endMin));
+      const inDay=(pl)=>pl.every(p=>p.startMin>=480&&p.endMin<=1200);
+      {const items=[it('i1','זום','meeting'),it('i2','בית מדרש','religious'),it('i3','קניות','shopping'),it('i4','תורה בחווה','religious',{place:'חווה'})];
+       const A=run(items,{events:CAL.events.filter(e=>e.id!=='ev_local_dup')}),B=run(items,{events:CAL.events.filter(e=>e.id!=='ev_local_dup')});
+       o.setAll=A.placed.length===4&&A.unplaced.length===0&&A.order[0]==='i1';
+       o.setNoOverlap=!overlaps(A.placed)&&inDay(A.placed);
+       o.setNoEventClash=A.placed.every(p=>!CAL.events.some(e=>e.date===p.date&&p.startMin<e.endMin&&p.endMin>e.startMin));
+       o.setDeterministic=JSON.stringify(A.placed)===JSON.stringify(B.placed);
+       o.setReasons=A.placed.every(p=>p.reason&&p.reason.length>2);
+       o.setNotShabbat=A.placed.every(p=>new Date(p.date+'T12:00:00Z').getUTCDay()!==6);}
+      {const A=run([it('i1','לסיים דוח','work',{durationMin:60}),it('i2','קניות','shopping')],{rules:{dayModes:{0:'rest',1:'work'}},targetDays:['2026-11-15','2026-11-16']});
+       o.dayMode=A.placed.length===2&&A.placed.every(p=>p.date==='2026-11-16');
+       const B=run([it('i1','לסיים דוח','work',{durationMin:60})],{rules:{dayModes:{0:'rest'}},targetDays:['2026-11-15']});o.dayModeUnplaced=B.placed.length===0&&B.unplaced[0].why==='day_mode';}
+      {const A=run([1,2,3].map(i=>it('i'+i,'משימה '+i,'admin',{durationMin:60})),{rules:{maxLoadMin:120},targetDays:['2026-11-16']});o.loadCap=A.placed.length===2&&A.unplaced.length===1&&A.unplaced[0].why==='load_cap';
+       const L=run([1,2,3,4,5].map(i=>it('i'+i,'משימה '+i,'admin',{durationMin:60})),{rules:{maxLoadMin:480,dayModes:{1:'light'}},targetDays:['2026-11-16']});o.lightDay=L.placed.length===4&&L.unplaced.length===1;}
+      {const A=run([it('i1','בנק','errand',{place:'תלפיות'}),it('i2','אופנוע','errand',{place:'תלפיות'})],{context:{currentPlace:'תלפיות'},targetDays:['2026-11-16']});
+       const s=A.placed.slice().sort((a,b)=>a.startMin-b.startMin);o.cluster=A.placed.length===2&&s[1].startMin-s[0].endMin<=15&&s[1].startMin>=s[0].endMin;}
+      {const E=[ev('m','פגישה בפתח תקווה','2026-11-16',540,600,{place:'פתח תקווה'})];
+       const A=run([it('i1','סידור באריאל','errand',{place:'אריאל'})],{events:E,targetDays:['2026-11-16']});
+       o.askTravel=A.questions.length===1&&A.questions[0].field==='travel'&&A.questions[0].from==='פתח תקווה'&&A.questions[0].to==='אריאל';
+       const B=run([it('i1','סידור באריאל','errand',{place:'אריאל'})],{events:E,rules:mat('פתח תקווה','אריאל',40),targetDays:['2026-11-16']});
+       o.respectTravel=B.placed.length===1&&(B.placed[0].startMin>=640||B.placed[0].endMin<=500||B.placed[0].startMin-600>=120)&&B.questions.length===0;}
+      {const E=[ev('tr','נסיעה לסופר','2026-11-15',600,645)];
+       const A=run([1,2,3].map(i=>it('c'+i,'שיחה '+i,'phone_call',{durationMin:20})),{events:E,targetDays:['2026-11-15']});
+       const byRef=Object.fromEntries(A.placed.map(p=>[p.ref,p]));
+       o.callsInTravel=byRef.c1.inTravel&&byRef.c1.startMin===600&&byRef.c2.inTravel&&byRef.c2.startMin===620&&!byRef.c3.inTravel&&byRef.c3.reason!=='בזמן הנסיעה';}
+      {const E=[ev('x','פגישה בפתח תקווה','2026-11-16',540,600)];
+       const ok=run([it('i1','פגישה','meeting',{durationMin:60,date:'2026-11-16',window:{from:'12:00'}})],{events:E});
+       o.fixedOk=ok.placed.length===1&&ok.placed[0].startMin===720&&ok.placed[0].endMin===780;
+       const bad=run([it('i1','פגישה','meeting',{durationMin:60,date:'2026-11-16',window:{from:'09:30'}})],{events:E});
+       o.fixedConflict=bad.placed.length===0&&bad.unplaced[0].why==='conflict'&&bad.unplaced[0].with[0]==='פגישה בפתח תקווה';}
+      {const E=CAL.events.filter(e=>e.id!=='ev_local_dup');
+       const items=[it('w1','עבודה א','work',{durationMin:60}),it('w2','עבודה ב','work',{durationMin:60}),it('w3','עבודה קשיחה','work',{durationMin:60,rigidity:'hard',confidence:{kind:0.9,rigidity:0.95}})];
+       const M=run(items,{op:'move',events:E,targetDays:['2026-11-17','2026-11-18'],existing:{w1:{date:'2026-11-15',startMin:600},w2:{date:'2026-11-19',startMin:540},w3:{date:'2026-11-16',startMin:840}}});
+       o.moveOnly=M.placed.length===2&&M.moves.length===2&&M.placed.every(p=>p.date==='2026-11-17'||p.date==='2026-11-18')&&M.kept.length===1&&M.kept[0].ref==='w3'&&M.kept[0].date==='2026-11-16'&&!overlaps(M.placed);
+       o.moveNoClash=M.placed.every(p=>!E.some(e=>e.date===p.date&&p.startMin<e.endMin&&p.endMin>e.startMin));}
+      {const E=[ev('big','יום מלא','2026-11-16',480,1080)];
+       const A=run([it('i1','לימוד סטטיסטיקה','study')],{events:E});
+       o.findAvoidsFull=A.placed.length===1&&A.placed[0].date!=='2026-11-16'&&new Date(A.placed[0].date+'T12:00:00Z').getUTCDay()!==6;
+       o.findGoodHours=A.placed[0].startMin>=540&&A.placed[0].startMin<720;}
+      {const E=[ev('tr','נסיעה לסופר','2026-11-15',600,645)];
+       const A=run([it('i1','לשלם ארנונה','admin'),it('i2','להתקשר לרופא','phone_call'),it('i3','ללכת לסופר','shopping'),it('i4','לסיים דוח','deep_work'),it('i5','להתאמן','fitness')],{events:E,targetDays:['2026-11-15','2026-11-16']});
+       const by=Object.fromEntries(A.placed.map(p=>[p.ref,p]));
+       o.fiveAll=A.placed.length===5&&A.unplaced.length===0&&!overlaps(A.placed)&&inDay(A.placed);
+       o.fiveCall=by.i2.inTravel===true;o.fiveDeep=by.i4.startMin>=540&&by.i4.startMin<720&&by.i4.endMin-by.i4.startMin===90;}
+      {const A=run([{ref:'t',title:'נסיעה לאריאל',kind:'travel',place:'אריאל',confidence:{kind:0.95}}],{targetDays:['2026-11-16']});o.travelPending=A.placed.length===0&&A.unplaced[0].why==='needs_travel_info';}
+      // ---- engine-legal hours (Shabbat / Friday) ----
+      {const A=run([it('i1','קניות','shopping')],{engine:true,targetDays:['2026-11-21']});o.engineSaturday=A.placed.length===0&&A.unplaced[0].why==='no_room';
+       const B=run([it('i1','קניות','shopping')],{engine:true,targetDays:['2026-11-20']});o.engineFriday=B.placed.length===0||B.placed[0].endMin<=840;
+       const st=mkState([]);const sn=buildContextSnapshot(st);o.snapshotHasEngine=sn.freeHours&&Object.isFrozen(sn.freeHours)&&!!sn.freeHours['2026-11-16'];o.staleWithEngine=contextIsStale(sn,st)===false;}
+      return o;})()`);
+    const okc=Object.values(r).every(v=>v===true);
+    rows.push(['plan: before-chain, departure, scheduleSet (C)',String(okc)+(okc?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okc)failed=true;
+  }catch(e){rows.push(['plan: before-chain, departure, scheduleSet (C)','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

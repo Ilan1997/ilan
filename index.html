@@ -9030,10 +9030,13 @@ function buildContextSnapshot(state,o){
   const events=contextEvents(state).filter(e=>e.date>=from&&e.date<=to);
   const rules=getUserRules(state);
   const hiddenTitles=events.filter(e=>e.source==='gcal'&&/^תפוס \(יומן גוגל\)$/.test(e.title)).length;
-  const sig=_ctxHash(JSON.stringify([today,from,to,events.map(e=>[e.id,e.title,e.date,e.startMin,e.endMin,e.place]),rules]));
-  return _deepFreeze({v:1,today,from,to,events,rules,sig,hiddenTitles});
+  // engine-legal free whole hours per date (Shabbat / closed days / sacred hours / assignments already applied). null = engine has no view of these dates.
+  let freeHours=null;
+  if(o.engine!==false){try{const inp=_suggestInputs('life',state);const fh={};Object.keys(inp.freeHours).forEach(d=>{if(d>=from&&d<=to)fh[d]=inp.freeHours[d].slice().sort((a,b)=>a-b);});if(Object.keys(fh).length)freeHours=fh;}catch(_e){freeHours=null;}}
+  const sig=_ctxHash(JSON.stringify([today,from,to,events.map(e=>[e.id,e.title,e.date,e.startMin,e.endMin,e.place]),rules,freeHours]));
+  return _deepFreeze({v:1,today,from,to,events,rules,sig,hiddenTitles,freeHours});
 }
-function contextIsStale(snap,state){return buildContextSnapshot(state,{from:snap.from,to:snap.to}).sig!==snap.sig;}
+function contextIsStale(snap,state){return buildContextSnapshot(state,{from:snap.from,to:snap.to,engine:snap.freeHours!==null}).sig!==snap.sig;}
 const _CTX_DN=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
 function _ctxDayName(iso){return 'יום '+_CTX_DN[new Date(iso+'T12:00:00Z').getUTCDay()];}
 // PURE: bind a spoken reference ("הפגישה בפתח תקווה", "הזום", "הטיפול", "הפגישה עם ארז", "האירוע של 12", "כשאני באריאל") to a REAL event.
@@ -9109,7 +9112,7 @@ function planChainBasic(snap,intent,gaps){
   const items=gaps.items;if(!items.length)return{status:'empty'};
   const first=items[0];let date=first.date||null,cursor=null,place=intent.context&&intent.context.currentPlace||null,anchorInfo=null;
   if(first.anchor){
-    if(first.anchor.rel==='before')return{status:'unsupported_yet',message:'תכנון "לפני" ייבנה בשלב הבא.'};
+    if(first.anchor.rel==='before')return _planChainBefore(snap,intent,gaps);
     const ar=resolveAnchor(snap,first.anchor);
     if(ar.status==='ambiguous')return{status:'ask',ask:{field:'anchor',ref:first.ref,question:ar.question,candidates:ar.candidates.map(c=>c.event.id)},anchor:ar};
     if(ar.status==='not_found')return{status:'not_found',message:ar.message,anchor:ar};
@@ -9150,7 +9153,7 @@ function planChainBasic(snap,intent,gaps){
 // PURE: before creating anything — was the calendar changed since planning? If so re-check overlaps on the fresh data.
 function revalidatePlan(snap,state,plan){
   if(!contextIsStale(snap,state))return{stale:false,ok:plan.conflicts.length===0,conflicts:plan.conflicts};
-  const fresh=buildContextSnapshot(state,{from:snap.from,to:snap.to});const conflicts=[];
+  const fresh=buildContextSnapshot(state,{from:snap.from,to:snap.to,engine:snap.freeHours!==null});const conflicts=[];
   plan.items.forEach(p=>fresh.events.forEach(e=>{if(e.date===p.date&&p.startMin<e.endMin&&p.endMin>e.startMin&&(!plan.anchor||e.id!==plan.anchor.eventId))conflicts.push({plan:p.ref,event:e.id,title:e.title});}));
   return{stale:true,ok:conflicts.length===0,conflicts,snapshot:fresh};
 }
@@ -9176,6 +9179,170 @@ function buildIntentSystem(todayISO){
   const dn=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const d=new Date(todayISO+'T12:00:00Z');
   return AI_INTENT_PROMPT+'\nהיום: '+todayISO+' (יום '+dn[d.getUTCDay()]+'). "מחר" = '+_isoAdd(todayISO,1)+'.';
+}
+// ══════════════════════════════════════════════════════
+//  PLAN (step C) — planChain "before" + departure time, and scheduleSet (unordered tasks under constraints). PURE.
+// ══════════════════════════════════════════════════════
+const planChain=planChainBasic;
+// Backward chain: everything must END before the anchor starts, with arrival buffer + the user's "late bias" (leave earlier).
+function _planChainBefore(snap,intent,gaps){
+  const items=gaps.items,first=items[0];
+  const ar=resolveAnchor(snap,first.anchor);
+  if(ar.status==='ambiguous')return{status:'ask',ask:{field:'anchor',ref:first.ref,question:ar.question,candidates:ar.candidates.map(c=>c.event.id)},anchor:ar};
+  if(ar.status!=='resolved')return{status:'not_found',message:ar.message||'לא מצאתי את האירוע.',anchor:ar};
+  const ev=ar.event,rules=snap.rules,date=ev.date;
+  const buf=resolveBuffer('meeting',rules).min,late=rules.lateBiasMin||0;
+  let cursor=ev.startMin-buf-late;const arriveBy=cursor;
+  let place=ev.place||null;const rev=[],assumptions=gaps.assumptions.slice();
+  for(let i=items.length-1;i>=0;i--){
+    const it=items[i];const prev=i>0?items[i-1]:null;
+    if(it.kind==='travel'){
+      const dest=it.place||place;if(!dest)return{status:'ask',ask:{field:'place',ref:it.ref,question:'לאן הנסיעה? (ל'+ev.title+' אין מיקום ביומן)'}};
+      const origin=(prev&&prev.place)||(intent.context&&intent.context.currentPlace)||null;
+      let min=it.durationMin,src='user_said';
+      if(!min){
+        if(!origin)return{status:'ask',ask:{field:'origin',ref:it.ref,question:'מאיפה יוצאים לנסיעה ל'+dest+'?'}};
+        const t=travelMinutes(rules,origin,dest);
+        if(t.min===null)return{status:'ask',ask:{field:'travel',ref:it.ref,from:origin,to:dest,question:'כמה זמן נסיעה מ'+origin+' ל'+dest+'? (אזכור לפעם הבאה)'}};
+        min=t.min;src=t.source;
+      }
+      rev.push({ref:it.ref,title:it.title,kind:'travel',place:dest,date,startMin:cursor-min,endMin:cursor,durationSource:src,departAt:cursor-min});
+      cursor-=min;place=origin||place;
+    }else{
+      const dur=it.duration.min||0;
+      rev.push({ref:it.ref,title:it.title,kind:it.kind,place:it.place||place||null,date,startMin:cursor-dur,endMin:cursor,durationSource:it.duration.source,assumed:it.duration.assumed});
+      cursor-=dur;if(it.place)place=it.place;
+    }
+  }
+  const plan=rev.reverse();
+  if(plan.length&&plan[0].startMin<0)return{status:'not_fit',message:'הרצף לא נכנס לפני "'+ev.title+'" באותו יום.'};
+  if(late>0)assumptions.push({ref:'rules',field:'lateBias',value:late,source:'user_default',text:'הקדמתי יציאה ב-'+late+' דק׳ (נטייה לאחר)'});
+  if(buf>0)assumptions.push({ref:'rules',field:'buffer',value:buf,source:resolveBuffer('meeting',rules).source,text:'השארתי '+buf+' דק׳ הגעה לפני "'+ev.title+'"'});
+  const conflicts=[];
+  plan.forEach(p=>snap.events.forEach(e=>{if(e.date===p.date&&e.id!==ev.id&&p.startMin<e.endMin&&p.endMin>e.startMin)conflicts.push({plan:p.ref,event:e.id,title:e.title});}));
+  return{status:'ok',date,direction:'before',anchor:{eventId:ev.id,title:ev.title,date,startMin:ev.startMin,endMin:ev.endMin,place:ev.place||null,confidence:ar.confidence},arriveBy,items:plan,assumptions,conflicts,snapshotSig:snap.sig};
+}
+// PURE: when to LEAVE for a fixed-start item: start − travel(origin→place) − buffer − late bias. Unknown travel → a question, never a guess.
+function departureFor(snap,o){
+  const rules=snap.rules,buf=resolveBuffer(o.kind||'meeting',rules).min,late=rules.lateBiasMin||0;
+  if(!o.origin)return{status:'ask',ask:{field:'origin',question:'מאיפה יוצאים?'}};
+  const t=travelMinutes(rules,o.origin,o.place);
+  if(t.min===null)return{status:'ask',ask:{field:'travel',from:o.origin,to:o.place,question:'כמה זמן נסיעה מ'+o.origin+' ל'+o.place+'? (אזכור לפעם הבאה)'}};
+  return{status:'ok',departAt:o.startMin-t.min-buf-late,travelMin:t.min,bufferMin:buf,lateBiasMin:late,arriveAt:o.startMin-buf-late};
+}
+// ── scheduleSet ──
+const PLAN_DAY_START=480,PLAN_DAY_END=1200;
+const PLAN_MODE_ALLOWS={
+  work:['work','deep_work','meeting','phone_call','admin','travel','errand','shopping','waiting_for_response'],
+  study:['study','deep_work','creative','phone_call','admin','travel','personal','religious','fitness'],
+  flexible:null,
+  errands:['errand','shopping','travel','phone_call','admin','meeting','personal','fitness'],
+  field:['errand','shopping','travel','phone_call','meeting','admin'],
+  rest:['personal','religious','fitness','creative'],
+  spirit:['religious','study','personal','fitness','creative','travel'],
+  light:null
+};
+function planKindAllowedOnMode(kind,mode){const a=PLAN_MODE_ALLOWS[mode||'flexible'];return a===null||a===undefined||a.indexOf(kind)>=0;}
+function _mergeIv(iv){iv.sort((a,b)=>a[0]-b[0]);const o=[];iv.forEach(x=>{if(x[1]<=x[0])return;const l=o[o.length-1];if(l&&x[0]<=l[1])l[1]=Math.max(l[1],x[1]);else o.push([x[0],x[1]]);});return o;}
+function _subIv(base,cut){const c=_mergeIv(cut.slice().map(x=>[x[0],x[1]]));const out=[];base.forEach(b=>{let s=b[0];c.forEach(x=>{if(x[1]<=s||x[0]>=b[1])return;if(x[0]>s)out.push([s,x[0]]);s=Math.max(s,x[1]);});if(s<b[1])out.push([s,b[1]]);});return out;}
+// PURE: free intervals (minutes) on a date: engine-legal hours (or Shabbat fallback) − events − the user's anchors − extra reservations.
+function ctxFreeIntervals(snap,date,reserved){
+  const dow=new Date(date+'T12:00:00Z').getUTCDay();
+  let base;
+  const fhKeys=snap.freeHours?Object.keys(snap.freeHours).sort():[];
+  if(snap.freeHours&&snap.freeHours[date]){base=_mergeIv(snap.freeHours[date].map(h=>[h*60,h*60+60]));base=_subIv([[PLAN_DAY_START,PLAN_DAY_END]],_subIv([[0,1440]],base));}
+  else if(fhKeys.length&&date>=fhKeys[0]&&date<=fhKeys[fhKeys.length-1])base=[];   // inside the engine's range but no free hour → closed day (Shabbat / blocked)
+  else if(dow===6)base=[];                                                      // outside the engine's range: Shabbat fallback
+  else if(dow===5)base=[[PLAN_DAY_START,840]];
+  else base=[[PLAN_DAY_START,PLAN_DAY_END]];
+  const cut=[];
+  snap.events.forEach(e=>{if(e.date===date)cut.push([e.startMin,e.endMin]);});
+  (snap.rules.anchors||[]).forEach(a=>{if(a.rigidity!=='optional'&&a.days.indexOf(dow)>=0)cut.push([a.startMin,a.endMin]);});
+  (reserved||[]).forEach(r=>cut.push([r[0],r[1]]));
+  return _subIv(base,cut);
+}
+// PURE: place an UNORDERED set of items into free time. Respects: day modes, daily load cap, each item's buffer, windows/fixed times,
+// geography (same-place items cluster; different places need known travel), travel-compatible items inside travel blocks.
+// Returns {placed,unplaced,kept,moves,questions,assumptions,order,loadByDate}. Never invents travel times (asks instead).
+function scheduleSet(snap,intent,gaps,opts){
+  opts=opts||{};const rules=snap.rules;
+  let dates=[];
+  if(intent.targetDays&&intent.targetDays.length)dates=intent.targetDays.slice().sort();
+  else{let d=opts.from||snap.today;const last=opts.to||_isoAdd(snap.today,6);for(let i=0;i<21&&d<=last;i++){dates.push(d);d=_isoAdd(d,1);}}
+  const placed=[],unplaced=[],kept=[],moves=[],questions=[],assumptions=gaps.assumptions.slice();
+  const reserved={};dates.forEach(d=>reserved[d]=[]);
+  const dowOf=d=>new Date(d+'T12:00:00Z').getUTCDay();
+  const capOf=d=>{const m=rules.dayModes[dowOf(d)],base=rules.maxLoadMin||540;return m==='light'?Math.round(base/2):base;};
+  const evLoad=d=>snap.events.filter(e=>e.date===d).reduce((t,e)=>t+Math.max(0,Math.min(e.endMin,PLAN_DAY_END)-Math.max(e.startMin,PLAN_DAY_START)),0);
+  const loadOf=d=>evLoad(d)+reserved[d].reduce((t,r)=>t+(r[1]-r[0]),0);
+  const hhmm=_hhmm;
+  const existing=opts.existing||{};
+  // order: fixed-time first, then windowed, then immovable, then longest first
+  const list=gaps.items.map(it=>{
+    const fixed=it.rigidityResolved.value==='hard'&&it.window&&hhmm(it.window.from)!=null&&!it.window.to;
+    return{it,fixed,windowed:!!(it.window&&(it.window.from||it.window.to)),movable:it.mobility.canMove};
+  }).sort((a,b)=>(b.fixed-a.fixed)||(b.windowed-a.windowed)||((a.movable?1:0)-(b.movable?1:0))||((b.it.duration.min||0)-(a.it.duration.min||0)));
+  const order=list.map(x=>x.it.ref);
+  const travelBlocks=d=>{const r=[];snap.events.forEach(e=>{if(e.date===d&&/^נסיעה/.test(e.title))r.push([e.startMin,e.endMin]);});placed.forEach(p=>{if(p.date===d&&p.kind==='travel')r.push([p.startMin,p.endMin]);});return r;};
+  const neighbours=d=>{const n=[];snap.events.forEach(e=>{if(e.date===d)n.push({s:e.startMin,e:e.endMin,place:e.place||''});});placed.forEach(p=>{if(p.date===d)n.push({s:p.startMin,e:p.endMin,place:p.place||''});});return n;};
+  const kindHour=(kind,s)=>{if(['work','deep_work','study','creative'].includes(kind))return s>=540&&s<720?3:(s>=720&&s<900?1:0);if(['errand','shopping'].includes(kind))return s>=600&&s<1080?2:0;if(kind==='phone_call')return s>=600&&s<1080?1:0;return 0;};
+  for(const x of list){
+    const it=x.it,dur=it.duration.min;
+    const ex=existing[it.ref];
+    if(ex&&!x.movable){kept.push({ref:it.ref,title:it.title,date:ex.date,startMin:ex.startMin,why:'קשיח — לא מזיזה'});continue;}
+    if(!dur){unplaced.push({ref:it.ref,title:it.title,why:'needs_travel_info'});continue;}
+    const where=it.place||(intent.context&&intent.context.currentPlace)||'';
+    const myDates=it.date?[it.date]:dates;
+    const wFrom=hhmm(it.window&&it.window.from),wTo=hhmm(it.window&&it.window.to);
+    // fixed time: exact start or conflict — never shifted
+    if(x.fixed){
+      const d=it.date||dates[0];const s=wFrom,e=s+dur;
+      const free=ctxFreeIntervals(snap,d,reserved[d]).some(iv=>s>=iv[0]&&e<=iv[1]);
+      if(free){reserved[d].push([s,e]);placed.push({ref:it.ref,title:it.title,kind:it.kind,place:it.place||null,date:d,startMin:s,endMin:e,reason:'שעה קבועה שביקשת'});}
+      else{const bl=snap.events.filter(ev=>ev.date===d&&s<ev.endMin&&e>ev.startMin).map(ev=>ev.title);unplaced.push({ref:it.ref,title:it.title,why:'conflict',with:bl,date:d});}
+      continue;
+    }
+    // phone calls & other travel-compatible kinds: use a travel block when one is long enough
+    if((rules.travelCompatibleKinds||[]).indexOf(it.kind)>=0){
+      let done=false;
+      for(const d of myDates){for(const tb of travelBlocks(d)){
+        const used=reserved[d].filter(r=>r[0]>=tb[0]&&r[1]<=tb[1]).reduce((t,r)=>t+(r[1]-r[0]),0);
+        const s=tb[0]+used;if(tb[1]-s>=dur){reserved[d].push([s,s+dur]);placed.push({ref:it.ref,title:it.title,kind:it.kind,place:null,date:d,startMin:s,endMin:s+dur,inTravel:true,reason:'בזמן הנסיעה'});done=true;break;}
+      }if(done)break;}
+      if(done)continue;
+    }
+    let best=null;const whyCount={};const why=k=>whyCount[k]=(whyCount[k]||0)+1;
+    myDates.forEach((d,di)=>{
+      const mode=rules.dayModes[dowOf(d)]||'flexible';
+      if(!planKindAllowedOnMode(it.kind,mode)){why('day_mode');return;}
+      if(loadOf(d)+dur>capOf(d)){why('load_cap');return;}
+      const ivs=ctxFreeIntervals(snap,d,reserved[d]);if(!ivs.length){why('no_room');return;}
+      const nb=neighbours(d);
+      ivs.forEach(iv=>{
+        for(let s=Math.max(iv[0],wFrom!=null?wFrom:iv[0]);s+dur<=iv[1]&&(wTo==null||s+dur<=wTo);s+=15){
+          // buffer before: keep the gap to whatever precedes within this interval start
+          const gapFromIv=s-iv[0];const prevBusy=nb.filter(n=>n.e<=s).sort((a,b)=>b.e-a.e)[0];
+          if(prevBusy&&s-prevBusy.e<(it.buffer.min||0)&&gapFromIv<(it.buffer.min||0))continue;
+          let okGeo=true,geo=0;
+          for(const n of nb){
+            const gap=n.e<=s?s-n.e:(n.s>=s+dur?n.s-(s+dur):-1);if(gap<0||gap>=120||!n.place||!where)continue;
+            if(_hnorm(n.place)===_hnorm(where)){if(gap<=15)geo+=6;else geo+=2;}
+            else{const t=travelMinutes(rules,n.place,where);if(t.min===null){if(!questions.some(q=>q.from===n.place&&q.to===where))questions.push({field:'travel',ref:it.ref,from:n.place,to:where,question:'כמה זמן נסיעה מ'+n.place+' ל'+where+'? (אזכור לפעם הבאה)'});}else if(gap<t.min){okGeo=false;break;}}
+          }
+          if(!okGeo)continue;
+          const sc=-di*2-loadOf(d)/60+geo+kindHour(it.kind,s)-(s-iv[0])/600;
+          if(!best||sc>best.sc)best={sc,d,s,geo,load:loadOf(d)};
+        }
+      });
+    });
+    if(!best){const top=Object.keys(whyCount).sort((a,b)=>whyCount[b]-whyCount[a])[0]||'no_room';unplaced.push({ref:it.ref,title:it.title,why:top});continue;}
+    reserved[best.d].push([best.s,best.s+dur]);
+    const reason=best.geo>=6?'ביחד עם משהו באותו מקום':best.load===0?'יום בלי אירועים אחרים':best.load<180?'יום קליל יחסית':'החלון הפנוי הכי נוח';
+    placed.push({ref:it.ref,title:it.title,kind:it.kind,place:it.place||null,date:best.d,startMin:best.s,endMin:best.s+dur,reason});
+    if(ex&&(ex.date!==best.d||ex.startMin!==best.s))moves.push({ref:it.ref,title:it.title,from:ex.date,to:best.d});
+  }
+  const loadByDate={};dates.forEach(d=>loadByDate[d]=loadOf(d));
+  return{placed:placed.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin),unplaced,kept,moves,questions:questions.slice(0,1),assumptions,order,loadByDate,snapshotSig:snap.sig};
 }
 // ── Interpretation layer for small tasks: kind (metadata), place, and "what can be done together" ──
 const TASK_KINDS=['deep_work','phone_call','admin','errand','travel_compatible','creative','meeting','study','personal','waiting_for_response'];
