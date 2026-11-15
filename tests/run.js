@@ -668,6 +668,44 @@ const w=dom.window;
     const okd=Object.values(r).every(v=>v===true);
     rows.push(['validate + proposeCuts (D)',String(okd)+(okd?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okd)failed=true;
   }catch(e){rows.push(['validate + proposeCuts (D)','THROW '+e.message]);failed=true;}
+  // ---- token refresh: single-flight, transient failures, other-tab race ----
+  try{
+    const r=await w.eval(`(async()=>{const o={};
+      const real=window.fetch,rs=localStorage.getItem(CLOUD_SESSION_KEY),saved=CLOUD_SESSION;
+      const now=()=>Math.floor(Date.now()/1000);
+      const sess=(exp,rt)=>({access_token:'at-'+rt,refresh_token:rt,expires_at:exp,user:{id:'u1',email:'a@b.c',name:'x'}});
+      const reply=(status,body)=>({ok:status>=200&&status<300,status,json:async()=>body});
+      try{
+        // 1) two callers at once → ONE refresh request (rotation would otherwise kill the 2nd)
+        let calls=0;_cloudStoreSession(sess(now()+10,'rt1'));
+        window.fetch=async()=>{calls++;await new Promise(r=>setTimeout(r,30));return reply(200,{access_token:'at2',refresh_token:'rt2',expires_in:3600,user:{id:'u1',email:'a@b.c'}});};
+        const rr=await Promise.all([_cloudEnsureFresh(),_cloudEnsureFresh(),_cloudEnsureFresh()]);
+        o.a_singleFlight=calls===1&&rr.every(x=>x===true)&&CLOUD_SESSION.refresh_token==='rt2';
+        // 2) server error once → retried → success
+        let n=0;_cloudStoreSession(sess(now()+10,'rt3'));
+        window.fetch=async()=>{n++;return n===1?reply(503,{}):reply(200,{access_token:'at4',refresh_token:'rt4',expires_in:3600,user:{id:'u1'}});};
+        o.b_retryOk=(await _cloudEnsureFresh())===true&&n===2&&CLOUD_SESSION.refresh_token==='rt4';
+        // 3) network down but the access token is still valid for 30s → carry on, stay signed in
+        _cloudStoreSession(sess(now()+30,'rt5'));window.fetch=async()=>{throw new Error('offline');};
+        o.c_networkTokenStillValid=(await _cloudEnsureFresh())===true&&cloudSignedIn();
+        // 4) network down and the token already expired → false, but NOT signed out (can retry)
+        _cloudStoreSession(sess(now()-5,'rt6'));
+        o.d_networkExpiredStaysSignedIn=(await _cloudEnsureFresh())===false&&cloudSignedIn();
+        // 5) refresh token rejected (400) but another tab stored a newer session → adopt it, don't sign out
+        _cloudStoreSession(sess(now()+10,'rt7'));
+        window.fetch=async()=>{localStorage.setItem(CLOUD_SESSION_KEY,JSON.stringify(sess(now()+3600,'rt8')));return reply(400,{error:'invalid_grant'});};
+        o.e_otherTabWins=(await _cloudEnsureFresh())===true&&cloudSignedIn()&&CLOUD_SESSION.refresh_token==='rt8';
+        // 6) refresh token really dead (400, nothing newer) → signed out
+        _cloudStoreSession(sess(now()+10,'rt9'));window.fetch=async()=>reply(400,{error:'invalid_grant'});
+        o.f_deadSignsOut=(await _cloudEnsureFresh())===false&&!cloudSignedIn();
+        // 7) fresh token → no request at all
+        _cloudStoreSession(sess(now()+3000,'rt10'));let c7=0;window.fetch=async()=>{c7++;return reply(200,{});};
+        o.g_freshNoRequest=(await _cloudEnsureFresh())===true&&c7===0;
+      }finally{window.fetch=real;CLOUD_SESSION=saved;try{if(rs===null)localStorage.removeItem(CLOUD_SESSION_KEY);else localStorage.setItem(CLOUD_SESSION_KEY,rs);}catch(_e){}}
+      return o;})()`);
+    const oka=Object.values(r).every(v=>v===true);
+    rows.push(['token refresh (single-flight)',String(oka)+(oka?'':' '+JSON.stringify(r))]);if(!oka)failed=true;
+  }catch(e){rows.push(['token refresh (single-flight)','THROW '+e.message]);failed=true;}
   // static checks on the server-side proxy files
   try{const ts=fs.readFileSync(path.join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');const sql=fs.readFileSync(path.join(__dirname,'..','cloud','ai_proxy.sql'),'utf8');
     const okp=/auth\.getUser\(/.test(ts)&&/bump_ai_usage/.test(ts)&&/DAILY_LIMIT/.test(ts)&&!/AIza[0-9A-Za-z_-]{20,}/.test(ts+sql+html)&&/GEMINI_API_KEY/.test(ts)&&/AbortSignal\.timeout\(/.test(ts)&&/TOTAL_BUDGET_MS/.test(ts)&&/status === 429\) break|status === 401 \|\| r\.status === 403\) break/.test(ts)&&/enable row level security/i.test(sql)&&/revoke all on function public\.bump_ai_usage/i.test(sql);

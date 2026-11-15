@@ -5839,7 +5839,7 @@ async function _aiEnsureConsent(){
 // Shared free AI through the Supabase Edge Function "maya-ai" (cloud/functions/maya-ai). Needs a signed-in user.
 async function _aiCallProxy(sys,msgs){
   if(!(await _aiEnsureConsent())){const e=new Error('no-consent');e.userMessage='בלי אישור לא אשלח את ההודעות ל-AI. אפשר לאשר בפעם הבאה שתשלח הודעה.';throw e;}
-  if(!(await _cloudEnsureFresh())){const e=new Error('login');e.userMessage='ההתחברות פגה — התחבר שוב דרך 👤 החשבון שלי.';throw e;}
+  if(!(await _cloudEnsureFresh())){const e=new Error('login');e.userMessage=cloudSignedIn()?'לא הצלחתי לרענן את ההתחברות כרגע (בעיית רשת או שרת). נסה שוב בעוד רגע.':'ההתחברות פגה — התחבר שוב דרך 👤 החשבון שלי.';throw e;}
   const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',timeoutMs:75000,body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))}});
   if(r.timeout){const e=new Error('ai-timeout');e.userMessage='מאיה לא ענתה בזמן. נסה שוב, ואם זה חוזר, ייתכן עומס אצל גוגל.';throw e;}
   if(r.network){const e=new Error('network');e.userMessage='אין חיבור לשרת — בדוק אינטרנט ונסה שוב.';throw e;}
@@ -7577,14 +7577,38 @@ async function _cloudFetch(path,opts={}){
   if(tm)clearTimeout(tm);
   return{ok:r.ok,status:r.status,data};
 }
+// Refresh the access token. Single-flight (sync + AI used to refresh at the same time: Supabase rotates the refresh token, so the 2nd call got 400 and signed the user out),
+// adopts a newer session another tab already stored, retries once on a transient failure, and — when the refresh cannot be done but the current token is still valid — carries on.
+let _cloudRefreshing=null;
+function _cloudSecsLeft(){return CLOUD_SESSION&&CLOUD_SESSION.expires_at?CLOUD_SESSION.expires_at-Math.floor(Date.now()/1000):-1;}
+function _cloudAdoptNewerStored(){
+  try{const st=JSON.parse(localStorage.getItem(CLOUD_SESSION_KEY)||'null');
+    if(st&&st.access_token&&st.user&&st.user.id&&CLOUD_SESSION&&st.refresh_token!==CLOUD_SESSION.refresh_token&&st.expires_at>CLOUD_SESSION.expires_at){CLOUD_SESSION=st;return true;}}catch(_e){}
+  return false;
+}
 async function _cloudEnsureFresh(){
   if(!cloudSignedIn())return false;
-  if(CLOUD_SESSION.expires_at-Math.floor(Date.now()/1000)>60)return true;
-  const r=await _cloudFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:CLOUD_SESSION.refresh_token}});
+  if(_cloudSecsLeft()>60)return true;
+  if(_cloudRefreshing)return _cloudRefreshing;
+  _cloudRefreshing=(async()=>{try{return await _cloudRefreshOnce();}finally{_cloudRefreshing=null;}})();
+  return _cloudRefreshing;
+}
+async function _cloudRefreshOnce(){
+  if(_cloudAdoptNewerStored()&&_cloudSecsLeft()>60)return true;
+  let r=null;
+  for(let k=0;k<2;k++){
+    r=await _cloudFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,timeoutMs:15000,body:{refresh_token:CLOUD_SESSION.refresh_token}});
+    if(r.ok||(!r.network&&r.status!==429&&r.status<500))break;   // answered for real (success or a definite no) → don't retry
+    if(k===0)await new Promise(res=>setTimeout(res,700));
+  }
   const s=r.ok?_cloudSessionFrom(r.data):null;
   if(s){_cloudStoreSession(s);return true;}
-  if(!r.network&&(r.status===400||r.status===401||r.status===403)){_cloudStoreSession(null);try{_cloudGate();}catch(_e){}} // refresh token dead → signed out → ask to log in again
-  return false;
+  if(!r.network&&(r.status===400||r.status===401||r.status===403)){
+    if(_cloudAdoptNewerStored())return true;   // another tab won the refresh race
+    _cloudStoreSession(null);try{_cloudGate();}catch(_e){}   // refresh token really dead → signed out → ask to log in again
+    return false;
+  }
+  return _cloudSecsLeft()>5;   // transient failure (network / server): the current access token may still be valid
 }
 
 async function cloudSignUp(email,password,name){
