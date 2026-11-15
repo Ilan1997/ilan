@@ -37,4 +37,7 @@ A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיס�
 התנהגות הפרומפט מול המודל האמיתי; Google POST/PATCH עם `extendedProperties.private` (maya_domain, maya_travel); מיקרופון; מקלדת באייפון; תפוגת טוקן גוגל (~שעה).
 
 ## GitHub
-דחיפה אוטומטית מהסשן הישן נחסמה (403). ההיסטוריה המפורטת של שלושה קומיטים נמצאת ב-`ilan-backup.bundle`; ב-GitHub הם עלו כקומיט אחד. בסשן חדש: לצרף את הריפו (`add_repo`, push) ולוודא `git push --dry-run origin main` לפני עבודה.
+הסיבה לחסימת ה-403 הייתה שאפליקציית Claude ב-GitHub הייתה מותקנת רק על `iron-pair-impact`. אחרי הוספת `ilan` ואישור בקשת ההרשאות, `git push` עובד (נבדק 15.11.2026). שלבים א׳–ד׳ + תיקון רענון הטוקן כבר ב-GitHub (`4d31412`). ענף `auth-probe` נשאר מבדיקת ההרשאות (זהה ל-main) וניתן למחיקה ידנית. כל שלב משמעותי = קומיט נפרד. ההיסטוריה הישנה: `backup-local-history`, `backup-step-c`, `backup-step-d`, `backup-auth-fix` (מקומיים) ו-`ilan-backup.bundle`.
+
+## ה-AI ("ההתחברות פגה")
+תוקן הרענון (single-flight, ניסיון חוזר, אימוץ סשן מטאב אחר, טוקן תקף נשאר בשימוש). לא אומת מול Supabase אמיתי. אם עדיין נכשל: לשלוח את הטקסט המדויק של השגיאה או את תוצאת "בדוק את ה-AI" בחשבון; לוודא ש-`maya-ai` פרוסה עם `PER_MODEL_MS=28000`, ש-`GEMINI_API_KEY` קיים, ושם המודל תקף (`GEMINI_MODEL=gemini-2.5-flash`).
