@@ -642,6 +642,11 @@ const w=dom.window;
        o.i_stepsHaveCosts=a.options.every(op=>op.steps.every(s=>s.costScore>0&&s.text&&s.fixes)&&op.totalCost===op.steps.reduce((t,s)=>t+s.costScore,0));
        o.i_ladder=PLAN_REPAIR_COST.drop<PLAN_REPAIR_COST.shorten&&PLAN_REPAIR_COST.shorten<PLAN_REPAIR_COST.shift&&PLAN_REPAIR_COST.shift<PLAN_REPAIR_COST.shift_chain&&PLAN_REPAIR_COST.shift_chain<PLAN_REPAIR_COST.move_day&&PLAN_REPAIR_COST.move_day<PLAN_REPAIR_COST.ask_user;
        o.i_noDropOfNonOptional=a.options.every(op=>op.steps.every(s=>s.type!=='drop'||s.ref==='sh'));}
+      // chain tied to a calendar event never moves to another day (a day before the meeting is nonsense)
+      {const st=mk([{id:'pt',title:'פגישה בפתח תקווה',date:MON,startH:9,endH:10,startMin:540,endMin:600,place:'פתח תקווה',attendees:2},{id:'tr',title:'טיפול',date:MON,startH:11,endH:13,startMin:680,endMin:740,attendees:1}],mat('פתח תקווה','אריאל',40));
+       const sn=buildContextSnapshot(st,{engine:false});const it=normalizeIntent({op:'create',items:[{ref:'i1',title:'נסיעה לאריאל',kind:'travel',place:'אריאל',anchor:{rel:'after',target:{text:'הפגישה בפתח תקווה',date:MON}},confidence:{kind:0.95,place:0.95,anchor:0.9}},{ref:'i2',title:'בית מדרש',kind:'religious',durationMin:60,afterItem:'i1',confidence:{kind:0.85,duration:0.95}}]});
+       const g=planningGaps(it,getUserRules(st));const ch=planChain(sn,it,g);const items=planItemsFrom(sn,g,ch,{chain:true});const res=proposeCuts(sn,items);
+       o.j_anchoredChainNoMoveDay=res.options.length>=2&&res.options.every(op=>op.steps.every(s=>s.type!=='move_day'))&&res.options.every(op=>op.plan.every(x=>x.date===MON));}
       // ===== FULL: Intent → Context → Plan → Validate → Repair (and the calendar changing after the plan) =====
       {const E=[HARD('m','פגישה',540,720)];
        const st=mk(E,mat('בית','אריאל',30,{maxLoadMin:540}));const sn=buildContextSnapshot(st,{engine:false});

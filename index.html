@@ -9675,7 +9675,8 @@ function _rpCandidates(snap,items,issue){
       }
     }
     // 5) other day
-    if(c.canMove&&(!members||members.every(m=>m.canMove))){
+    // a chain tied to a calendar event ("after/before the meeting") lives on that event's day — it can't be moved to another day
+    if(c.canMove&&(!members||members.every(m=>m.canMove))&&!(members&&members[0].chainAnchor)){
       const first=members?members[0].startMin:c.startMin,total=members?members[members.length-1].endMin-first:needDur;
       const dayDates=[];for(let d=snap.today;d<=snap.to;d=_isoAdd(d,1))if(d!==c.date)dayDates.push(d);
       dayDates.slice(0,14).forEach(d=>{
