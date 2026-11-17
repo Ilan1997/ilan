@@ -668,6 +668,21 @@ const w=dom.window;
     const okd=Object.values(r).every(v=>v===true);
     rows.push(['validate + proposeCuts (D)',String(okd)+(okd?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okd)failed=true;
   }catch(e){rows.push(['validate + proposeCuts (D)','THROW '+e.message]);failed=true;}
+  // ---- AI preview: prompt does not let the model state days/hours; simulatePlan takes live "now" ----
+  try{
+    const r=await w.eval(`(()=>{const o={};
+      o.a_promptRule=AI_SYSTEM_PROMPT_BASE.indexOf('אל תציין/י בטקסט ימים, שעות או חלוקה')>=0&&AI_SYSTEM_PROMPT_BASE.indexOf('המנוע הוא שמחליט איפה לשבץ')>=0;
+      const s=structuredClone(STATE_ACTIVE);s.meta.today='2026-11-17';
+      const pay={id:'t1',title:'עבודה להגשה',requiredUnits:8,deadline:'2026-11-23',priorityWeight:1,splitMode:'flexible',type:'generic',calendarId:'personal',location:''};
+      const a=simulatePlan(s,'personal',pay),b=simulatePlan(s,'personal',pay,{}),c=simulatePlan(s,'personal',pay,{nowMinutes:1130});
+      const sig=x=>JSON.stringify(Object.keys(x.result.assignments).sort());
+      o.b_defaultUnchanged=sig(a)===sig(b)&&Object.keys(a.result.assignments).length>0;
+      o.c_acceptsNow=!!c&&c.result&&Object.keys(c.result.assignments).length===Object.keys(a.result.assignments).length;
+      o.d_previewFromSimulation=(()=>{const cp={tasks:[{title:'עבודה להגשה',hours:8,deadline:'2026-11-23',calendar:'personal',split:'flexible',priority:1}],events:[]};const sim=_simulateCompiledPlan(s,cp);const pv=_buildAIPlanPreview(cp,sim);return /שובצו 8\\/8 שעות/.test(pv.text)&&/ביום/.test(pv.text);})();
+      return o;})()`);
+    const okp=Object.values(r).every(v=>v===true);
+    rows.push(['AI preview consistency',String(okp)+(okp?'':' '+JSON.stringify(r))]);if(!okp)failed=true;
+  }catch(e){rows.push(['AI preview consistency','THROW '+e.message]);failed=true;}
   // ---- token refresh: single-flight, transient failures, other-tab race ----
   try{
     const r=await w.eval(`(async()=>{const o={};

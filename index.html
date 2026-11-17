@@ -3245,7 +3245,9 @@ let _firstSuggShown=false;  // true after first suggestion banner has been shown
 // Batch tasks: simulatePlan(state, calId, [task1, task2, ...])
 // Returns diff + per-task preview for each task in the batch.
 // External AI layer can call this directly without UI interaction.
-function simulatePlan(stateSnapshot, calendarId, taskOrTasks){
+function simulatePlan(stateSnapshot, calendarId, taskOrTasks, options={}){
+  // options.nowMinutes (live callers): hours already gone today are not offered — so the preview matches what the live engine will really do.
+  const _engOpts=typeof options.nowMinutes==='number'?{nowMinutes:options.nowMinutes}:{};
   const tasks=Array.isArray(taskOrTasks)?taskOrTasks:[taskOrTasks];
 
   // Apply all tasks to build tentative state
@@ -3254,8 +3256,8 @@ function simulatePlan(stateSnapshot, calendarId, taskOrTasks){
     tentativeState=applyEvent(tentativeState, calendarId, {type:'ADD_TASK',payload:t});
   }
 
-  const resultBefore=buildEngine(stateSnapshot, calendarId);
-  const resultAfter =buildEngine(tentativeState, calendarId);
+  const resultBefore=buildEngine(stateSnapshot, calendarId, _engOpts);
+  const resultAfter =buildEngine(tentativeState, calendarId, _engOpts);
 
   // ── Assignment diff (across all new tasks) ──
   const beforeSet=new Set(Object.keys(resultBefore.assignments));
@@ -5772,6 +5774,7 @@ const AI_SYSTEM_PROMPT_BASE=`את/ה מאיה, המזכירה האישית של 
 \`\`\`SEMANTIC_PLAN
 {"semanticVersion":1,"intents":[{"action":"create_task","title":"...","calendar":"personal","durationHours":3,"deadline":"YYYY-MM-DD","importance":"normal","schedulingPreference":"flexible"}]}
 \`\`\`
+**כשאת/ה מחזיר/ה SEMANTIC_PLAN של משימה שצריך לשבץ: אל תציין/י בטקסט ימים, שעות או חלוקה מסוימת (למשל "חמישי ושישי, 4 שעות כל פעם").** המנוע הוא שמחליט איפה לשבץ, והשיבוץ האמיתי מוצג למשתמש/ת מתחת להודעה — מה שתכתוב/י עלול לסתור אותו. כתוב/י רק משפט קצר שמכיר/ה בצורך ושואל/ת אם לאשר את השיבוץ שיוצג.
 **זהו הפורמט היחיד שעליך להחזיר.** אל תחזיר/י אף פעם שדות פנימיים של המנוע — לא id, לא priorityWeight, לא planningDeadlineOffset, לא splitMode, לא lockedAssignments, לא slotId, לא policy, לא meta. רק את שדות החוזה הסמנטי שמופיעים כאן.
 כללים ל-intents מסוג create_task: calendar הוא personal (לימודים/חיים) או work — אם לא ברור, פשוט השמט/י את השדה (ברירת המחדל האוטומטית היא personal). importance: urgent/high/normal/low/background (ברירת מחדל normal אם לא ברור). category (מומלץ): work/study/family/health/finance/errands/rest — סיווג המשימה; משימת עבודה = calendar work. durationHours ו-deadline הם **חובה** — אם המשתמש/ת לא ציין/ה דדליין בשום צורה (גם לא "עד סוף השבוע" או רמז דומה שאפשר לחשב ממנו תאריך), אל תמציא/י תאריך — שאל/י בקצרה "עד מתי צריך להשלים את זה?" בלי לצרף SEMANTIC_PLAN כלל.
 **schedulingPreference — קריטי לבחור נכון, זו סיבה נפוצה לתזמון שבור:** strict_contiguous (כל השעות ברצף אחד, בלי פיצול בכלל) הוא הבחירה הנכונה לכל דבר שהוא מפגש/אירוע חד-פעמי אחד במציאות ולא יכול "להתחלק" — דייט, פגישה, אימון בודד, ביקור אצל רופא, שיחת טלפון, סידור. **לעולם אל תיתן/י schedulingPreference=flexible לדבר כזה** — תוצאה כמו "חצי שעה לפני העבודה וחצי שעה אחריה" היא שגיאה, לא תזמון תקין. flexible (מפוזר, מותר בכל שעה בנפרד) מתאים רק לעבודה שבאמת אפשר לחלק לנתחים בלתי-תלויים — למידה, כתיבה, פרויקט מתמשך. prefer_contiguous הוא פשרה כשעדיף רצוף אבל לא קריטי. chunked הוא למקרה של "בבלוקים של עד X שעות עם הפסקת חובה של Y שעות ביניהם". בכל ספק בין flexible ל-strict_contiguous — עדיף strict_contiguous.
@@ -6442,7 +6445,7 @@ function _simulateCompiledPlan(state,compiledPlan){
       id:t.id||('sim_'+calId+'_'+i), title:t.title,requiredUnits:t.hours,deadline:t.deadline,
       priorityWeight:t.priority,splitMode:t.split,type:t.type||'generic',calendarId:calId,location:t.location||'',
     }));
-    out[calId]=simulatePlan(state,calId,payloads);
+    out[calId]=simulatePlan(state,calId,payloads,{nowMinutes:(new Date().getHours()*60+new Date().getMinutes())});
   });
   return out;
 }
@@ -7269,7 +7272,7 @@ function previewTask(){
   if(!built)return;
   const{calendarId,payload}=built;
 
-  PENDING_PLAN=simulatePlan(STATE_ACTIVE, calendarId, payload);
+  PENDING_PLAN=simulatePlan(STATE_ACTIVE, calendarId, payload,{nowMinutes:(new Date().getHours()*60+new Date().getMinutes())});
   const p=PENDING_PLAN.preview;
   const d=PENDING_PLAN.diff;
 
