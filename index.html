@@ -2084,6 +2084,8 @@ function buildEngine(state,calendarId,options={}){
   // vary depending on the UI's displayed week). Same state + same options MUST always
   // produce the same result, for ALL weeks simultaneously, not just the one on screen.
   const _optNowMinutes=typeof options.nowMinutes==='number'?options.nowMinutes:null;
+  // options.elapsedToday (live callers only): hours of TODAY that have already ended are not offered — the engine itself never reads the clock, it only gets the minute as an input.
+  const _elapsedToday=options.elapsedToday===true&&_optNowMinutes!=null;
 
   // ① Date anchors MUST be first — used by everything below
   const start=parseISO(snapToSunday(meta.startDate)); // always Sunday-aligned
@@ -2273,7 +2275,7 @@ function buildEngine(state,calendarId,options={}){
       const _allowed=isSlotAllowed(calendarId,date.getDay(),h,workWindows);
       if(st==='free'&&_allowed){
         const _isStabilityLocked=(dId<=STABILITY_CUTOFF_DID)&&(date>=today);
-        allSlots.push({sid:slotId(date,h),g,h,date,dId,isPast:date<today,isWithinStabilityWindow:_isStabilityLocked});
+        allSlots.push({sid:slotId(date,h),g,h,date,dId,isPast:date<today||(_elapsedToday&&isTodayDate(date)&&(h+1)*60<=_optNowMinutes),isWithinStabilityWindow:_isStabilityLocked});
       }
       // 1 slot = 1 hour only
     }
@@ -3019,7 +3021,7 @@ function findConcreteSuggestionPlan(state, calendarId, result, suggestionType, t
     const vr=applyValidatedPlan(state,calendarId,{expectedRevision:_rev,changes});
     if(!vr.valid)return null;
     let afterResult;
-    try{ afterResult=buildEngine(vr.nextState,calendarId); }catch(e){return null;}
+    try{ afterResult=buildEngine(vr.nextState,calendarId,_liveEngineOpts(vr.nextState)); }catch(e){return null;}
     const afterMetrics=computePlanQualityMetrics(vr.nextState,calendarId,afterResult);
     if(!isPlanImprovement(beforeMetrics,afterMetrics))return null;
     return{valid:true,changes,beforeMetrics,afterMetrics,violations:vr.violations};
@@ -3135,7 +3137,7 @@ function findInfeasibleTaskResolutions(state,calendarId,result,task){
     const vr=applyValidatedPlan(state,calendarId,{expectedRevision:_rev,changes});
     if(!vr.valid)return;
     let afterResult;
-    try{afterResult=buildEngine(vr.nextState,calendarId);}catch(e){return;}
+    try{afterResult=buildEngine(vr.nextState,calendarId,_liveEngineOpts(vr.nextState));}catch(e){return;}
     const afterR=afterResult.risk?.[task.id];
     if(!afterR||afterR.remainingUnits>0)return; // must actually resolve the shortfall to be worth suggesting
     const afterMetrics=computePlanQualityMetrics(vr.nextState,calendarId,afterResult);
@@ -3245,9 +3247,21 @@ let _firstSuggShown=false;  // true after first suggestion banner has been shown
 // Batch tasks: simulatePlan(state, calId, [task1, task2, ...])
 // Returns diff + per-task preview for each task in the batch.
 // External AI layer can call this directly without UI interaction.
+// UI layer (NOT the engine): the live clock as an explicit engine input. nowMinutes always (deadline-day lock, as before);
+// elapsedToday only when "today" is the real date (not a manual/simulated day) and this is not a test run (tests set window.__MAYA_TEST__).
+function _liveEngineOpts(state){
+  const n=new Date(),o={nowMinutes:n.getHours()*60+n.getMinutes()};
+  try{
+    const st=state||STATE_ACTIVE,real=(typeof window!=='undefined'&&window.__MAYA_NOW__)?window.__MAYA_NOW__:null;
+    const testRun=typeof window!=='undefined'&&window.__MAYA_TEST__===true;
+    if(real){o.nowMinutes=real.minutes;if(st&&st.meta&&st.meta.today===real.iso&&!st.meta.todayIsManual)o.elapsedToday=true;return o;}   // test hook: a fixed pretend "now"
+    if(!testRun&&st&&st.meta&&!st.meta.todayIsManual&&st.meta.today===getTodayISO())o.elapsedToday=true;
+  }catch(_e){}
+  return o;
+}
 function simulatePlan(stateSnapshot, calendarId, taskOrTasks, options={}){
   // options.nowMinutes (live callers): hours already gone today are not offered — so the preview matches what the live engine will really do.
-  const _engOpts=typeof options.nowMinutes==='number'?{nowMinutes:options.nowMinutes}:{};
+  const _engOpts={...(typeof options.nowMinutes==='number'?{nowMinutes:options.nowMinutes}:{}),...(options.elapsedToday===true?{elapsedToday:true}:{})};
   const tasks=Array.isArray(taskOrTasks)?taskOrTasks:[taskOrTasks];
 
   // Apply all tasks to build tentative state
@@ -3942,7 +3956,7 @@ function recalcAndRender(){
   // If either throws, RESULT_P/W are NOT updated, preventing stale UI false-success.
   let _nextP, _nextW;
   try{
-    const _liveOpts={nowMinutes:(new Date().getHours()*60+new Date().getMinutes())}; // weekId removed — buildEngine no longer depends on the displayed week
+    const _liveOpts=_liveEngineOpts(STATE_ACTIVE); // weekId removed — buildEngine no longer depends on the displayed week
     _nextP=buildEngine(STATE_ACTIVE,'personal',_liveOpts);
     _nextW=buildEngine(STATE_ACTIVE,'work',_liveOpts);
   }catch(_e){
@@ -5474,7 +5488,7 @@ function computeWeekBriefing(state,extra){
   const per={};days.forEach(d=>per[d]={work:0,life:0,free:0,off:false});
   const titles={};
   ['personal','work'].forEach(calId=>{
-    let R;try{R=buildEngine(state,calId);}catch(_e){return;}
+    let R;try{R=buildEngine(state,calId,_liveEngineOpts(state));}catch(_e){return;}
     (state.calendars[calId]?.tasks||[]).forEach(t=>{titles[t.id]=t.title;});
     Object.keys(R.assignments||{}).forEach(sid=>{const d=sid.split('T')[0];if(!per[d])return;per[d][calId==='work'?'work':'life']++;});
     if(calId==='personal')(R.derived?.allFreeSlots||[]).forEach(sl=>{const d=String(sl.sid).split('T')[0];if(!per[d]||sl.isPast)return;if(R.assignments&&R.assignments[sl.sid])return;per[d].free++;});
@@ -5539,7 +5553,7 @@ function computeMayaInsights(state){
   if(!state||!today)return out;
   const[ws,we]=_weekBounds(today);
   ['personal','work'].forEach(calId=>{
-    let R;try{R=buildEngine(state,calId);}catch(_e){return;}
+    let R;try{R=buildEngine(state,calId,_liveEngineOpts(state));}catch(_e){return;}
     (state.calendars[calId]?.tasks||[]).forEach(t=>{
       const rp=getRiskPresentation(R.risk?.[t.id]);
       if(rp.level==='critical'||rp.level==='warning'){
@@ -5774,6 +5788,8 @@ const AI_SYSTEM_PROMPT_BASE=`את/ה מאיה, המזכירה האישית של 
 \`\`\`SEMANTIC_PLAN
 {"semanticVersion":1,"intents":[{"action":"create_task","title":"...","calendar":"personal","durationHours":3,"deadline":"YYYY-MM-DD","importance":"normal","schedulingPreference":"flexible"}]}
 \`\`\`
+**סגנון — מזכירה אישית, לא מערכת:** דבר/י כמו מזכירה אנושית וחמה, בעברית יומיומית ובקצרה. אל תשתמש/י במילים טכניות או פנימיות (דדליין, שיבוץ, משימה, בלוק, סיכון, אילוץ, מנוע, פרמטר, intent). במקום "דדליין" — "מועד ההגשה"; במקום "לשבץ" — "לקבוע" או "לסדר"; במקום "משימה" — מה שהדבר באמת (העבודה, ההכנה, הפגישה). אל תחזור/י על פרטי התכנית — המסך מציג אותם מתחת להודעה.
+**שעות מועדפות:** כשמבקשים ממך להקדיש 3 שעות ומעלה ללימוד או לעבודה מרוכזת, ובפרופיל עדיין אין מתי המשתמש/ת הכי ממוקד/ת או באילו שעות נוח לו/לה — שאל/י שאלה אחת קצרה בלבד (למשל "באילו שעות נוח לך ללמוד — בוקר, אחה״צ או ערב?"), ועדיין אל תצרף/י בלוק. אם השעות כבר ידועות (בפרופיל או שנאמרו בשיחה) — הציע/י ימים ושעות קונקרטיים כאירועי create_event (למשל שעתיים ברביעי ושעתיים בחמישי בשעות הנוחות לו/לה), ובמקרה הזה מותר ורצוי לציין בטקסט את הימים והשעות כי הם בדיוק מה שאת יוצרת. אם הסכום לא מספיק לכל הנדרש — אמרי מה חסר והציעי היכן להשלים.
 **כשאת/ה מחזיר/ה SEMANTIC_PLAN של משימה שצריך לשבץ: אל תציין/י בטקסט ימים, שעות או חלוקה מסוימת (למשל "חמישי ושישי, 4 שעות כל פעם").** המנוע הוא שמחליט איפה לשבץ, והשיבוץ האמיתי מוצג למשתמש/ת מתחת להודעה — מה שתכתוב/י עלול לסתור אותו. כתוב/י רק משפט קצר שמכיר/ה בצורך ושואל/ת אם לאשר את השיבוץ שיוצג.
 **זהו הפורמט היחיד שעליך להחזיר.** אל תחזיר/י אף פעם שדות פנימיים של המנוע — לא id, לא priorityWeight, לא planningDeadlineOffset, לא splitMode, לא lockedAssignments, לא slotId, לא policy, לא meta. רק את שדות החוזה הסמנטי שמופיעים כאן.
 כללים ל-intents מסוג create_task: calendar הוא personal (לימודים/חיים) או work — אם לא ברור, פשוט השמט/י את השדה (ברירת המחדל האוטומטית היא personal). importance: urgent/high/normal/low/background (ברירת מחדל normal אם לא ברור). category (מומלץ): work/study/family/health/finance/errands/rest — סיווג המשימה; משימת עבודה = calendar work. durationHours ו-deadline הם **חובה** — אם המשתמש/ת לא ציין/ה דדליין בשום צורה (גם לא "עד סוף השבוע" או רמז דומה שאפשר לחשב ממנו תאריך), אל תמציא/י תאריך — שאל/י בקצרה "עד מתי צריך להשלים את זה?" בלי לצרף SEMANTIC_PLAN כלל.
@@ -6123,8 +6139,8 @@ function _aiCurrentItemsSummary(){
     // Real remaining-hours (not just the raw deadline) — needs a live build,
     // which is cheap (single-digit ms) and run once per message, not in a loop.
     let riskP={},riskW={};
-    try{ riskP=buildEngine(STATE_ACTIVE,'personal').risk||{}; }catch(_bp){}
-    try{ riskW=buildEngine(STATE_ACTIVE,'work').risk||{}; }catch(_bw){}
+    try{ riskP=buildEngine(STATE_ACTIVE,'personal',_liveEngineOpts(STATE_ACTIVE)).risk||{}; }catch(_bp){}
+    try{ riskW=buildEngine(STATE_ACTIVE,'work',_liveEngineOpts(STATE_ACTIVE)).risk||{}; }catch(_bw){}
 
     const allTasks=[];
     ['personal','work'].forEach(calId=>{
@@ -6445,47 +6461,53 @@ function _simulateCompiledPlan(state,compiledPlan){
       id:t.id||('sim_'+calId+'_'+i), title:t.title,requiredUnits:t.hours,deadline:t.deadline,
       priorityWeight:t.priority,splitMode:t.split,type:t.type||'generic',calendarId:calId,location:t.location||'',
     }));
-    out[calId]=simulatePlan(state,calId,payloads,{nowMinutes:(new Date().getHours()*60+new Date().getMinutes())});
+    out[calId]=simulatePlan(state,calId,payloads,_liveEngineOpts(state));
   });
   return out;
 }
 // Builds the user-facing preview PURELY from simulation numbers — never
 // from AI-authored prose, so what's shown always matches what will actually happen.
 function _buildAIPlanPreview(compiledPlan,simulation){
+  // Written the way a personal secretary would say it — no internal terms (task / deadline / risk level / scheduling preference).
+  const DN=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+  const dm=iso=>{const m=String(iso||'').match(/^\d{4}-(\d{2})-(\d{2})/);return m?(+m[2])+'.'+(+m[1]):String(iso||'');};
+  const hrs=n=>n===1?'שעה':n===2?'שעתיים':n+' שעות';
+  const hh=h=>String(h).padStart(2,'0')+':00';
   const understood=(compiledPlan.tasks||[]).map(t=>
-    `• יצירת משימה: ${t.title} — משך: ${t.hours} שעות — דדליין: ${t.deadline} — תחום: ${t.calendar==='work'?'עבודה':'חיים ולימודים'} — העדפת שיבוץ: ${
-      t.split==='strict_contiguous'?'רצוף בלבד':t.split==='prefer_contiguous'?'רצוף אם אפשר':t.split==='chunked'?'בבלוקים':'גמיש'}`);
-  (compiledPlan.events||[]).forEach(e=>understood.push(`• יצירת אירוע: ${e.title} — ${e.date} ${e.startHour}:00–${e.endHour}:00`));
+    `• ${t.title} — ${hrs(t.hours)}${t.deadline?', עד '+dm(t.deadline):''}${t.calendar==='work'?' (בעבודה)':''}`+
+    (t.split==='strict_contiguous'?', ברצף אחד':t.split==='prefer_contiguous'?', עדיף ברצף':t.split==='chunked'?', בכמה חלקים':''));
+  (compiledPlan.events||[]).forEach(e=>understood.push(`• ${e.title} — ${dm(e.date)}, ${hh(e.startHour)}–${hh(e.endHour)}`));
   if(compiledPlan.capacity?.days?.length>0){
-    const DNAMES2=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
-    understood.push(`• שינוי שעות עבודה קבועות: ${compiledPlan.capacity.days.map(d=>DNAMES2[d]).join(', ')} בין ${compiledPlan.capacity.startHour}:00–${compiledPlan.capacity.endHour}:00`);
+    understood.push(`• שעות העבודה הקבועות שלך ב${compiledPlan.capacity.days.map(d=>'יום '+DN[d]).join(', ')}: ${hh(compiledPlan.capacity.startHour)}–${hh(compiledPlan.capacity.endHour)}`);
   }
 
   const resultLines=[];
-  const DNAMES=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   ['personal','work'].forEach(calId=>{
     const sim=simulation[calId];
     if(!sim)return;
     sim.previews.forEach(p=>{
       const r=sim.result.risk?.[p.id];
       const done=r?.done??0;
-      resultLines.push(`• "${p.title}": שובצו ${done}/${p.needed} שעות — רמת סיכון: ${
-        p.level==='done'?'בטוחה (הושלם)':p.level==='critical'?'בסיכון':p.level==='warning'?'גבולית':'בטוחה'}`);
+      resultLines.push(done>=p.needed
+        ?`"${p.title}": הצלחתי לקבוע ${p.needed===1?'את השעה':p.needed===2?'את שתי השעות':'את כל '+p.needed+' השעות'}${p.level==='warning'?' — אבל זה צמוד':''}.`
+        :`"${p.title}": הצלחתי לקבוע רק ${done} מתוך ${hrs(p.needed)} לפני המועד — כדאי לפנות עוד זמן או להזיז משהו.`);
       // Day-by-day breakdown, derived from the actual simulated assignments — never invented text.
       const byDay=new Map();
       Object.entries(sim.result.assignments||{}).forEach(([sid,a])=>{
         if(a.taskId!==p.id)return;
-        const dateStr=sid.split('T')[0];
-        byDay.set(dateStr,(byDay.get(dateStr)||0)+1);
+        const [dateStr,hourStr]=sid.split('T');
+        byDay.set(dateStr,(byDay.get(dateStr)||[]).concat([+hourStr]));
       });
-      [...byDay.entries()].sort().forEach(([dateStr,hrs])=>{
+      [...byDay.entries()].sort().forEach(([dateStr,hours])=>{
         const dow=parseISO(dateStr).getDay();
-        resultLines.push(`  ◦ ${hrs} שעות ביום ${DNAMES[dow]} (${dateStr})`);
+        hours.sort((a,b)=>a-b);
+        const runs=[];hours.forEach(h=>{const l=runs[runs.length-1];if(l&&l[1]===h)l[1]=h+1;else runs.push([h,h+1]);});
+        resultLines.push(`  • יום ${DN[dow]} ${dm(dateStr)}: ${runs.map(([a,b])=>hh(a)+'–'+hh(b)).join(', ')}`);
       });
     });
   });
 
-  return{understood,resultLines,text:understood.join('\n')+(resultLines.length?'\n\nתוצאת השיבוץ:\n'+resultLines.join('\n'):'')};
+  return{understood,resultLines,text:understood.join('\n')+(resultLines.length?'\n\nככה אני מציעה לסדר את זה:\n'+resultLines.join('\n'):'')};
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -6524,7 +6546,7 @@ function prepareAIPlanProposal(state,aiPayload){
   const summary=_buildAIPlanPreview(compiledPlan,simulation);
   const warnings=[];
   ['personal','work'].forEach(calId=>{
-    if(simulation[calId]?.diff.overloadedDays>0)warnings.push(`${simulation[calId].diff.overloadedDays} ימים חורגים מהיעד הרגיל בלוח ${calId==='work'?'עבודה':'חיים'}`);
+    if(simulation[calId]?.diff.overloadedDays>0)warnings.push(simulation[calId].diff.overloadedDays===1?'יום אחד יוצא עמוס יותר מהרגיל':simulation[calId].diff.overloadedDays+' ימים יוצאים עמוסים יותר מהרגיל');
   });
 
   return{
@@ -6568,7 +6590,7 @@ function findCandidatePlacements(state,calendarId,taskId,N=3,opts={}){
   const task=cal?.tasks?.find(t=>t.id===taskId);
   if(!task)return[];
   if(Object.values(cal.lockedAssignments||{}).some(l=>l&&l.taskId===taskId))return[]; // only unlocked tasks
-  const R=buildEngine(state,calendarId);
+  const R=buildEngine(state,calendarId,_liveEngineOpts(state));
   const curSlots=Object.keys(R.assignments).filter(k=>R.assignments[k].taskId===taskId).sort();
   const k=curSlots.length;
   if(k<1||k>4)return[];
@@ -6598,7 +6620,7 @@ function findCandidatePlacements(state,calendarId,taskId,N=3,opts={}){
     const changes=slots.map(t=>({type:'lock',taskId,targetSlotId:t}));
     const vr=applyValidatedPlan(state,calendarId,{expectedRevision:rev,changes});
     if(!vr.valid)return null;
-    let R2;try{R2=buildEngine(vr.nextState,calendarId);}catch(_e){return null;}
+    let R2;try{R2=buildEngine(vr.nextState,calendarId,_liveEngineOpts(vr.nextState));}catch(_e){return null;}
     const got=Object.keys(R2.assignments).filter(x=>R2.assignments[x].taskId===taskId).sort();
     if(got.join()!==slots.join())return null; // engine must honour exactly this placement
     const after=computePlanQualityMetrics(vr.nextState,calendarId,R2);
@@ -7272,7 +7294,7 @@ function previewTask(){
   if(!built)return;
   const{calendarId,payload}=built;
 
-  PENDING_PLAN=simulatePlan(STATE_ACTIVE, calendarId, payload,{nowMinutes:(new Date().getHours()*60+new Date().getMinutes())});
+  PENDING_PLAN=simulatePlan(STATE_ACTIVE, calendarId, payload,_liveEngineOpts(STATE_ACTIVE));
   const p=PENDING_PLAN.preview;
   const d=PENDING_PLAN.diff;
 
@@ -8489,7 +8511,7 @@ function suggestSlots(o){
 function _suggestInputs(domain,state){
   state=state||STATE_ACTIVE;
   const cal=(domain==='work'&&state.calendars&&state.calendars.work)?'work':'personal';
-  const R=buildEngine(state,cal);
+  const R=buildEngine(state,cal,_liveEngineOpts(state));
   const freeHours={},busy={};
   (R.derived&&R.derived.allFreeSlots||[]).forEach(sl=>{
     if(R.assignments&&R.assignments[sl.sid])return;
@@ -10506,7 +10528,7 @@ function _emBuildProposedState(){
   // a moved task receives; a stale render cache would corrupt the actual
   // mutation produced, not just a display value.
   let R;
-  try{ R=buildEngine(STATE_ACTIVE,calId); }catch(e){ R=null; }
+  try{ R=buildEngine(STATE_ACTIVE,calId,_liveEngineOpts(STATE_ACTIVE)); }catch(e){ R=null; }
 
   // deep clone via JSON (no functions in STATE)
   let proposed=structuredClone(STATE_ACTIVE);
@@ -10565,7 +10587,7 @@ function _emBuildProposedState(){
 
 function _emCheckConflict(proposedState){
   const{calId,taskId}=_em;
-  const R2=buildEngine(proposedState,calId,{nowMinutes:(new Date().getHours()*60+new Date().getMinutes())});
+  const R2=buildEngine(proposedState,calId,_liveEngineOpts(proposedState));
   const warnings=[];
 
   const R=calId==='work'?RESULT_W:RESULT_P;
@@ -10968,7 +10990,7 @@ function _findContiguousGroup(calId,taskId,srcSid){
   // which then let a group-move/swap only touch PART of a strict_contiguous
   // block — breaking Invariant 4 (see assertEngineInvariants).
   let R;
-  try{ R=buildEngine(STATE_ACTIVE,calId); }catch(e){ return[srcSid]; }
+  try{ R=buildEngine(STATE_ACTIVE,calId,_liveEngineOpts(STATE_ACTIVE)); }catch(e){ return[srcSid]; }
   const allTaskSlots=Object.entries(R.assignments).filter(([,v])=>v.taskId===taskId).map(([sid])=>sid);
   const[fromDate,fromHourStr]=srcSid.split('T');
   const fromHour=parseInt(fromHourStr);
@@ -11489,8 +11511,8 @@ function approveSuggestion(){
   // generation time is not good enough.
   let beforeResult,afterResult;
   try{
-    beforeResult=buildEngine(STATE_ACTIVE,s.calendarId);
-    afterResult=buildEngine(vr.nextState,s.calendarId);
+    beforeResult=buildEngine(STATE_ACTIVE,s.calendarId,_liveEngineOpts(STATE_ACTIVE));
+    afterResult=buildEngine(vr.nextState,s.calendarId,_liveEngineOpts(vr.nextState));
   }catch(e){
     console.warn('approveSuggestion: buildEngine failed during re-check',e);
     _discard('💭 שגיאה בבדיקת ההצעה.',false);
@@ -11877,7 +11899,7 @@ function validateAssignmentChange(state,calendarId,change){
   // 1. Legality per the engine's own free-slot resolution (closed days, global
   //    events, work-window inversion — the same source of truth buildEngine uses).
   let built;
-  try{ built=buildEngine(proposed,calendarId); }
+  try{ built=buildEngine(proposed,calendarId,_liveEngineOpts(proposed)); }
   catch(e){ fail('engine_error','שגיאת מנוע בבדיקת השינוי: '+e.message,null,null); return{valid:false,violations}; }
   const freeSet=new Set((built.derived?.allFreeSlots||[]).map(s=>s.sid));
   const _checkSlotLegal=(sid,taskId)=>{
@@ -15979,7 +16001,8 @@ function runCoreTests(){
   try{
     const s=freshState();
     const p=prepareAIPlanProposal(s,{semanticVersion:1,intents:[{action:'create_task',title:'PreviewCheck',calendar:'personal',durationHours:2,deadline:'2026-03-10'}]});
-    const hasRealNumbers=p.summary.resultLines.some(l=>l.includes('PreviewCheck')&&/\d+\/\d+/.test(l));
+    const _rl=p.summary.resultLines;let _hrsShown=0;_rl.forEach(l=>{const re=/(\d\d):00–(\d\d):00/g;let m;while((m=re.exec(l)))_hrsShown+=(+m[2])-(+m[1]);});
+    const hasRealNumbers=_rl.some(l=>l.includes('PreviewCheck'))&&_hrsShown===2;   // the hours shown come from the simulated assignments (2h task → exactly 2 hours listed)
     ok('Preview מבוסס על Simulation (מספרים אמיתיים, לא טקסט מומצא)',hasRealNumbers,JSON.stringify(p.summary.resultLines));
   }catch(e){ok('Preview מבוסס על Simulation',false,e.message);}
 

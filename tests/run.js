@@ -4,7 +4,7 @@ const {JSDOM,VirtualConsole}=require('jsdom');const fs=require('fs');const path=
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const errs=[];const vc=new VirtualConsole();vc.on('jsdomError',e=>errs.push(String(e.message).slice(0,200)));
 const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',virtualConsole:vc,
-  beforeParse(w){const m={};
+  beforeParse(w){w.__MAYA_TEST__=true;const m={};
     w.storage={get:async k=>{if(!(k in m))throw new Error('nf');return{value:m[k]}},set:async(k,v)=>{m[k]=v;return{}},delete:async k=>{delete m[k];return{}}};
     if(!w.structuredClone)w.structuredClone=o=>JSON.parse(JSON.stringify(o));
     w.requestAnimationFrame=f=>setTimeout(f,0);w.HTMLElement.prototype.scrollIntoView=()=>{};w.scrollTo=()=>{};}});
@@ -672,17 +672,46 @@ const w=dom.window;
   try{
     const r=await w.eval(`(()=>{const o={};
       o.a_promptRule=AI_SYSTEM_PROMPT_BASE.indexOf('אל תציין/י בטקסט ימים, שעות או חלוקה')>=0&&AI_SYSTEM_PROMPT_BASE.indexOf('המנוע הוא שמחליט איפה לשבץ')>=0;
+      o.a2_personaRule=AI_SYSTEM_PROMPT_BASE.indexOf('מזכירה אישית, לא מערכת')>=0&&/דדליין, שיבוץ, משימה/.test(AI_SYSTEM_PROMPT_BASE);
+      o.a3_hoursRule=AI_SYSTEM_PROMPT_BASE.indexOf('שעות מועדפות')>=0&&AI_SYSTEM_PROMPT_BASE.indexOf('שאלה אחת קצרה')>=0&&AI_SYSTEM_PROMPT_BASE.length<24000;
       const s=structuredClone(STATE_ACTIVE);s.meta.today='2026-11-17';
       const pay={id:'t1',title:'עבודה להגשה',requiredUnits:8,deadline:'2026-11-23',priorityWeight:1,splitMode:'flexible',type:'generic',calendarId:'personal',location:''};
       const a=simulatePlan(s,'personal',pay),b=simulatePlan(s,'personal',pay,{}),c=simulatePlan(s,'personal',pay,{nowMinutes:1130});
       const sig=x=>JSON.stringify(Object.keys(x.result.assignments).sort());
       o.b_defaultUnchanged=sig(a)===sig(b)&&Object.keys(a.result.assignments).length>0;
       o.c_acceptsNow=!!c&&c.result&&Object.keys(c.result.assignments).length===Object.keys(a.result.assignments).length;
-      o.d_previewFromSimulation=(()=>{const cp={tasks:[{title:'עבודה להגשה',hours:8,deadline:'2026-11-23',calendar:'personal',split:'flexible',priority:1}],events:[]};const sim=_simulateCompiledPlan(s,cp);const pv=_buildAIPlanPreview(cp,sim);return /שובצו 8\\/8 שעות/.test(pv.text)&&/ביום/.test(pv.text);})();
+      o.d_previewFromSimulation=(()=>{const cp={tasks:[{title:'עבודה להגשה',hours:8,deadline:'2026-11-23',calendar:'personal',split:'flexible',priority:1}],events:[]};const sim=_simulateCompiledPlan(s,cp);const pv=_buildAIPlanPreview(cp,sim);return /כל 8 השעות/.test(pv.text)&&/יום [א-ת]+ [0-9]+[.][0-9]+: [0-9][0-9]:00–[0-9][0-9]:00/.test(pv.text)&&!/דדליין|סיכון|שיבוץ:|העדפת|משימה/.test(pv.text);})();
       return o;})()`);
     const okp=Object.values(r).every(v=>v===true);
     rows.push(['AI preview consistency',String(okp)+(okp?'':' '+JSON.stringify(r))]);if(!okp)failed=true;
   }catch(e){rows.push(['AI preview consistency','THROW '+e.message]);failed=true;}
+  // ---- hours already gone today are not offered (live callers only; the engine itself stays clock-free) ----
+  try{
+    const r=await w.eval(`(()=>{const o={};
+      const pay={id:'t1',title:'עבודה להגשה',requiredUnits:8,deadline:'2026-11-23',priorityWeight:1,splitMode:'flexible',type:'generic',calendarId:'personal',location:''};
+      const mk=(manual)=>{const s=structuredClone(STATE_ACTIVE);s.meta.today='2026-11-17';s.meta.todayIsManual=!!manual;return s;};
+      const hoursOn=(r,d)=>Object.keys(r.result.assignments).filter(k=>k.split('T')[0]===d&&r.result.assignments[k].taskId==='t1').map(k=>+k.split('T')[1]);
+      const total=r=>Object.keys(r.result.assignments).filter(k=>r.result.assignments[k].taskId==='t1').length;
+      try{
+        window.__MAYA_NOW__={minutes:1130,iso:'2026-11-17'};   // Tuesday 18:50
+        const s=mk(false),opts=_liveEngineOpts(s);
+        o.a_optsOn=opts.elapsedToday===true&&opts.nowMinutes===1130;
+        const r=simulatePlan(s,'personal',pay,opts);
+        o.b_noElapsedHours=hoursOn(r,'2026-11-17').every(h=>h>=18)&&total(r)===8;
+        o.c_pushedForward=hoursOn(simulatePlan(s,'personal',pay),'2026-11-17').some(h=>h<18);   // without the live input the old behaviour (morning hours today) is unchanged
+        o.d_deterministic=JSON.stringify(Object.keys(r.result.assignments).sort())===JSON.stringify(Object.keys(simulatePlan(s,'personal',pay,opts).result.assignments).sort());
+        const sm=mk(true);o.e_manualTodayNoElapsed=_liveEngineOpts(sm).elapsedToday!==true;
+        const other=mk(false);other.meta.today='2026-11-18';o.f_otherDayNoElapsed=_liveEngineOpts(other).elapsedToday!==true;
+        window.__MAYA_NOW__={minutes:30,iso:'2026-11-17'};   // 00:30 — nothing has ended yet
+        const early=simulatePlan(s,'personal',pay,_liveEngineOpts(s));o.g_earlyMorningUnchanged=hoursOn(early,'2026-11-17').some(h=>h<10);
+        window.__MAYA_NOW__={minutes:1439,iso:'2026-11-17'};   // 23:59 — the whole day is gone
+        const late=simulatePlan(s,'personal',pay,_liveEngineOpts(s));o.h_lateNightNothingToday=hoursOn(late,'2026-11-17').every(h=>h>=23)&&total(late)===8;
+      }finally{delete window.__MAYA_NOW__;}
+      o.i_testRunsStayClockFree=_liveEngineOpts(mk(false)).elapsedToday!==true;   // window.__MAYA_TEST__ is set in this harness
+      return o;})()`);
+    const oke=Object.values(r).every(v=>v===true);
+    rows.push(['elapsed hours today',String(oke)+(oke?'':' '+JSON.stringify(r))]);if(!oke)failed=true;
+  }catch(e){rows.push(['elapsed hours today','THROW '+e.message]);failed=true;}
   // ---- token refresh: single-flight, transient failures, other-tab race ----
   try{
     const r=await w.eval(`(async()=>{const o={};
@@ -735,7 +764,7 @@ const w=dom.window;
     const d=new Date(Date.now()+10*86400000);st.meta.endDate=d.toISOString().slice(0,10);
     const sv=w.eval('SCHEMA_VERSION'),key=w.eval('LS_KEY');const e2=[];const vc2=new VirtualConsole();vc2.on('jsdomError',e=>e2.push(String(e.message).slice(0,160)));vc2.on('error',(...a)=>e2.push('console.error: '+a.join(' ').slice(0,160)));vc2.on('warn',(...a)=>{const t=a.join(' ');if(/failed|before initialization/i.test(t))e2.push('console.warn: '+t.slice(0,160));});
     const dom2=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',virtualConsole:vc2,
-      beforeParse(w2){const m={};w2.storage={get:async k=>{if(!(k in m))throw new Error('nf');return{value:m[k]}},set:async(k,v)=>{m[k]=v;return{}},delete:async k=>{delete m[k];return{}}};
+      beforeParse(w2){w2.__MAYA_TEST__=true;const m={};w2.storage={get:async k=>{if(!(k in m))throw new Error('nf');return{value:m[k]}},set:async(k,v)=>{m[k]=v;return{}},delete:async k=>{delete m[k];return{}}};
         w2.localStorage.setItem(key,JSON.stringify({schemaVersion:sv,state:st}));if(!w2.structuredClone)w2.structuredClone=o=>JSON.parse(JSON.stringify(o));
         w2.requestAnimationFrame=f=>setTimeout(f,0);w2.HTMLElement.prototype.scrollIntoView=()=>{};w2.scrollTo=()=>{};}});
     await new Promise(r=>setTimeout(r,1200));
