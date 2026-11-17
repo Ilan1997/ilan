@@ -628,3 +628,8 @@ Pure, no UI, no state writes. Tests: "validate + proposeCuts (D)" (8 acceptance 
 - **Preview text** (`_buildAIPlanPreview`) is written as a secretary would say it ("הצלחתי לקבוע את כל 8 השעות", "יום רביעי 18.11: 08:00–11:00"), still derived only from simulation numbers (audited). No internal words (task/deadline/risk/preference).
 - **Prompt**: (a) persona rule — warm everyday Hebrew, no technical words; (b) the model must not state days/hours for create_task (the engine decides; the card shows the real placement); (c) hours rule — for ≥3h of focused work with unknown preferred hours ask ONE short question; if known, propose concrete create_event blocks and then days/hours may be mentioned.
 - Known limit: the engine's own auto-placement does not yet prefer the user's peak hours (peak is used by placement suggestions, not by new-task auto-scheduling).
+
+## 56. Maya's voice is enforced in code, not only in the prompt
+- `mayaPolish` runs on every model reply before display: strips foreign-script letters (Georgian/Cyrillic/CJK leaks) and swaps system words (דדליין, בלוק, פריסה, אילוץ…) for everyday ones. `mayaVoiceLint` flags what remains.
+- Tests: `tests/fixtures/voice_samples.json` holds real bad replies (add every new one); the lint also scans `_buildAIPlanPreview` output, intake/greeting strings and all `userMessage` literals.
+- `APP_BUILD` is shown in the header and a stale cached copy triggers a "גרסה חדשה" banner (`_checkForNewVersion`, boot + visibilitychange).

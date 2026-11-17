@@ -712,6 +712,43 @@ const w=dom.window;
     const oke=Object.values(r).every(v=>v===true);
     rows.push(['elapsed hours today',String(oke)+(oke?'':' '+JSON.stringify(r))]);if(!oke)failed=true;
   }catch(e){rows.push(['elapsed hours today','THROW '+e.message]);failed=true;}
+  // ---- Maya's voice: enforced in code (polish + lint over real samples and every UI string) ----
+  try{
+    const samples=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'fixtures','voice_samples.json'),'utf8')).samples;
+    const r=await w.eval(`(()=>{const o={};const SAMPLES=${JSON.stringify(samples)};
+      SAMPLES.forEach(sm=>{const out=mayaPolish(sm.raw);
+        o['sample_'+sm.id+'_clean']=mayaVoiceLint(out).ok&&sm.mustContain.every(x=>out.indexOf(x)>=0)&&sm.mustNotContain.every(x=>out.indexOf(x)<0);
+        o['sample_'+sm.id+'_wasDirty']=!mayaVoiceLint(sm.raw).ok;});
+      o.a_idempotent=SAMPLES.every(sm=>mayaPolish(mayaPolish(sm.raw))===mayaPolish(sm.raw));
+      o.b_plainHebrewUntouched=mayaPolish('בסדר גמור, קבעתי לך שעתיים ביום רביעי.')==='בסדר גמור, קבעתי לך שעתיים ביום רביעי.';
+      o.c_lintCatchesInternals=!mayaVoiceLint('שובצו 8/8 שעות — רמת סיכון: בטוחה').ok&&!mayaVoiceLint('יצירת משימה: x').ok&&!mayaVoiceLint('undefined').ok&&!mayaVoiceLint('SEMANTIC_PLAN').ok;
+      // every text the user reads that code produces must pass the lint
+      const s=structuredClone(STATE_ACTIVE);s.meta.today='2026-11-17';
+      const cp={tasks:[{title:'עבודה להגשה בלימודים',hours:8,deadline:'2026-11-23',calendar:'personal',split:'flexible',priority:1},{title:'פגישה',hours:1,deadline:'2026-11-20',calendar:'work',split:'strict_contiguous',priority:1}],events:[{title:'בחינה',date:'2026-11-19',startHour:9,endHour:12}],capacity:{days:[1,3],startHour:9,endHour:17}};
+      const pv=_buildAIPlanPreview(cp,_simulateCompiledPlan(s,cp));
+      o.d_previewLint=mayaVoiceLint(pv.text).ok;
+      o.e_intakeLint=Object.values(AI_INTAKE_QUESTION).every(q=>mayaVoiceLint(q).ok)&&mayaVoiceLint(AI_GREETING_BASE).ok;
+      o.f_errorMessagesFound=true;o.g_errorMessagesLint=true;
+      return o;})()`);
+    const srcHtml=require('fs').readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
+    const msgs=[...srcHtml.matchAll(/userMessage\s*=\s*(?:[^'"\n;]*\?\s*)?'([^'\n]{8,})'/g)].map(m=>m[1]);
+    r.f_errorMessagesFound=msgs.length>=3;
+    r.g_errorMessagesLint=(await w.eval('(ms=>ms.every(m=>mayaVoiceLint(m).ok))('+JSON.stringify(msgs)+')'))===true;
+    const okv=Object.values(r).every(v=>v===true);
+    rows.push(['Maya voice (polish + lint)',String(okv)+(okv?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okv)failed=true;
+  }catch(e){rows.push(['Maya voice (polish + lint)','THROW '+e.message]);failed=true;}
+  // ---- build stamp + stale-version detection ----
+  try{
+    const r=await w.eval(`(()=>{const o={};
+      o.a_stamp=/^[0-9]{4}-[0-9]{2}-[0-9]{2}[.][0-9]+$/.test(APP_BUILD);
+      o.b_parse=_parseBuild("x const APP_BUILD='2030-01-01.9'; y")==='2030-01-01.9'&&_parseBuild('nothing')===null;
+      o.c_shownOnScreen=(document.getElementById('navRange')||{textContent:''}).textContent.indexOf(APP_BUILD)>=0;
+      o.d_noBannerInTests=(()=>{_verBannerShown=false;return _checkForNewVersion(true);})()instanceof Promise;
+      o.e_bannerText=(()=>{_verBannerShown=false;_showNewVersionBanner();const b=document.getElementById('newVersionBanner');const ok=!!b&&/גרסה חדשה/.test(b.textContent)&&mayaVoiceLint(b.textContent).ok;if(b)b.remove();_verBannerShown=false;return ok;})();
+      return o;})()`);
+    const okb=Object.values(r).every(v=>v===true);
+    rows.push(['build stamp + new-version banner',String(okb)+(okb?'':' '+JSON.stringify(r))]);if(!okb)failed=true;
+  }catch(e){rows.push(['build stamp + new-version banner','THROW '+e.message]);failed=true;}
   // ---- token refresh: single-flight, transient failures, other-tab race ----
   try{
     const r=await w.eval(`(async()=>{const o={};

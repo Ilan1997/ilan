@@ -1,0 +1,23 @@
+{
+  "_doc": "Real model replies that sounded like software. mayaPolish must turn them into text that passes mayaVoiceLint, keeping the meaning. Add every new real sample here.",
+  "samples": [
+    {
+      "id": "real-2026-11-17-a",
+      "raw": "קיבלתי, נחלק את הלימודים לבלוקים קצרים של שעתיים כל פעם כדי לשמור על ריכוז.\n\nאפתח לך את הפריסה הזו בשაკול גמיש על פני הימים הקרובים.",
+      "mustContain": ["לחלקים קצרים", "הסידור", "גמיש"],
+      "mustNotContain": ["בלוק", "פריסה", "ა"]
+    },
+    {
+      "id": "real-2026-11-17-b",
+      "raw": "מבין לגמרי את הלחץ. כדי להספיק 8 שעות עד המועד, אפשר לפצל את זה לשני בלוקים של 4 שעות, בימים שבהם אין לך עבודה. הדדליין הוא ב-23 בנובמבר.",
+      "mustContain": ["לשני חלקים", "מועד ההגשה"],
+      "mustNotContain": ["בלוק", "דדליין"]
+    },
+    {
+      "id": "leaked-scripts",
+      "raw": "בסדר גמור, אסדר לך את הלימודים — по плану 学习 בימי רביעי.",
+      "mustContain": ["בימי רביעי"],
+      "mustNotContain": ["по", "学"]
+    }
+  ]
+}
