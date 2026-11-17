@@ -633,3 +633,16 @@ Pure, no UI, no state writes. Tests: "validate + proposeCuts (D)" (8 acceptance 
 - `mayaPolish` runs on every model reply before display: strips foreign-script letters (Georgian/Cyrillic/CJK leaks) and swaps system words (דדליין, בלוק, פריסה, אילוץ…) for everyday ones. `mayaVoiceLint` flags what remains.
 - Tests: `tests/fixtures/voice_samples.json` holds real bad replies (add every new one); the lint also scans `_buildAIPlanPreview` output, intake/greeting strings and all `userMessage` literals.
 - `APP_BUILD` is shown in the header and a stale cached copy triggers a "גרסה חדשה" banner (`_checkForNewVersion`, boot + visibilitychange).
+
+## 57. Step E — Replan (minimal disruption)
+Pure functions, no UI, no clock: `makePlan`, `lockPlanItems`, `planDisruptionCost`, `replan(plan, trigger, freshSnapshot, {today, nowMin})`, `replanSummaryText`.
+- **Plan/PlanItem**: `planId` (deterministic hash), `supersedes`, items carry `itemId`, `sourceIntentRef`, `status` (planned|started|done|cancelled), `lockedByUser`, `actual`, `droppedByReplan`.
+- **Triggers**: `delay`, `item_done` (actualEnd), `item_cancelled`, `new_event`, `calendar_changed`, `user_request` (only "don't move X" is understood in code; anything else → `needs_interpretation`, the model must parse it).
+- **Never moved**: done/started/locked items, items already past, items on past days, hard events/anchors. They enter the working snapshot as hard pseudo-events (clipped to "now"); time before now is cut from free intervals (`snap.notBefore`).
+- **Order of work**: (1) apply the trigger; (2) ripple only items that would start before the new floor (chains together, next free slot); (3) validate; (4) if blocked, `proposeCuts`, then choose the option with the lowest `repair cost + disruptionCost` vs. the plan the user already saw; (5) hard conflicts with fixed/locked items → `needs_decision`, plan unchanged.
+- **In progress, not marked started**: start frozen; if shortenable its tail may be trimmed (`canMove:false`, min duration ≥ elapsed), otherwise it is fixed.
+- **Freed time** (done early / cancelled): only a *suggestion* (`opportunities`: pull_forward must start inside the freed window; real tasks before optional ones) — never auto-applied.
+- `disruptionCost`: shift 3+Δ/10 (≤28), shorten 15+, drop 40 (+20 core), other day 50.
+- Tests: `tests/replan.scenarios.js` (44 checks, run by `tests/run.js`), demo `node tests/demo-replan.js`, staged walk-through of step D `node tests/demo-stages.js`.
+- Known limits: repair does not ripple neighbours to make room (a displaced item can land in the evening); `user_request` is a narrow regex; no link to the chat/UI yet (step F).
+- Fix found by the step-D demo: a chain anchored to a calendar event can no longer be offered "move to another day".

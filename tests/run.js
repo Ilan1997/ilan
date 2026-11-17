@@ -717,6 +717,13 @@ const w=dom.window;
     const oke=Object.values(r).every(v=>v===true);
     rows.push(['elapsed hours today',String(oke)+(oke?'':' '+JSON.stringify(r))]);if(!oke)failed=true;
   }catch(e){rows.push(['elapsed hours today','THROW '+e.message]);failed=true;}
+  // ---- Step E: replan (minimal disruption) ----
+  try{
+    const body=require('fs').readFileSync(require('path').join(__dirname,'replan.scenarios.js'),'utf8');
+    const r=await w.eval(body.trim()+'()');
+    const okr=Object.values(r).every(v=>v===true);
+    rows.push(['replan (E)',String(okr)+' ('+Object.keys(r).length+')'+(okr?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okr)failed=true;
+  }catch(e){rows.push(['replan (E)','THROW '+e.message]);failed=true;}
   // ---- Maya's voice: enforced in code (polish + lint over real samples and every UI string) ----
   try{
     const samples=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'fixtures','voice_samples.json'),'utf8')).samples;

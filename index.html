@@ -9358,6 +9358,7 @@ function ctxFreeIntervals(snap,date,reserved){
   snap.events.forEach(e=>{if(e.date===date)cut.push([e.startMin,e.endMin]);});
   (snap.rules.anchors||[]).forEach(a=>{if(a.rigidity!=='optional'&&a.enforcement!=='soft'&&a.days.indexOf(dow)>=0)cut.push([a.startMin,a.endMin]);});
   (reserved||[]).forEach(r=>cut.push([r[0],r[1]]));
+  if(snap.notBefore&&snap.notBefore.date===date)cut.push([0,snap.notBefore.min]);   // replan: time that already passed is not free
   return _subIv(base,cut);
 }
 // PURE: place an UNORDERED set of items into free time. Respects: day modes, daily load cap, each item's buffer, windows/fixed times,
@@ -9758,6 +9759,167 @@ function repairSummaryText(res){
   if(res.best){L.push('הצעה (עלות '+res.best.totalCost+'):');res.best.steps.forEach(s=>L.push('• '+s.text));}
   res.options.filter(o=>o!==res.best).forEach(o=>L.push('חלופה: '+o.steps.map(s=>s.text).join('; ')));
   res.decisions.forEach(d=>L.push('❓ '+d.question));
+  return L.join('\n');
+}
+// ═══ Step E: Replan — minimal disruption ═══
+// Pure: (plan, trigger, fresh snapshot, {today,nowMin}) → new plan + what changed + disruptionCost. "Now" is an INPUT (the engine never reads a clock).
+// Rules: done/started/locked/past items never move; hard events & anchors never move; ripple only what is after the change; cut only if needed; drop last.
+const REPLAN_DISRUPTION={shiftMax:25,shiftBase:3,shorten:15,drop:40,dropCore:20,moveDay:50};
+function _rpHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36);}
+// PURE: wrap PlanItems into a Plan with ids/status. planId is deterministic (same snapshot+times → same id).
+function makePlan(snap,items,opts){
+  opts=opts||{};
+  const planId=opts.planId||('p_'+_rpHash(JSON.stringify([snap.sig,items.map(x=>[x.ref,x.date,x.startMin,x.endMin])])));
+  return{planId,supersedes:opts.supersedes||null,snapshotSig:snap.sig,
+    items:items.map(x=>({...x,planId,itemId:x.itemId||x.ref,sourceIntentRef:x.sourceIntentRef||opts.intentRef||x.ref,status:x.status||'planned',lockedByUser:!!x.lockedByUser}))};
+}
+function lockPlanItems(plan,ids){return{...plan,items:plan.items.map(x=>ids.indexOf(x.itemId)>=0?{...x,lockedByUser:true}:{...x})};}
+// PURE: how much the user's already-seen plan changed. 0 = identical. Shift grows slowly, cutting/dropping/moving day cost more.
+function planDisruptionCost(oldItems,newItems){
+  const byId={};newItems.forEach(x=>{byId[x.itemId]=x;});const D=REPLAN_DISRUPTION;let total=0;const per=[];
+  oldItems.forEach(o=>{
+    if(o.status==='done'||o.status==='cancelled')return;const n=byId[o.itemId];if(!n)return;let c=0;
+    if(n.status==='cancelled')c=D.drop+(PLAN_CORE_KINDS.indexOf(o.kind)>=0?D.dropCore:0);
+    else{
+      if(n.date!==o.date)c+=D.moveDay;
+      else if(n.startMin!==o.startMin)c+=D.shiftBase+Math.min(D.shiftMax,Math.round(Math.abs(n.startMin-o.startMin)/10));
+      const d0=o.endMin-o.startMin,d1=n.endMin-n.startMin;if(d1<d0)c+=D.shorten+Math.round((d0-d1)/d0*30);
+    }
+    if(c){per.push({itemId:o.itemId,cost:c});total+=c;}
+  });
+  return{total,per};
+}
+function _rpParseDT(s){const m=/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/.exec(String(s||''));return m?{date:m[1],min:(+m[2])*60+(+m[3])}:null;}
+function _rpPseudoEvent(x,from){
+  return{id:'plan:'+x.itemId,gid:null,source:'plan',title:x.title,date:x.date,startMin:Math.max(x.startMin,from),endMin:x.endMin,place:x.place||null,attendees:1,transparency:'opaque',descr:'',online:false,color:null,domain:null,travelMin:0,
+    rigidity:{rigidity:'hard',source:'plan',reason:'כבר קבוע בתכנית'}};
+}
+function replan(plan,trigger,snapNew,ctx){
+  ctx=ctx||{};const today=ctx.today,nowMin=ctx.nowMin;
+  if(!plan||!Array.isArray(plan.items)||!trigger||!trigger.type||!snapNew||!/^\d{4}-\d{2}-\d{2}$/.test(String(today))||!Number.isInteger(nowMin))return{status:'error',message:'חסר מידע לתכנון מחדש.'};
+  const t=trigger.type,notes=[],opportunities=[];
+  let cur=plan.items.map(x=>({...x}));const find=id=>cur.find(x=>x.itemId===id);
+  let floor=null,freed=null;
+  if(t==='delay'){
+    const m=trigger.minutes;if(!Number.isInteger(m)||m<=0)return{status:'error',message:'לא הבנתי בכמה זמן התאחרת.'};
+    const started=cur.filter(x=>x.status==='started'&&x.date===today).sort((a,b)=>b.startMin-a.startMin)[0];
+    if(started){started.endMin+=m;floor=started.endMin;notes.push('"'+started.title+'" נמשך עוד '+m+' דק׳.');}
+    else{floor=nowMin+m;notes.push('איחור של '+m+' דק׳ — כל מה שמתוכנן להתחיל לפני '+_fmtMin(floor)+' יתחיל אחרי זה.');}
+  }else if(t==='item_done'){
+    const it=find(trigger.itemId);const dt=_rpParseDT(trigger.actualEnd);
+    if(!it||!dt)return{status:'error',message:'לא מצאתי את הפריט או את שעת הסיום.'};
+    const planned=it.endMin;it.status='done';it.endMin=Math.max(dt.min,it.startMin+5);it.actual={startMin:it.startMin,endMin:it.endMin};
+    if(it.endMin>planned){floor=it.endMin;notes.push('"'+it.title+'" נגמר '+(it.endMin-planned)+' דק׳ אחרי התכנון.');}
+    else if(it.endMin<planned){freed={date:it.date,from:it.endMin,to:planned};notes.push('"'+it.title+'" נגמר '+(planned-it.endMin)+' דק׳ לפני התכנון.');}
+  }else if(t==='item_cancelled'){
+    const it=find(trigger.itemId);if(!it)return{status:'error',message:'לא מצאתי את הפריט שבוטל.'};
+    it.status='cancelled';freed={date:it.date,from:it.startMin,to:it.endMin};notes.push('"'+it.title+'" בוטל — לא נוגעת בשאר היום.');
+    if(it.chain)cur.forEach(x=>{if(x.chain===it.chain&&x.itemId!==it.itemId){x.chain=null;x.chainIdx=null;x.chainAnchor=null;}});
+  }else if(t==='new_event'){
+    const ev=(snapNew.events||[]).find(e=>e.id===trigger.eventId);
+    notes.push(ev?'נוסף ליומן "'+ev.title+'" ('+_fmtMin(ev.startMin)+'–'+_fmtMin(ev.endMin)+').':'האירוע החדש לא נמצא ביומן.');
+  }else if(t==='calendar_changed'){notes.push('היומן השתנה.');
+  }else if(t==='user_request'){
+    const txt=String(trigger.text||'').trim().replace(/[.!?]+$/,'');
+    const m=/(?:אל|לא)\s+ת(?:זיז|זיזי|זיזו)\s+(?:את\s+)?(?:ה)?(.+?)\s*$/.exec(txt)||/^(?:את\s+)?(?:ה)?(.+?)\s+(?:אל|לא)\s+ת(?:זיז|זיזי|זיזו)$/.exec(txt);
+    if(!m)return{status:'needs_interpretation',text:trigger.text,plan,message:'לא הבנתי מה לשנות בתכנית.'};
+    const q=_hnorm(m[1]);const hits=cur.filter(x=>x.status!=='cancelled'&&q&&_hnorm(x.title).indexOf(q)>=0);
+    if(hits.length!==1)return{status:'needs_decision',plan,decisions:[{code:'which_item',question:hits.length?'איזה מהם לא להזיז?':'לא מצאתי בתכנית "'+m[1]+'". למה התכוונת?',choices:hits.map(h=>({id:h.itemId,label:h.title}))}],message:'צריכה הבהרה.'};
+    hits[0].lockedByUser=true;notes.push('"'+hits[0].title+'" ננעל — לא אזיז אותו.');
+  }else return{status:'error',message:'סוג שינוי לא מוכר.'};
+
+  // classify
+  const cls=x=>{
+    if(x.status==='cancelled')return'gone';if(x.status==='done'||x.status==='started'||x.lockedByUser)return'fixed';
+    if(x.date<today)return'fixed';
+    if(x.date===today){if(x.endMin<=nowMin)return'fixed';if(x.startMin<nowMin&&floor==null)return x.canShorten?'tail':'fixed';}
+    return'move';
+  };
+  const fixed=cur.filter(x=>cls(x)==='fixed'),mov0=cur.filter(x=>cls(x)==='move'||cls(x)==='tail');
+  // an item already under way (not marked started) keeps its start but, if it may be shortened, its end can still be trimmed
+  const tailIds={};cur.forEach(x=>{if(cls(x)==='tail')tailIds[x.itemId]=1;});
+  fixed.filter(x=>x.status==='planned'&&!x.lockedByUser&&(x.date<today||x.endMin<=nowMin)).forEach(x=>notes.push('"'+x.title+'" כבר עבר ולא סומן כבוצע — לא מזיזה אותו.'));
+  const work={...snapNew,today,notBefore:{date:today,min:nowMin}};
+  work.events=(snapNew.events||[]).slice();
+  fixed.forEach(x=>{const from=x.date===today?nowMin:0;if(x.date>=today&&x.endMin>from)work.events.push(_rpPseudoEvent(x,from));});
+  // ripple: only items that would start before the new floor (chains move together), in order, into the next free spot
+  let mov=mov0.map(x=>tailIds[x.itemId]?{...x,canMove:false,minDurationMin:Math.max(x.minDurationMin||0,nowMin-x.startMin+5)}:{...x});
+  if(floor!=null){
+    const groups=[];const seen={};
+    mov.filter(x=>x.date===today).sort((a,b)=>a.startMin-b.startMin).forEach(x=>{
+      if(x.chain){if(seen[x.chain])return;seen[x.chain]=1;groups.push(mov.filter(m=>m.chain===x.chain).sort((a,b)=>a.chainIdx-b.chainIdx));}else groups.push([x]);
+    });
+    let cursor=floor;const placed=[];
+    groups.forEach(g=>{
+      const first=g[0].startMin,total=g[g.length-1].endMin-first;
+      if(first>=cursor){g.forEach(m=>placed.push([m.startMin,m.endMin]));cursor=Math.max(cursor,g[g.length-1].endMin);return;}
+      const ivs=ctxFreeIntervals(work,today,placed);let s=null;
+      for(const iv of ivs){const from=Math.max(iv[0],cursor);if(from+total<=iv[1]){s=from;break;}}
+      if(s==null){g.forEach(m=>placed.push([m.startMin,m.endMin]));return;}   // no room: leave, validation/repair will say why
+      const sh=s-first;g.forEach(m=>{m.startMin+=sh;m.endMin+=sh;placed.push([m.startMin,m.endMin]);});cursor=Math.max(cursor,s+total);
+    });
+  }
+  const v0=validatePlan(work,mov);let repair=null,final=mov,status='ok',decisions=[];
+  if(!v0.ok){
+    repair=proposeCuts(work,mov);
+    if(repair.best){
+      const rank=o=>o.totalCost+planDisruptionCost(mov0,_rpAsPlanItems(o.plan,mov0)).total;
+      const ok=repair.options.filter(o=>o.complete).sort((a,b)=>rank(a)-rank(b));
+      repair.best=ok[0];final=repair.best.plan.map(x=>({...x}));status='repaired';
+    }else{status='needs_decision';decisions=repair.decisions;}
+  }
+  // assemble the new plan: keep history (done/started/cancelled stay in the plan with their status)
+  const keptIds={};final.forEach(x=>{keptIds[x.ref]=x;});
+  const out=[];
+  cur.forEach(x=>{
+    const c=cls(x);
+    if(c==='move'||c==='tail'){const n=keptIds[x.itemId]||keptIds[x.ref];
+      if(n)out.push({...x,date:n.date,startMin:n.startMin,endMin:n.endMin,bufferMin:x.bufferMin});
+      else out.push({...x,status:'cancelled',droppedByReplan:true});}   // removed by repair (optional items only)
+    else out.push({...x});
+  });
+  out.sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:0)||a.startMin-b.startMin);
+  const baseForCost=plan.items.filter(o=>{const c=find(o.itemId);return c&&c.status!=='done'&&c.status!=='cancelled';}).map(o=>({...o}));
+  const disruption=planDisruptionCost(baseForCost,out.map(x=>x));
+  // what changed (only items the replan itself touched)
+  const changes=[];
+  baseForCost.forEach(o=>{const n=out.find(x=>x.itemId===o.itemId);if(!n)return;
+    if(n.status==='cancelled')changes.push({itemId:o.itemId,title:o.title,type:'dropped',from:{date:o.date,startMin:o.startMin,endMin:o.endMin}});
+    else if(n.date!==o.date)changes.push({itemId:o.itemId,title:o.title,type:'moved_day',from:{date:o.date,startMin:o.startMin,endMin:o.endMin},to:{date:n.date,startMin:n.startMin,endMin:n.endMin}});
+    else{if(n.startMin!==o.startMin)changes.push({itemId:o.itemId,title:o.title,type:'moved',from:{date:o.date,startMin:o.startMin,endMin:o.endMin},to:{date:n.date,startMin:n.startMin,endMin:n.endMin}});
+      if((n.endMin-n.startMin)<(o.endMin-o.startMin))changes.push({itemId:o.itemId,title:o.title,type:'shortened',from:{date:o.date,startMin:o.startMin,endMin:o.endMin},to:{date:n.date,startMin:n.startMin,endMin:n.endMin}});}
+  });
+  // free time that opened up: SUGGEST (never auto-apply) pulling the next flexible item forward
+  if(freed&&status!=='needs_decision'&&freed.date===today&&freed.to>freed.from){
+    const live=out.filter(x=>x.status==='planned'&&!x.lockedByUser&&x.date===today&&x.startMin>=freed.from&&x.canMove&&!x.chain&&x.rigidity!=='hard');
+    live.sort((a,b)=>((a.rigidity==='optional')-(b.rigidity==='optional'))||(b.startMin-a.startMin));
+    for(const nxt of live){
+      const len=nxt.endMin-nxt.startMin;const ivs=ctxFreeIntervals(work,today,out.filter(x=>x!==nxt&&x.status!=='cancelled'&&x.date===today).map(x=>[x.startMin,x.endMin]));
+      const s0=Math.max(freed.from,nowMin);const iv=ivs.find(i=>{const st=Math.max(i[0],s0);return st<freed.to&&st<nxt.startMin&&st+len<=i[1];});   // must START inside the time that actually opened up
+      if(iv){const st=Math.max(iv[0],s0);opportunities.push({type:'pull_forward',itemId:nxt.itemId,title:nxt.title,from:{startMin:nxt.startMin,endMin:nxt.endMin},to:{startMin:st,endMin:st+len},gainMin:nxt.startMin-st,freedWindow:{from:freed.from,to:freed.to}});break;}
+    }
+    if(!opportunities.length)opportunities.push({type:'free_time',date:freed.date,from:freed.from,to:freed.to});
+  }
+  const newId='p_'+_rpHash(plan.planId+'|'+t+'|'+JSON.stringify(out.map(x=>[x.itemId,x.status,x.date,x.startMin,x.endMin,!!x.lockedByUser])));
+  const nextPlan={planId:newId,supersedes:plan.planId,snapshotSig:snapNew.sig,items:out.map(x=>({...x,planId:newId}))};
+  if(status==='needs_decision')return{status,plan,decisions,notes,changes:[],opportunities,disruptionCost:0,validation:v0,repair};
+  if(!changes.length&&status==='ok'&&!opportunities.length&&['delay','new_event','calendar_changed'].indexOf(t)>=0)status='unchanged';
+  return{status,plan:nextPlan,changes,notes,opportunities,decisions:[],disruptionCost:disruption.total,disruptionDetail:disruption.per,repairCost:repair&&repair.best?repair.best.totalCost:0,validation:validatePlan(work,out.filter(x=>cls(x)==='move'&&x.status!=='cancelled').map(x=>({...x,ref:x.itemId}))),repair};
+}
+function _rpAsPlanItems(planItems,orig){return planItems.map(x=>({...x,itemId:x.ref,status:'planned',kind:x.kind}));}
+// PURE: what Maya says after a replan — plain Hebrew, only what changed.
+function replanSummaryText(r){
+  if(r.status==='error'||r.status==='needs_interpretation')return r.message;
+  if(r.status==='needs_decision')return r.decisions.map(d=>'❓ '+d.question).join('\n');
+  const L=[];(r.notes||[]).forEach(n=>L.push(n));
+  if(!r.changes.length)L.push(r.status==='unchanged'?'אין צורך לשנות כלום — שאר התכנית נשארת.':'שאר התכנית נשארת כמו שהייתה.');
+  r.changes.forEach(c=>{
+    if(c.type==='dropped')L.push('• מורידה את "'+c.title+'" (היה '+_fmtMin(c.from.startMin)+'–'+_fmtMin(c.from.endMin)+').');
+    else if(c.type==='moved_day')L.push('• מעבירה את "'+c.title+'" ליום אחר ('+_fmtMin(c.to.startMin)+').');
+    else if(c.type==='shortened')L.push('• מקצרת את "'+c.title+'" ל-'+(c.to.endMin-c.to.startMin)+' דק׳.');
+    else L.push('• "'+c.title+'" זז מ-'+_fmtMin(c.from.startMin)+' ל-'+_fmtMin(c.to.startMin)+'.');
+  });
+  (r.opportunities||[]).forEach(o=>{if(o.type==='pull_forward')L.push('התפנו '+o.gainMin+' דק׳ — רוצה שאקדים את "'+o.title+'" ל-'+_fmtMin(o.to.startMin)+'?');else if(o.type==='free_time')L.push('התפנה זמן ('+_fmtMin(o.from)+'–'+_fmtMin(o.to)+').');});
   return L.join('\n');
 }
 // ── Interpretation layer for small tasks: kind (metadata), place, and "what can be done together" ──
