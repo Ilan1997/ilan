@@ -212,7 +212,18 @@
     {const pd=onbApprove(YP,YT,'all').profile,pn=onbApprove(YP,YT,{accept:YT.items.filter(i=>i.needsApproval).map(i=>i.id),reject:[]}).profile,pj=onbApprove(YP,YT,{accept:[],reject:['set_daystart']}).profile;
       o.ds1_acceptingMakesItAPreference=pd.preferences.dayStart&&pd.preferences.dayStart.min===600&&pd.preferences.dayStart.source==='maya_proposal'&&pd.decisions.some(x=>x.proposalId==='pr_daystart'&&x.materializedAs.type==='Preference.dayStart');
       o.ds2_notApprovedStaysAProposal=!pn.preferences.dayStart&&pn.proposals.some(p=>p.id==='pr_daystart'&&p.status==='pending');
-      o.ds3_rejectedRestoresDefaultAndLeaves=pj.dayStart===480&&!pj.proposals.some(p=>p.id==='pr_daystart')&&!pj.preferences.dayStart;}
+      o.ds3_rejectedDropsPreferenceAndDoesNotInventEight=pj.preferredDayStart===null&&!pj.preferences.dayStart&&!pj.proposals.some(p=>p.id==='pr_daystart')&&pj.decisions.some(d=>d.proposalId==='pr_daystart'&&d.status==='rejected'&&d.materializedAs===null);
+      const pu=JSON.parse(JSON.stringify(YP));pu.userDayStart=540;const pju=onbApprove(pu,YT,{accept:[],reject:['set_daystart']}).profile;
+      o.ds4_rejectFallsBackOnlyToEarlierUserSetting=pju.preferences.dayStart.min===540&&pju.preferences.dayStart.source==='user_setting'&&pju.dayStart===540;
+      o.ds5_acceptedKeepsSourceMayaProposal=pd.preferredDayStart.min===600&&pd.preferredDayStart.source==='maya_proposal';}
+    {const ap=onbApprove(YP,YT,'all'),pr0=ap.profile,thesis=YT.unscheduled.find(u=>u.goalId&&/תזה/.test(u.title));
+      o.pp1_partiallyPlacedApprovalDoesNotCreateTimedCalendarWrites=YT.templateStatus==='partially_placed'&&ap.calendarWrites.length>0&&ap.calendarWrites.every(w=>Number.isFinite(w.startMin)&&Number.isFinite(w.endMin)&&!/^(תזה|מיילים|חשבוניות|סגירת שבוע|סטטיסטיקה)/.test(w.title))&&!ap.accepted.filter(i=>i.reason==='work_hours_unknown').some(i=>ap.calendarWrites.some(w=>w.itemId===i.id));
+      o.pp2_approvedThesisBudgetKeptAsGoalWithoutPlacement=!!thesis&&pr0.workloadGoals.some(g=>g.key==='thesis'&&g.requiredPerWeekMinutes===360)&&pr0.approvedBudgets.some(b=>b.goalId===thesis.goalId&&b.minutesPerWeek===360&&b.placement==='unplaced'&&b.placementBlockedBy==='work_hours_unknown')&&!pr0.routines.some(r=>r.key==='thesis');
+      o.pp3_approvedNeedCadenceBecomesRoutineWithoutTime=pr0.routines.some(r=>r.key==='emails'&&r.source==='maya_proposal'&&!('startMin' in r))&&pr0.approvedBudgets.some(b=>/מיילים/.test(b.title)&&b.routineId==='rt_emails')&&!ap.calendarWrites.some(w=>/מיילים/.test(w.title));
+      o.pp4_noInventedStartEndOnUnscheduled=YT.unscheduled.every(u=>!('startMin' in u)&&!('endMin' in u)&&!('date' in u));
+      const only=onbApprove(YP,YT,{accept:YT.unscheduled.filter(u=>/מיילים/.test(u.title)).map(u=>u.id),reject:[]}).profile;
+      o.pp5_approvingOneBudgetLeavesOthersPending=only.routines.some(r=>r.key==='emails')&&!only.routines.some(r=>r.key==='invoices')&&only.proposals.some(p=>p.id==='pr_need_invoices'&&p.status==='pending')&&only.approvedBudgets.length===1;
+      o.pp6_laterPlacementIsPossibleBecauseBudgetIsStructured=pr0.approvedBudgets.every(b=>b.minutesPerWeek>0&&(b.goalId||b.routineId));}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

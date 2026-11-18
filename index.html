@@ -10584,7 +10584,7 @@ function onbBuildTemplate(profile,o){
 // A rejected Proposal leaves the active profile (kept only in `decisions`). Un-decided ones stay pending.
 function onbMaterialize(pr,p){
   if(p.goalId){const g=pr.workloadGoals.find(x=>x.id===p.goalId);if(g){g.trialAccepted=true;return{type:'WorkloadGoal.trialAllocation',id:g.id};}return null;}
-  if(p.kind==='preference'&&p.value&&p.value.preference==='dayStart'){pr.preferences=pr.preferences||{};pr.preferences.dayStart={min:p.value.min,source:'maya_proposal'};pr.dayStart=p.value.min;return{type:'Preference.dayStart',id:p.id};}
+  if(p.kind==='preference'&&p.value&&p.value.preference==='dayStart'){pr.preferences=pr.preferences||{};pr.preferences.dayStart={min:p.value.min,source:'maya_proposal'};pr.preferredDayStart=pr.preferences.dayStart;pr.dayStart=p.value.min;return{type:'Preference.dayStart',id:p.id};}
   if(p.kind==='boundary'&&p.value&&p.value.rule){pr.boundaries.push({rule:p.value.rule,source:'maya_proposal',definition:'known'});
     if(p.value.availability)pr.availability.push({rule:p.value.availability,source:'maya_proposal'});return{type:'Boundary',id:p.id};}
   const id='rt_'+p.ref;if(pr.routines.some(r=>r.id===id))return{type:'Routine',id};
@@ -10603,11 +10603,13 @@ function onbApprove(profile,tpl,sel){
   pr.proposals.forEach(p=>{
     const mine=approvable.filter(i=>i.proposalId===p.id);
     if(mine.some(i=>accIds.indexOf(i.id)>=0)){p.status='accepted';pr.decisions.push({proposalId:p.id,status:'accepted',materializedAs:onbMaterialize(pr,p)});}
-    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0)){p.status='rejected';if(p.kind==='preference')pr.dayStart=PLAN_DAY_START;pr.decisions.push({proposalId:p.id,status:'rejected',materializedAs:null});}
+    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0)){p.status='rejected';if(p.kind==='preference'){/* rejected proposal != opposite preference: drop it; fall back only to an earlier user_setting */const u=pr.userDayStart;pr.preferences=pr.preferences||{};if(Number.isFinite(u)){pr.preferences.dayStart={min:u,source:'user_setting'};pr.preferredDayStart=pr.preferences.dayStart;}else{delete pr.preferences.dayStart;pr.preferredDayStart=null;}pr.dayStart=Number.isFinite(u)?u:PLAN_DAY_START;}pr.decisions.push({proposalId:p.id,status:'rejected',materializedAs:null});}
     else keep.push(p);
   });
+  pr.approvedBudgets=(pr.approvedBudgets||[]).slice();             // approved time budget with no placement: a goal/routine, never a timed event
+  accepted.filter(i=>i.reason==='work_hours_unknown').forEach(i=>pr.approvedBudgets.push({itemId:i.id,title:i.title,goalId:i.goalId||null,routineId:(()=>{const d=pr.decisions.find(d=>d.proposalId===i.proposalId&&d.materializedAs&&d.materializedAs.type==='Routine');return d?d.materializedAs.id:null;})(),minutesPerWeek:i.minutesPerWeek,placement:'unplaced',placementBlockedBy:'work_hours_unknown'}));
   pr.proposals=keep;                                                   // active profile: only still-pending proposals
-  return{profile:pr,accepted,rejected,pending:approvable.filter(i=>accIds.indexOf(i.id)<0&&rejIds.indexOf(i.id)<0),calendarWrites:accepted.filter(i=>i.date).map(i=>({title:i.title,date:i.date,startMin:i.startMin,endMin:i.endMin,origin:'maya_onboarding',itemId:i.id}))};
+  return{profile:pr,accepted,rejected,pending:approvable.filter(i=>accIds.indexOf(i.id)<0&&rejIds.indexOf(i.id)<0),calendarWrites:accepted.filter(i=>i.date&&Number.isFinite(i.startMin)&&Number.isFinite(i.endMin)).map(i=>({title:i.title,date:i.date,startMin:i.startMin,endMin:i.endMin,origin:'maya_onboarding',itemId:i.id}))};
 }
 
 // ── confirmation: semantic MessageIntents (facts + decisions) are separate from wording. V1 renderer is deterministic.
