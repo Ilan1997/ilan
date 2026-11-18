@@ -1,0 +1,1218 @@
+{
+ "version": 1,
+ "today": "2026-11-18",
+ "cases": [
+  {
+   "id": "T01",
+   "cat": "tidy",
+   "q": "q1",
+   "answer": "שלוש ריצות בשבוע, ארוחת ערב עם הילדים ארבעה ערבים, ושעתיים עבודה עמוקה בכל יום. אם השבוע עמוס — לפחות שתי ריצות ושני ערבים עם הילדים.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "ריצ"
+      ],
+      "domain": "life",
+      "kind": "fitness",
+      "perWeek": 3,
+      "protected": true,
+      "inMvw": true
+     },
+     {
+      "m": [
+       "ארוחת ערב"
+      ],
+      "domain": "life",
+      "kind": "family",
+      "perWeek": 4,
+      "protected": true,
+      "inMvw": true
+     },
+     {
+      "m": [
+       "עבודה עמוקה"
+      ],
+      "domain": "work",
+      "kind": "deep_work",
+      "perDay": true,
+      "durationMin": 120
+     }
+    ],
+    "officeHours": null,
+    "mvw": true
+   },
+   "followup": false,
+   "covers": [
+    "q1",
+    "q4"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "T02",
+   "cat": "tidy",
+   "q": "q2",
+   "answer": "משרד 08:30 עד 17:30 בימים א׳ עד ה׳. טיפול משפחתי ביום שני עד 17:00, מתחיל בערך ב-15:30.",
+   "expect": {
+    "officeHours": {
+     "from": "08:30",
+     "to": "17:30"
+    },
+    "fixed": [
+     {
+      "m": [
+       "טיפול"
+      ],
+      "days": [
+       1
+      ],
+      "start": "15:30",
+      "startPrecision": "approx",
+      "end": "17:00"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "T03",
+   "cat": "tidy",
+   "q": "q5",
+   "answer": "הצעת מחיר ללקוח חדש. בערך 6 שעות, עד 25 בנובמבר.",
+   "expect": {
+    "goals": [
+     {
+      "m": [
+       "הצעת מחיר"
+      ],
+      "total": 360,
+      "deadline": "2026-11-25"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "B01",
+   "cat": "brain_dump",
+   "q": "q1",
+   "answer": "תראה, אני בנאדם עם המון דברים. אני יועץ, יש לי 3 ילדים, אשתי עובדת במשמרות, אני חייב 3 ריצות בשבוע אחרת אני משתגע, ארוחת שישי משפחתית זה קדוש, בימי שלישי אני לוקח את הקטנה מהגן ב-16:00, וקורס אונליין בשבתות שאני לא מוותר עליו. לא יודע כמה שעות זה יוצא.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "ריצ"
+      ],
+      "domain": "life",
+      "perWeek": 3,
+      "protected": true
+     },
+     {
+      "m": [
+       "שישי",
+       "ארוחת"
+      ],
+      "domain": "life",
+      "kind": "family",
+      "protected": true
+     }
+    ],
+    "fixed": [
+     {
+      "m": [
+       "גן"
+      ],
+      "days": [
+       2
+      ],
+      "start": "16:00"
+     },
+     {
+      "m": [
+       "קורס"
+      ],
+      "days": [
+       6
+      ]
+     }
+    ],
+    "officeHours": null,
+    "extraRoutinesOk": true
+   },
+   "followup": true,
+   "covers": [
+    "q1",
+    "q4"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "B02",
+   "cat": "brain_dump",
+   "q": "q3",
+   "answer": "בעבודה: מיילים, חשבוניות, תשלומים לספקים, לעדכן את ה-CRM, הודעות של לקוחות בוואטסאפ, וכל מיני דברים קטנים. בבית: כביסה, קניות, לחדש ביטוח לרכב, תור לרופא שיניים לילד, והמיסים.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "מייל"
+      ],
+      "domain": "work",
+      "maintenance": "work"
+     },
+     {
+      "m": [
+       "חשבונ"
+      ],
+      "domain": "work",
+      "maintenance": "work"
+     },
+     {
+      "m": [
+       "תשלומים"
+      ],
+      "domain": "work",
+      "maintenance": "work"
+     },
+     {
+      "m": [
+       "קניות"
+      ],
+      "domain": "life",
+      "maintenance": "life"
+     }
+    ],
+    "extraRoutinesOk": true,
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [
+    "q3"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "B03",
+   "cat": "brain_dump",
+   "q": "q2",
+   "answer": "אני עובד במשרד בכל יום מ-9 עד 6 חוץ מיום חמישי שאני מהבית. ביום ראשון בבוקר יש לי ישיבת צוות ב-9:30 שנמשכת בערך שעה, והילדים ביום רביעי אצל אמא שלי אז אני יותר פנוי.",
+   "expect": {
+    "officeHours": {
+     "from": "09:00",
+     "to": "18:00"
+    },
+    "fixed": [
+     {
+      "m": [
+       "ישיבת צוות",
+       "ישיבה"
+      ],
+      "days": [
+       0
+      ],
+      "start": "09:30",
+      "end": "10:30"
+     }
+    ],
+    "extraRoutinesOk": true
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "K01",
+   "cat": "dont_know",
+   "q": "q1",
+   "answer": "לא יודע, בא לי שיהיה פחות לחץ.",
+   "expect": {
+    "routines": [],
+    "officeHours": null,
+    "mvw": false,
+    "dontKnow": [
+     "minimumViableWeek"
+    ],
+    "goals": []
+   },
+   "followup": false,
+   "covers": [
+    "q1"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "K02",
+   "cat": "dont_know",
+   "q": "q2",
+   "answer": "עובד ברוב הימים. לא יודע בדיוק באילו שעות.",
+   "expect": {
+    "officeHours": null,
+    "fixed": [],
+    "dontKnow": [
+     "workHours"
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "K03",
+   "cat": "dont_know",
+   "q": "q3",
+   "answer": "אין לי מושג.",
+   "expect": {
+    "routines": [],
+    "dontKnow": [
+     "maintenance"
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q3"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "K04",
+   "cat": "dont_know",
+   "q": "q7",
+   "answer": "לא יודע. שלא יעבדו אותי בערב.",
+   "expect": {
+    "boundaries": [
+     {
+      "m": [
+       "ערב"
+      ],
+      "kind": "no_work_evening",
+      "defined": false
+     }
+    ],
+    "noTimedBoundary": true,
+    "dontKnow": [
+     "evening"
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q7"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "C01",
+   "cat": "contradiction",
+   "q": "q2",
+   "answer": "משרד מ-9 עד 5. אה לא רגע, בעצם מ-8 עד 4.",
+   "expect": {
+    "officeHours": {
+     "from": "08:00",
+     "to": "16:00"
+    }
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "C02",
+   "cat": "contradiction",
+   "q": "q1",
+   "answer": "אני רץ שלוש פעמים בשבוע. טוב, בפועל פעמיים.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "ריצ",
+       "רץ"
+      ],
+      "domain": "life",
+      "perWeek": 2
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q1"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "C03",
+   "cat": "contradiction",
+   "q": "q5",
+   "answer": "ללמוד לבחינה 10 שעות עד סוף החודש. סליחה, 12 שעות.",
+   "expect": {
+    "goals": [
+     {
+      "m": [
+       "בחינה",
+       "ללמוד"
+      ],
+      "total": 720,
+      "deadline": "2026-11-30"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "M01",
+   "cat": "multi_topic",
+   "q": "q1",
+   "answer": "שבוע טוב: ריצות פעמיים, תזה שש שעות בשבוע, ושלא אפסיד את הערבים עם הילדים. שני הדברים הכי חשובים: התזה והילדים.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "ריצ"
+      ],
+      "domain": "life",
+      "perWeek": 2
+     },
+     {
+      "m": [
+       "ילדים"
+      ],
+      "domain": "life",
+      "kind": "family",
+      "protected": true,
+      "inMvw": true
+     }
+    ],
+    "goals": [
+     {
+      "m": [
+       "תזה"
+      ],
+      "perWeek": 360
+     }
+    ],
+    "mvw": true
+   },
+   "followup": false,
+   "covers": [
+    "q1",
+    "q4",
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "M02",
+   "cat": "multi_topic",
+   "q": "q2",
+   "answer": "אני במשרד 9–17, בשישי אני לא עובד בכלל ואחרי 20:00 לא עובד.",
+   "expect": {
+    "officeHours": {
+     "from": "09:00",
+     "to": "17:00"
+    },
+    "boundaries": [
+     {
+      "m": [
+       "שישי"
+      ],
+      "kind": "closed_day",
+      "dow": 5
+     },
+     {
+      "m": [
+       "20"
+      ],
+      "kind": "no_work_after",
+      "time": "20:00"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q2",
+    "q7"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "M03",
+   "cat": "multi_topic",
+   "q": "q3",
+   "answer": "מצטברים לי מיילים וחשבוניות. ומה שמפרק לי את השבוע זה ילד חולה או לקוח שמתקשר בפאניקה.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "מייל"
+      ],
+      "domain": "work",
+      "maintenance": "work"
+     },
+     {
+      "m": [
+       "חשבונ"
+      ],
+      "domain": "work",
+      "maintenance": "work"
+     }
+    ],
+    "chaos": 2
+   },
+   "followup": false,
+   "covers": [
+    "q3",
+    "q6"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "X01",
+   "cat": "change_of_mind",
+   "q": "q5",
+   "answer": "תזה, עשר שעות בשבוע. בעצם לא, זה יותר מדי, שש.",
+   "expect": {
+    "goals": [
+     {
+      "m": [
+       "תזה"
+      ],
+      "perWeek": 360
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "X02",
+   "cat": "change_of_mind",
+   "q": "q2",
+   "answer": "הטיפול ביום שני. לא, בעצם ביום שלישי, שעה 17:00 עד 18:00.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "טיפול"
+      ],
+      "days": [
+       2
+      ],
+      "start": "17:00",
+      "end": "18:00"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "A01",
+   "cat": "ambiguous_time",
+   "q": "q2",
+   "answer": "יש לי שיעור ביום ג׳ בערב.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "שיעור"
+      ],
+      "days": [
+       2
+      ],
+      "noTimes": true
+     }
+    ],
+    "officeHours": null
+   },
+   "followup": true,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "A02",
+   "cat": "ambiguous_time",
+   "q": "q2",
+   "answer": "פגישה עם המנחה ביום חמישי אחה״צ.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "מנחה"
+      ],
+      "days": [
+       4
+      ],
+      "semanticWindow": "אחה״צ",
+      "noTimes": true
+     }
+    ],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "A03",
+   "cat": "ambiguous_time",
+   "q": "q2",
+   "answer": "אני עובד רוב השבוע במשרד.",
+   "expect": {
+    "officeHours": null,
+    "fixed": []
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "A04",
+   "cat": "ambiguous_time",
+   "q": "q2",
+   "answer": "הקורס ביום ד׳ בבוקר.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "קורס"
+      ],
+      "days": [
+       3
+      ],
+      "semanticWindow": "בוקר",
+      "noTimes": true
+     }
+    ],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "W01",
+   "cat": "recurring_workload",
+   "q": "q5",
+   "answer": "תזה, שש שעות כל שבוע.",
+   "expect": {
+    "goals": [
+     {
+      "m": [
+       "תזה"
+      ],
+      "perWeek": 360,
+      "total": null,
+      "deadline": null
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "W02",
+   "cat": "recurring_workload",
+   "q": "q5",
+   "answer": "שעתיים כל יום ראשון עד חמישי ללמוד לבחינה, הבחינה ב-14 בדצמבר.",
+   "expect": {
+    "goals": [
+     {
+      "m": [
+       "בחינה",
+       "ללמוד"
+      ],
+      "perWeek": 600,
+      "deadline": "2026-12-14"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "W03",
+   "cat": "recurring_workload",
+   "q": "q5",
+   "answer": "סטטיסטיקה, מבחן ב-14 בדצמבר. אין לי מושג כמה שעות צריך.",
+   "expect": {
+    "goals": [
+     {
+      "m": [
+       "סטטיסטיקה"
+      ],
+      "total": null,
+      "perWeek": null,
+      "deadline": "2026-12-14"
+     }
+    ],
+    "dontKnow": [
+     "goal."
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q5"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "W04",
+   "cat": "maintenance_both",
+   "q": "q3",
+   "answer": "בעבודה: מעקב לידים ומשוב לעובדים אחת לשבועיים. בבית: חשבונות וקניות כל שבוע.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "לידים"
+      ],
+      "domain": "work",
+      "maintenance": "work"
+     },
+     {
+      "m": [
+       "משוב"
+      ],
+      "domain": "work",
+      "maintenance": "work",
+      "perTwoWeeks": true
+     },
+     {
+      "m": [
+       "חשבונות"
+      ],
+      "domain": "life",
+      "maintenance": "life"
+     },
+     {
+      "m": [
+       "קניות"
+      ],
+      "domain": "life",
+      "maintenance": "life"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q3"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "E01",
+   "cat": "calendar",
+   "q": "q2",
+   "answer": "ישיבת הצוות ביום שני כבר ביומן. חוץ מזה אני עובד 9 עד 5.",
+   "expect": {
+    "officeHours": {
+     "from": "09:00",
+     "to": "17:00"
+    },
+    "fixed": [],
+    "forbidFixed": [
+     "ישיבת",
+     "צוות"
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": [
+    {
+     "dow": 1,
+     "startMin": 600,
+     "endMin": 660,
+     "title": "ישיבת צוות"
+    }
+   ],
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "E02",
+   "cat": "calendar",
+   "q": "q2",
+   "answer": "זה כבר ביומן, אין עוד.",
+   "expect": {
+    "officeHours": null,
+    "fixed": [],
+    "forbidFixed": [
+     "ישיבת",
+     "צוות"
+    ]
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {},
+   "calendar": [
+    {
+     "dow": 1,
+     "startMin": 600,
+     "endMin": 660,
+     "title": "ישיבת צוות"
+    }
+   ],
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "E03",
+   "cat": "calendar",
+   "q": "q2",
+   "answer": "הטיפול ביום שלישי 17:00 עד 18:00 לא ביומן, והישיבה ביום שני כבר שם.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "טיפול"
+      ],
+      "days": [
+       2
+      ],
+      "start": "17:00",
+      "end": "18:00"
+     }
+    ],
+    "forbidFixed": [
+     "ישיבה",
+     "צוות"
+    ],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [
+    "q2"
+   ],
+   "ctx": {},
+   "calendar": [
+    {
+     "dow": 1,
+     "startMin": 600,
+     "endMin": 660,
+     "title": "ישיבת צוות"
+    }
+   ],
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "F01",
+   "cat": "followup",
+   "q": "f",
+   "answer": "בערך 15:30.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "טיפול"
+      ],
+      "start": "15:30",
+      "startPrecision": "approx"
+     }
+    ],
+    "routines": [],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {
+    "fixed": [
+     {
+      "key": "therapy",
+      "title": "טיפול משפחתי",
+      "days": [
+       1
+      ],
+      "end": "17:00"
+     }
+    ]
+   },
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": "מתי מתחיל טיפול משפחתי? גם \"בערך\" מספיק.",
+   "field": "fixed.therapy.start"
+  },
+  {
+   "id": "F02",
+   "cat": "followup",
+   "q": "f",
+   "answer": "בערך שעה, ו-18:15 מדויק.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "קורס"
+      ],
+      "start": "18:15",
+      "travelMin": 60
+     }
+    ],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {
+    "fixed": [
+     {
+      "key": "course",
+      "title": "קורס סטטיסטיקה",
+      "days": [
+       2
+      ],
+      "start": "18:00",
+      "startPrecision": "approx",
+      "end": "21:00",
+      "travelNeeded": true
+     }
+    ]
+   },
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": "כמה זמן לוקח להגיע לקורס סטטיסטיקה, והאם 18:00 מדויק?",
+   "field": "fixed.course.travel"
+  },
+  {
+   "id": "F03",
+   "cat": "followup",
+   "q": "f",
+   "answer": "חמישי אחה״צ, לא יודע מתי בדיוק.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "מנחה"
+      ],
+      "days": [
+       4
+      ],
+      "semanticWindow": "אחה״צ",
+      "noTimes": true
+     }
+    ],
+    "dontKnow": [
+     "fixed."
+    ]
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {
+    "fixed": [
+     {
+      "key": "advisor",
+      "title": "פגישה עם המנחה",
+      "dayUnknown": true
+     }
+    ]
+   },
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": "באיזה יום ובערך באיזו שעה פגישה עם המנחה? גם \"אחה״צ\" מספיק.",
+   "field": "fixed.advisor.day"
+  },
+  {
+   "id": "F04",
+   "cat": "followup",
+   "q": "f",
+   "answer": "לא יודע.",
+   "expect": {
+    "fixed": [
+     {
+      "m": [
+       "טיפול"
+      ],
+      "noTimes": true
+     }
+    ],
+    "dontKnow": [
+     "fixed."
+    ],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {
+    "fixed": [
+     {
+      "key": "therapy",
+      "title": "טיפול משפחתי",
+      "days": [
+       1
+      ],
+      "end": "17:00"
+     }
+    ]
+   },
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": "מתי מתחיל טיפול משפחתי? גם \"בערך\" מספיק.",
+   "field": "fixed.therapy.start"
+  },
+  {
+   "id": "P01",
+   "cat": "protected",
+   "q": "q4",
+   "answer": "ערבים עם הילדים. וספורט אולי.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "ילדים"
+      ],
+      "domain": "life",
+      "protected": true,
+      "stated": "fact"
+     },
+     {
+      "m": [
+       "ספורט"
+      ],
+      "domain": "life",
+      "protected": true,
+      "stated": "maybe"
+     }
+    ]
+   },
+   "followup": false,
+   "covers": [
+    "q4"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "P02",
+   "cat": "chaos",
+   "q": "q6",
+   "answer": "לקוחות שמתקשרים באמצע היום, וישיבות שמתארכות.",
+   "expect": {
+    "chaos": 2
+   },
+   "followup": false,
+   "covers": [
+    "q6"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "P03",
+   "cat": "boundaries",
+   "q": "q7",
+   "answer": "בשישי אחר הצהריים ובשבת כלום.",
+   "expect": {
+    "boundaries": [
+     {
+      "m": [
+       "שישי"
+      ],
+      "kind": "closed_day",
+      "dow": 5,
+      "semanticWindow": "אחה״צ"
+     },
+     {
+      "m": [
+       "שבת"
+      ],
+      "kind": "closed_day",
+      "dow": 6
+     }
+    ],
+    "noTimedBoundary": true
+   },
+   "followup": false,
+   "covers": [
+    "q7"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "P04",
+   "cat": "mixed_language",
+   "q": "q1",
+   "answer": "ריצות? 3x בשבוע. family dinner ארבעה ימים. deep work שעתיים ביום.",
+   "expect": {
+    "routines": [
+     {
+      "m": [
+       "ריצ"
+      ],
+      "domain": "life",
+      "perWeek": 3
+     },
+     {
+      "m": [
+       "dinner",
+       "ארוחת",
+       "family"
+      ],
+      "domain": "life",
+      "kind": "family",
+      "perWeek": 4
+     },
+     {
+      "m": [
+       "deep",
+       "עמוקה"
+      ],
+      "domain": "work",
+      "kind": "deep_work",
+      "perDay": true,
+      "durationMin": 120
+     }
+    ],
+    "officeHours": null
+   },
+   "followup": false,
+   "covers": [
+    "q1"
+   ],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  },
+  {
+   "id": "N01",
+   "cat": "chatter",
+   "q": "q1",
+   "answer": "מה שלומך? בוא נתחיל.",
+   "expect": {
+    "routines": [],
+    "fixed": [],
+    "goals": [],
+    "officeHours": null,
+    "mvw": false,
+    "boundaries": []
+   },
+   "followup": false,
+   "covers": [],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": null
+  }
+ ]
+}

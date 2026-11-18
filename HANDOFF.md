@@ -56,3 +56,9 @@ A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיס�
 
 ## Onboarding stage 1 (2026-11-18.6)
 Pure core in `index.html` (`onb*`), spec `ONBOARDING_SPEC_V2.md`, tests `tests/onboarding.scenarios.js` (+ fixtures `tests/fixtures/onboarding/`), demo `node tests/demo-onboarding.js [noam|yuval|dani]`. No UI, no calendar writes, no edge-function mode yet (extraction proven only with a stubbed model). Next: UI wiring after the demo is approved; then an `onboarding` extraction mode in `maya-ai` and a live run against Gemini.
+
+### Onboarding next steps (2026-11-18.7)
+1. Redeploy `maya-ai` (new `mode:"onboarding"`; copy in `/mnt/user-data/outputs/maya-ai-index.ts`).
+2. `node tests/onboarding-eval/run.js --function --jwt <JWT> --out r.json --md report.md` and send `report.md` (any critical blocks UI).
+3. `node tests/onboarding-eval/e2e.js yuval --function --jwt <JWT>` (and noam/dani) — real conversation to the post-approval state.
+4. Then: replace the fallback placement with `scheduleSet`; then UI.

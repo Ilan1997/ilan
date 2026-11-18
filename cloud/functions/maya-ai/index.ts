@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
   if (total > MAX_TOTAL) return json({ error: "too_long", message: "השיחה ארוכה מדי — התחל שיחה חדשה." }, 413, origin);
 
   // structured output: the page asks for JSON that Gemini itself enforces against a schema (mode "intent"), at a low temperature
-  const schemaOk = body.mode === "intent" && !!body.schema && typeof body.schema === "object" && !Array.isArray(body.schema) && JSON.stringify(body.schema).length <= 8000;
+  const schemaOk = (body.mode === "intent" || body.mode === "onboarding") && !!body.schema && typeof body.schema === "object" && !Array.isArray(body.schema) && JSON.stringify(body.schema).length <= 8000;
   const temperature = typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 1 ? body.temperature : undefined;
   const generationConfig = (schemaOk || temperature !== undefined)
     ? { ...(schemaOk ? { responseMimeType: "application/json", responseSchema: body.schema } : {}), ...(temperature !== undefined ? { temperature } : {}) }

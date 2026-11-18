@@ -744,6 +744,12 @@ const w=dom.window;
     const okb=Object.values(r).every(v=>v===true);
     rows.push(['onboarding (spec v2)',String(okb)+' ('+Object.keys(r).length+')'+(okb?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okb)failed=true;
   }catch(e){rows.push(['onboarding (spec v2)','THROW '+e.message]);failed=true;}
+  // ---- onboarding-eval harness: comparator must flag known flaws; replaying the expectations must score all-pass (no model involved) ----
+  try{
+    const cp=require('child_process');const o1=cp.execFileSync('node',[require('path').join(__dirname,'onboarding-eval','selftest.js')],{encoding:'utf8'});
+    cp.execFileSync('node',[require('path').join(__dirname,'onboarding-eval','run.js'),'--mock-expected'],{encoding:'utf8',stdio:'pipe'});
+    rows.push(['onboarding-eval harness',String(/19\/19/.test(o1))]);
+  }catch(e){rows.push(['onboarding-eval harness','FAIL '+String(e.stdout||e.message).slice(0,160)]);failed=true;}
   // ---- Maya's voice: enforced in code (polish + lint over real samples and every UI string) ----
   try{
     const samples=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'fixtures','voice_samples.json'),'utf8')).samples;

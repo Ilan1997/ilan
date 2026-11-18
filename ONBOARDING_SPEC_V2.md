@@ -106,7 +106,14 @@ TemplateItem { origin:"calendar"|"proposal"|"hold", status:"existing"|"proposed"
 - ימי א׳–ה׳ מועדפים בשיבוץ; שישי/שבת **לא** חסומים אלא אם יש `AvailabilityRule` מחייב (`user_setting` / `user_said` / `calendar`). `onbAvailabilityFromSnap` ממיר סגירות שכבר בהגדרות (freeHours) ל־`user_setting`, ולא נשען על ברירות המחדל של `ctxFreeIntervals`.
 - חיבור ל־Gemini (פונקציית edge ל־extraction) **לא** חובר בשלב זה; `onbExtractWith` מקבל `callModel` מוזרק.
 
-## 9. קבלה (acceptance)
+## 9. עדכון 2026-11-18 (אחרי סבב ראשון)
+- **Lifecycle:** `Proposal(pending) → accepted → materialize() → Routine | Boundary | WorkloadGoal.trialAllocation`, `source:"maya_proposal"`. הצעה שנדחתה יוצאת מהפרופיל הפעיל (נשארת רק ב־`decisions`). "סגירת שבוע" מאושרת → Routine. provenance: `user_said | calendar | maya_proposal | learned`.
+- **7 תחומי כיסוי, לא 7 תחנות:** `onbCovered(facts)` נגזר בקוד (לא רק מ־`answeredTopics` של המודל). נשאלים רק תחומים שלא כוסו. תשובה ראשונה שמכסה הכול → שיחה של שאלה אחת. הנוסח "מוגנים בקיצור" של שאלה 4 בוטל (אם כבר ידוע מה מוגן — לא שואלים).
+- **MessageIntent:** כל משפט של מאיה נבנה כ־`{type,data}` (`ask_topic`, `ask_missing_constraint`, `present_template`, `show_existing`, `propose_items`, `propose_trial_items`, `state_*`, `ask_approval`) ו־`onbRender` דטרמיניסטי הוא V1. renderer עתידי רשאי רק לנסח מחדש, לא להוסיף עובדות/החלטות.
+- **שיבוץ:** ההיוריסטיקה "היום הכי פנוי" היא fallback זמני (`template.placement==="fallback_greedy"`, TODO מפורש בקוד) — היעד הוא `scheduleSet / buildContextSnapshot / validatePlan`.
+- **חילוץ אמיתי:** `mode:"onboarding"` ב־`maya-ai`; הערכה ב־`tests/onboarding-eval` (38 תשובות).
+
+## 10. קבלה (acceptance)
 שלושה פרופילים (נועם מסודר, יובל מבולגן, דני לא יודע) + בדיקות שליליות:
 1. consequential unknown לא נהיה constraint.
 2. proposal לא נהיה routine לפני אישור.

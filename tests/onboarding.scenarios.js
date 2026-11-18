@@ -11,7 +11,7 @@
   try{
     const N=await onbPlay(FX.noam),Y=await onbPlay(FX.yuval),D=await onbPlay(FX.dani);
     // ───────── Noam (organised, calendar connected) ─────────
-    o.n01_flow=JSON.stringify(ids(N))===JSON.stringify(['q1','q2','f1','q3','q4','q5','q6','q7'])&&mains(N)===7&&fus(N)===1&&N.st.done;
+    o.n01_flow=JSON.stringify(ids(N))===JSON.stringify(['q1','q2','f1','q3','q5','q6','q7'])&&mains(N)===6&&fus(N)===1&&N.st.done&&onbCovered(N.st.facts).includes('q4');
     o.n02_scriptAlignedWithMachine=N.asked.every(a=>a.id===a.expect);
     o.n03_calendarNotAskedFromScratch=N.asked.find(a=>a.id==='q2').text===ONB_QUESTIONS.q2cal&&!N.asked.some(a=>/כמה (זמן|דקות)/.test(a.text));
     o.n04_followupIsTheCriticalOne=/טיפול משפחתי/.test(N.asked.find(a=>a.id==='f1').text);
@@ -73,11 +73,25 @@
     {const acc=ids=>onbApprove(DP,DT,{accept:ids,reject:[]});
       const sport=newItems(DT).filter(i=>i.proposalId==='pr_sport').map(i=>i.id),others=newItems(DT).filter(i=>i.proposalId!=='pr_sport').map(i=>i.id);
       const a0=acc([]),a1=acc(others),a2=acc(sport),rj=onbApprove(DP,DT,{accept:others,reject:sport});
-      o.neg2a_pendingBeforeApproval=!DP.routines.some(r=>r.source==='accepted_proposal')&&DP.proposals.every(p=>p.status==='pending')&&a0.profile.proposals.every(p=>p.status==='pending')&&!a0.profile.routines.some(r=>/sport/.test(r.key));
-      o.neg2b_otherApprovalsDoNotPromoteIt=a1.profile.proposals.find(p=>p.id==='pr_sport').status==='pending'&&!a1.profile.routines.some(r=>/sport/.test(r.key));
-      o.neg2c_onlyAcceptancePromotes=(()=>{const rt=a2.profile.routines.find(r=>r.key==='sport');return a2.profile.proposals.find(p=>p.id==='pr_sport').status==='accepted'&&rt&&rt.source==='accepted_proposal'&&rt.fromProposal==='pr_sport';})();
-      o.neg2d_rejectedStaysRejected=rj.profile.proposals.find(p=>p.id==='pr_sport').status==='rejected'&&!rj.profile.routines.some(r=>/sport/.test(r.key));
-      o.neg2e_inputProfileUntouched=JSON.stringify(DP)===JSON.stringify(D.fin.profile)&&DP.routines.every(r=>r.source==='user');}
+      const hasSport=pr=>pr.proposals.some(p=>p.id==='pr_sport');
+      o.neg2a_pendingBeforeApproval=!DP.routines.some(r=>r.source==='maya_proposal')&&DP.proposals.every(p=>p.status==='pending')&&a0.profile.proposals.every(p=>p.status==='pending')&&!a0.profile.routines.some(r=>/sport/.test(r.key))&&a0.profile.decisions.length===0;
+      o.neg2b_otherApprovalsDoNotPromoteIt=hasSport(a1.profile)&&a1.profile.proposals.find(p=>p.id==='pr_sport').status==='pending'&&!a1.profile.routines.some(r=>/sport/.test(r.key));
+      o.neg2c_onlyAcceptancePromotes=(()=>{const rt=a2.profile.routines.find(r=>r.key==='sport');const dc=a2.profile.decisions.find(x=>x.proposalId==='pr_sport');return rt&&rt.source==='maya_proposal'&&rt.fromProposal==='pr_sport'&&dc.status==='accepted'&&dc.materializedAs.type==='Routine'&&!hasSport(a2.profile);})();
+      o.neg2d_rejectedLeavesActiveProfile=!hasSport(rj.profile)&&rj.profile.decisions.find(x=>x.proposalId==='pr_sport').status==='rejected'&&!rj.profile.routines.some(r=>/sport/.test(r.key));
+      o.neg2e_inputProfileUntouched=JSON.stringify(DP)===JSON.stringify(D.fin.profile)&&DP.routines.every(r=>r.source==='user_said');}
+    // 2b) materialization: what was approved becomes a real entity (and is used by the next template)
+    {const all=onbApprove(NP,NT,'all');const ap=all.profile;
+      o.m1_reviewBecomesRoutine=(()=>{const r=ap.routines.find(x=>x.key==='review');return r&&r.kind==='review'&&r.source==='maya_proposal'&&r.targetFrequency.perWeek===1&&r.targetDuration.minutes===30&&ap.decisions.some(x=>x.proposalId==='pr_review'&&x.materializedAs.type==='Routine');})();
+      o.m2_provenanceKept=ap.routines.filter(r=>r.source==='user_said').length===NP.routines.length&&ap.routines.filter(r=>r.source==='maya_proposal').length===ap.decisions.filter(x=>x.status==='accepted'&&x.materializedAs.type==='Routine').length;
+      const yAll=onbApprove(YP,YT,'all').profile,statsG=yAll.workloadGoals.find(g=>g.key==='stats');
+      o.m3_trialAllocationBecomesPartOfGoal=statsG.trialAccepted===true&&statsG.trialAllocationMinutes===150&&statsG.requiredTotalMinutes===null&&yAll.decisions.some(x=>x.proposalId==='pr_goal_stats'&&x.materializedAs.type==='WorkloadGoal.trialAllocation')&&!yAll.proposals.length;
+      const bp=J(DP);bp.proposals.push({id:'pr_b',ref:'b',title:'בלי עבודה אחרי 20:00',kind:'boundary',domain:'work',value:{rule:'בלי עבודה אחרי 20:00',availability:{kind:'no_work_after',fromMin:1200},perWeek:0,minutes:0},reason:'הצעה',status:'pending'});
+      const bt=J(DT);bt.items.push({id:'itb',title:'x',origin:'proposal',status:'tentative',proposalId:'pr_b',needsApproval:true,date:bt.dates[0],startMin:600,endMin:610,kind:'x'});
+      const bb=onbApprove(bp,bt,{accept:['itb']}).profile;
+      o.m4_boundaryProposalBecomesBoundary=bb.boundaries.some(b=>b.source==='maya_proposal'&&b.rule==='בלי עבודה אחרי 20:00')&&bb.availability.some(r=>r.source==='maya_proposal'&&r.rule.kind==='no_work_after');
+      const D2=onbApprove(DP,DT,'all').profile,t2=onbBuildTemplate(D2);
+      o.m5_nextTemplateUsesMaterializedRoutines=newItems(t2).filter(i=>i.routineId==='rt_sport').length===2&&D2.proposals.length===0&&newItems(t2).every(i=>i.endMin<=1020);
+      o.m6_rejectedNeverReturns=!onbBuildTemplate(onbApprove(DP,DT,{accept:[],reject:newItems(DT).map(i=>i.id)}).profile).items.some(i=>i.origin==='proposal');}
     // 3) a hold is never created without a source
     {o.neg3a_makeHoldNeedsBasis=makeHold({from:780,to:1080,reason:'x'})===null&&makeHold({derivedFrom:'semantic_window',semanticWindow:'ערב'})===null&&makeHold({derivedFrom:'semantic_window',semanticWindow:'לא קיים'})===null&&makeHold({derivedFrom:'user_time_window',userWindow:{from:900,to:800}})===null&&makeHold({derivedFrom:'calendar_fact'})===null&&makeHold({derivedFrom:'known_travel_requirement'})===null&&makeHold({derivedFrom:'guess'})===null&&makeHold()===null;
       o.neg3b_validBasesProduceHolds=makeHold({derivedFrom:'semantic_window',semanticWindow:'אחה״צ'}).from===780&&makeHold({derivedFrom:'user_time_window',userWindow:{from:840,to:1020}}).to===1020&&makeHold({derivedFrom:'calendar_fact',event:{startMin:600,endMin:660}}).confidence===1&&makeHold({derivedFrom:'known_travel_requirement',travel:{from:1000,to:1060}}).derivedFrom==='known_travel_requirement';
@@ -85,7 +99,7 @@
       const vp=V.fin.profile,vt=V.fin.template;
       o.neg3c_unknownTherapyStartMakesNoHold=vp.holds.length===0&&!vt.items.some(i=>i.origin==='hold')&&!vt.items.some(i=>i.ref==='therapy')&&vp.partialDays.some(p=>p.dow===1&&p.ref==='therapy');
       o.neg3d_dayMarkedNotFullyPlannable=vt.partialDays.length===1&&vt.partialDays[0].date==='2026-11-23'&&!newItems(vt).some(i=>i.date==='2026-11-23')&&/לא הוספתי כלום/.test(V.fin.text);
-      o.neg3e_dontKnowAskedOnceOnly=ids(V).filter(x=>x[0]==='f').length===1&&JSON.stringify(ids(V))===JSON.stringify(['q1','q2','f1','q3','q4','q5','q6','q7'])&&V.fin.profile.unknowns.some(u=>u.field==='fixed.therapy.start'&&u.planningImpact==='blocking'&&u.handling==='asked');}
+      o.neg3e_dontKnowAskedOnceOnly=ids(V).filter(x=>x[0]==='f').length===1&&JSON.stringify(ids(V))===JSON.stringify(['q1','q2','f1','q3','q5','q6','q7'])&&V.fin.profile.unknowns.some(u=>u.field==='fixed.therapy.start'&&u.planningImpact==='blocking'&&u.handling==='asked');}
     // 4) a calendar event never needs approval
     {const calIds=DT.items.filter(i=>i.origin==='calendar').map(i=>i.id),holdIds=YT.items.filter(i=>i.origin==='hold').map(i=>i.id);
       const a=onbApprove(NP,NT,{accept:calIds,reject:calIds}),b=onbApprove(NP,NT,'all'),h=onbApprove(YP,YT,'all');
@@ -98,11 +112,11 @@
       const goalItems=NT.items.filter(i=>i.goalId==='gl_quote');
       o.neg5a_goalUsesRoutineBlocksNotOnTop=acc.deepWork.newBlockMinutes===0&&acc.deepWork.routineMinutes===600&&dw===600&&acc.deepWork.totalMinutes===600&&goalItems.length===3&&goalItems.every(i=>i.routineId==='rt_deep');
       o.neg5b_capacityCountedFirst=acc.goals[0].coveredByRoutineMin===360&&acc.goals[0].requiredTotalMinutes===360&&acc.goals[0].newBlockMinutes===0;
-      const fx2=J(FX.noam);fx2.script[5].extraction.goals[0].fillsRoutineKey=null;const N2=await onbPlay(fx2);
+      const fx2=J(FX.noam);fx2.script[4].extraction.goals[0].fillsRoutineKey=null;const N2=await onbPlay(fx2);
       const t2=N2.fin.template,deep2=t2.items.filter(i=>i.kind==='deep_work'&&i.origin==='proposal').reduce((t,i)=>t+i.endMin-i.startMin,0),quote2=t2.items.filter(i=>i.goalId==='gl_quote').reduce((t,i)=>t+i.endMin-i.startMin,0);
       o.neg5c_controlWithoutFillingTheSameGoalAddsOnTop=deep2===600&&quote2>=360&&deep2+quote2>=960;
       // goal bigger than the routine can hold → only the shortfall is added
-      const fx3=J(FX.noam);fx3.script[5].extraction.goals[0].requiredTotalMinutes=840;fx3.script[5].extraction.goals[0].deadline='2026-11-26';const N3=await onbPlay(fx3);
+      const fx3=J(FX.noam);fx3.script[4].extraction.goals[0].requiredTotalMinutes=840;fx3.script[4].extraction.goals[0].deadline='2026-11-26';const N3=await onbPlay(fx3);
       const a3=N3.fin.template.accounting.deepWork;
       o.neg5d_shortfallOnlyBecomesNewBlocks=a3.routineMinutes===600&&a3.goalCoveredByRoutineMin===600&&a3.newBlockMinutes===240;}
     // 6) "I don't know" never invents work hours (and never repeats a question)
@@ -110,7 +124,7 @@
       o.neg6b_noTimeBasedOnGuessedHours=DP.guards.length===1&&DT.guards.length===1&&/שעות העבודה שלך/.test(D.fin.text)&&!DT.items.some(i=>i.origin==='proposal'&&i.domain==='work'&&/עבודה/.test(i.title));
       const everyAnswerDontKnow=J(FX.dani);everyAnswerDontKnow.script.forEach(s=>{s.extraction={answeredTopics:[s.expect],dontKnow:['workHours','maintenance','minimumViableWeek','chaos','evening']};});
       const Z=await onbPlay(everyAnswerDontKnow);
-      o.neg6c_allDontKnowStillSevenQuestionsNoFollowups=ids(Z)===undefined||(mains(Z)===7&&fus(Z)===0&&Z.fin.profile.fixedConstraints.filter(f=>f.origin==='user_said').length===0&&!Z.fin.profile.availability.length);}
+      o.neg6c_allDontKnowAsksNoFollowupsAndInventsNothing=(mains(Z)<=7&&fus(Z)===0&&Z.st.done&&Z.fin.profile.fixedConstraints.filter(f=>f.origin==='user_said').length===0&&!Z.fin.profile.availability.length);}
     // ───────── Provenance: Shabbat / Friday ─────────
     {o.s1_systemDefaultNeverBinds=onbBindingAvailability([{rule:{kind:'closed',dow:6,fromMin:0,toMin:1440},source:'system_default'},{rule:{kind:'closed',dow:5,fromMin:780,toMin:1440},source:'system_default'}]).length===0
         &&onbBindingAvailability([{rule:{kind:'closed',dow:6,fromMin:0,toMin:1440},source:'user_setting'},{rule:{kind:'closed',dow:6},source:'bogus'},{rule:{},source:'user_said'}]).length===1;
@@ -142,7 +156,7 @@
       let s=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);
       s=onbAdvance(s,{answeredTopics:['q1'],fixed:[{key:'a',title:'א',dayUnknown:true},{key:'b',title:'ב',dayUnknown:true},{key:'c',title:'ג',dayUnknown:true}]});
       const fq=[];while(s.current&&s.current.kind==='followup'){fq.push(s.current.field);s=onbAdvance(s,{});}
-      o.e5_followupCapTwoNeverRepeated=fq.length===2&&new Set(fq).size===2&&s.current&&s.current.id==='q2';
+      o.e5_followupCapTwoNeverRepeated=fq.length===2&&new Set(fq).size===2&&s.current&&s.current.id==='q3';
       // 7 main questions at most, even if nothing is ever answered
       let s2=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);let n2=0;while(s2.current&&n2<20){n2++;s2=onbAdvance(s2,{});}
       o.e6_neverMoreThanSevenMain=n2===7&&s2.done&&s2.mainCount===7;
@@ -150,6 +164,26 @@
       let s3=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);s3=onbAdvance(s3,{});s3=onbAdvance(s3,{fixed:[{key:'t',title:'טיפול',days:[1],end:{hhmm:'17:00'}}]});
       const f1=s3.current;s3=onbAdvance(s3,{});
       o.e7_oneFollowupWhenOneGap=f1.kind==='followup'&&s3.current.kind==='main'&&s3.followups===1;}
+    // ───────── Coverage areas (the 7 are areas, not stations) ─────────
+    {const dump={answeredTopics:['q1'],successCriteria:['ריצה','תזה'],minimumViableWeek:['תזה'],routines:[{key:'w',title:'ריצה',kind:'fitness',perWeek:3,protected:true},{key:'p',title:'חשבוניות',kind:'payments',domain:'work',maintenance:'work',perWeek:1}],
+        officeHours:{from:'09:00',to:'17:00'},goals:[{key:'g',title:'תזה',kind:'study',requiredPerWeekMinutes:360}],chaosTriggers:['ילדים חולים'],boundaries:[{rule:'לא אחרי 20',kind:'no_work_after',time:'20:00'}]};
+      let c0=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);c0=onbAdvance(c0,dump);
+      o.c1_brainDumpCoversEverythingAsksNothingElse=c0.done&&c0.current===null&&c0.mainCount===1&&JSON.stringify(onbCovered(c0.facts))===JSON.stringify(['q1','q2','q3','q4','q5','q6','q7']);
+      const part={successCriteria:['שבוע רגוע'],routines:[{key:'r',title:'ריצה',kind:'fitness',perWeek:2,protected:true}],boundaries:[{rule:'שבת סגורה',kind:'closed_day',dow:6}]};
+      let c1=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);c1=onbAdvance(c1,part);const seq=[];while(c1.current){seq.push(c1.current.id);c1=onbAdvance(c1,{});}
+      o.c2_onlyTheMissingAreasAreAsked=JSON.stringify(seq)===JSON.stringify(['q2','q3','q5','q6'])&&c1.mainCount===5;
+      let c3=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);c3=onbAdvance(c3,{dontKnow:['maintenance']});
+      o.c3_dontKnowAlsoCoversTheArea=onbCovered(c3.facts).includes('q3')&&c3.current.id==='q2';
+      o.c4_coverageIsDerivedNotOnlyTrustedFromModel=(()=>{let x=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);x=onbAdvance(x,{answeredTopics:[],routines:[{key:'a',title:'א',kind:'payments',domain:'work',maintenance:'work',perWeek:1}]});return x.current.id==='q2'&&onbCovered(x.facts).includes('q3');})();}
+    // ───────── MessageIntent ≠ wording ─────────
+    {const M=onbMessages(NP,NT);
+      o.mi1_everyMessageIsTypedData=M.every(m=>typeof m.type==='string'&&m.data&&typeof m.data==='object')&&['present_template','show_existing','propose_items','ask_approval'].every(t=>M.some(m=>m.type===t));
+      o.mi2_textIsOnlyARenderingOfIntents=N.fin.text===M.map(m=>onbRender(m,{today:NP.today})).join('\n\n')&&N.asked.every(a=>a.text===onbRender(a.intent,{today:NP.today})||a.intent===undefined||a.text===onbRender(a.intent));
+      o.mi3_questionsCarryIntents=N.st.current===null&&N.asked.length>0;
+      const x=onbAdvance(onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null),{fixed:[{key:'t',title:'טיפול',days:[1],end:{hhmm:'17:00'}}]});
+      o.mi4_followupIsAnIntent=x.current.intent.type==='ask_missing_constraint'&&x.current.intent.data.kind==='start'&&x.current.text===onbRender(x.current.intent);
+      o.mi5_renderCannotAddFactsUnknownTypeIsEmpty=onbRender({type:'invent_fact',data:{}})==='';}
+    o.t1_templateMarksTemporaryPlacement=NT.placement==='fallback_greedy';
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

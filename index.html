@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.6';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.7';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10194,12 +10194,18 @@ const ONB_EXTRACT_SCHEMA=(()=>{
     dontKnow:A(S)},required:[]};
 })();
 function onbExtractPrompt(st,answer){
-  const cur=st&&st.current||{};
-  return 'אתה מחלץ מבנה מתשובה חופשית של משתמש בשיחת היכרות עם מזכירה אישית. אל תמציא דבר שלא נאמר. פרט שלא נאמר — השמט אותו (אל תנחש שעות, ימים, משכים או תדירויות).\n'+
+  const cur=st&&st.current||{},F=(st&&st.facts)||onbEmptyFacts();
+  const known=[].concat(F.fixed.map(f=>'fixed '+f.key+'='+(f.title||f.key)),F.routines.map(r=>'routine '+r.key+'='+r.title),F.goals.map(g=>'goal '+g.key+'='+g.title));
+  return 'אתה מחלץ מבנה מתשובה חופשית של משתמש בשיחת היכרות עם מזכירה אישית. אל תמציא דבר שלא נאמר. פרט שלא נאמר — השמט אותו (אל תנחש שעות, ימים, משכים, תדירויות או סכומי שעות).\n'+
+    'היום: '+(st&&st.today||'')+'\n'+
+    (st&&st.calendar&&st.calendar.length?'כבר ביומן (אל תחלץ אותם שוב כקבועים): '+onbCalendarLine(st.calendar)+'\n':'')+
+    (known.length?'פריטים שכבר חולצו (כשהתשובה מעדכנת אחד מהם — השתמש באותו key ושלח רק את מה שהשתנה): '+known.join('; ')+'\n':'')+
     'השאלה שנשאלה (נושא '+(cur.id||'?')+(cur.field?', שדה '+cur.field:'')+'): '+(cur.text||'')+'\n'+
     'התשובה: '+String(answer||'').slice(0,1500)+'\n'+
     'כללים: "לא יודע"/"אין לי מושג" → dontKnow עם מפתח השדה (workHours, evening, minimumViableWeek, maintenance, maintenance.work, maintenance.life, chaos, fixed.<key>.start|day|travel, goal.<key>.total). '+
-    'ימים: 0=ראשון … 6=שבת. שעות HH:MM. precision=approx כשנאמר "בערך". answeredTopics = נושאים q1..q7 שהתשובה כיסתה. stated=maybe כשהמשתמש אמר "אולי". החזר JSON לפי הסכמה בלבד.';
+    'ימים: 0=ראשון … 6=שבת. שעות HH:MM. precision=approx כשנאמר "בערך". stated=maybe כשהמשתמש אמר "אולי". '+
+    'זמן עמום ("בערב", "רוב השבוע", "אחרי הצהריים") אינו שעה: אל תמלא start/end/officeHours ממנו; "אחה״צ", "בוקר" ו"צהריים" → semanticWindow בלבד. אם המשתמש חזר בו — קח את הגרסה האחרונה. '+
+    'answeredTopics = נושאים q1..q7 שהתשובה כיסתה. החזר JSON לפי הסכמה בלבד.';
 }
 function onbNormalizeExtraction(raw){
   const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
@@ -10259,21 +10265,31 @@ function onbCalendarLine(cal){
 // PURE: blocking gaps — things that decide how a day can be built and were neither said nor already asked / declared unknown.
 function onbGaps(facts,askedFields){
   const out=[],skip=f=>askedFields.indexOf(f)>=0||facts.dontKnow.indexOf(f)>=0;
+  const G=(field,ref,kind,why,title,f)=>{const intent={type:'ask_missing_constraint',data:{kind,title,startMin:f&&f.start?f.start.min:null,startApprox:!!(f&&f.start&&f.start.precision==='approx'),startKnown:!!(f&&f.start)}};
+    out.push({field,ref,kind,why,intent,question:onbRender(intent)});};
   facts.fixed.forEach(f=>{
     const title=f.title||f.key,hasDays=(f.days||[]).length>0;
     const fd='fixed.'+f.key+'.day',fs='fixed.'+f.key+'.start',ft='fixed.'+f.key+'.travel';
-    if(!hasDays&&f.dayUnknown!==false&&!skip(fd)){out.push({field:fd,ref:f.key,kind:'day',why:'ביום לא ידוע',question:'באיזה יום ובערך באיזו שעה '+title+'? גם "אחה״צ" מספיק.'});return;}
+    if(!hasDays&&f.dayUnknown!==false&&!skip(fd)){G(fd,f.key,'day','ביום לא ידוע',title,f);return;}
     const hasWin=f.semanticWindow&&ONB_SEMANTIC_WINDOWS[f.semanticWindow]||f.window;
-    if((!f.start||!f.end)&&!hasWin&&!skip(fs)&&hasDays)out.push({field:fs,ref:f.key,kind:'start',why:'חסר '+(f.start?'סיום':'התחלה')+' לפגישה קשיחה',question:'מתי '+(f.start?'מסתיים ':'מתחיל ')+title+'? גם "בערך" מספיק.'});
-    if(f.travelNeeded&&!f.travelMin&&!skip(ft))out.push({field:ft,ref:f.key,kind:'travel',why:'זמן נסיעה לא ידוע',question:'כמה זמן לוקח להגיע ל'+title+(f.start&&f.start.precision==='approx'?', והאם '+_fmtMin(f.start.min)+' מדויק?':'?')});
+    if((!f.start||!f.end)&&!hasWin&&!skip(fs)&&hasDays)G(fs,f.key,'start','חסר '+(f.start?'סיום':'התחלה')+' לפגישה קשיחה',title,f);
+    if(f.travelNeeded&&!f.travelMin&&!skip(ft))G(ft,f.key,'travel','זמן נסיעה לא ידוע',title,f);
   });
   const pri={day:0,start:1,travel:2};return out.sort((a,b)=>pri[a.kind]-pri[b.kind]);
 }
-function onbMainText(s,id){
-  if(id==='q2')return s.calendarConnected?ONB_QUESTIONS.q2cal:ONB_QUESTIONS.q2;
-  if(id==='q4'){const p=s.facts.routines.filter(r=>r.protected);if(p.length)return'סימנתי '+p.map(r=>r.title).join(', ')+' כמוגנים. יש עוד משהו בחיים שאסור שהעבודה תדחק החוצה?';}
-  return ONB_QUESTIONS[id];
+// PURE: which of the 7 coverage areas the facts ALREADY cover (derived in code, not only trusted from the model). The 7 are areas, not stations.
+function onbCovered(F){
+  const dk=k=>F.dontKnow.some(x=>x===k||x.indexOf(k+'.')===0),c=[];
+  if(F.successCriteria.length||F.minimumViableWeek.length||dk('minimumViableWeek'))c.push('q1');
+  if(F.officeHours||F.fixed.length||dk('workHours'))c.push('q2');
+  if(F.routines.some(r=>r.maintenance)||dk('maintenance'))c.push('q3');
+  if(F.routines.some(r=>r.protected))c.push('q4');
+  if(F.goals.length||F.goalsNone)c.push('q5');
+  if(F.chaosTriggers.length||dk('chaos'))c.push('q6');
+  if(F.boundaries.length||dk('evening'))c.push('q7');
+  return c;
 }
+function onbMainIntent(s,id){return{type:'ask_topic',data:{topic:id,calendar:!!s.calendarConnected}};}
 // PURE: advance the conversation. `extraction` = normalized extraction of the answer to s.current (null at the start).
 // Returns a NEW state; state.current = the next question {id,kind:'main'|'followup',text,field?} or null when done.
 function onbAdvance(st,extraction){
@@ -10289,12 +10305,15 @@ function onbAdvance(st,extraction){
   if(gaps.length>=2&&s.fuBudget<2)s.fuBudget=2;                       // two follow-ups only when two blocking gaps exist at once
   if(gaps.length&&s.followups<s.fuBudget){
     const g=gaps[0];s.followups++;s.askedFields.push(g.field);
-    s.current={id:'f'+s.followups,kind:'followup',field:g.field,text:g.question};return s;
+    s.current={id:'f'+s.followups,kind:'followup',field:g.field,intent:g.intent,text:g.question};return s;
   }
-  const next=ONB_ORDER.find(id=>s.answered.indexOf(id)<0&&!(s.log.some(l=>l.q===id)));
-  if(next&&s.mainCount<ONB_MAX_MAIN){s.mainCount++;s.current={id:next,kind:'main',text:onbMainText(s,next)};return s;}
+  const cov=onbCovered(s.facts);
+  const next=ONB_ORDER.find(id=>s.answered.indexOf(id)<0&&cov.indexOf(id)<0&&!(s.log.some(l=>l.q===id)));
+  if(next&&s.mainCount<ONB_MAX_MAIN){s.mainCount++;const it=onbMainIntent(s,next);s.current={id:next,kind:'main',intent:it,text:onbRender(it)};return s;}
   s.current=null;s.done=true;return s;
 }
+// Glue to the deployed function (mode "onboarding"): returns the model's JSON text. Not unit-tested (needs the network); eval: tests/onboarding-eval.
+async function _onbCallModel(req){return _aiWithTimeout(_aiCallModel('אתה מחלץ מבנה מתשובות בעברית. החזר JSON בלבד לפי הסכמה. אל תמציא.',[{role:'user',content:req.prompt}],{mode:'onboarding',schema:req.schema,temperature:0}),60000);}
 // Glue: model call is injected (callModel({prompt,schema}) → raw JSON or text). One repair retry; never throws — an unusable reply becomes an empty extraction.
 async function onbExtractWith(callModel,st,answer){
   const tryOnce=async(extra)=>{try{const r=await callModel({prompt:onbExtractPrompt(st,answer)+(extra||''),schema:ONB_EXTRACT_SCHEMA});
@@ -10394,7 +10413,7 @@ function onbBuildProfile(st){
     const d=hasFreq?dur(r):{minutes:r.durationMin||null};
     const rt={id:'rt_'+r.key,key:r.key,title:r.title,domain:r.domain,kind:r.kind,maintenanceClass:r.maintenance==='work'?'workMaintenance':r.maintenance==='life'?'lifeMaintenance':null,
       targetFrequency:r.perDay?{perDay:1}:r.perTwoWeeks?{perTwoWeeks:1}:r.perWeek?{perWeek:r.perWeek}:r.maintenance?{perWeek:1}:null,targetDuration:d,days:r.days||null,window:r.window||null,
-      rigidity:r.window?'hard':'flexible',inMinimumViableWeek:r.inMvw===true,protected:r.protected===true,confidence:r.confidence!=null?r.confidence:0.9,source:'user'};
+      rigidity:r.window?'hard':'flexible',inMinimumViableWeek:r.inMvw===true,protected:r.protected===true,confidence:r.confidence!=null?r.confidence:0.9,source:'user_said'};
     p.routines.push(rt);
     if(r.maintenance==='work')p.workMaintenance.push(rt.id);else if(r.maintenance==='life')p.lifeMaintenance.push(rt.id);
     if(r.protected)p.protectedLife.push({title:r.title,routineId:rt.id,confidence:rt.confidence});
@@ -10411,7 +10430,7 @@ function onbBuildProfile(st){
   F.goals.forEach(g=>{
     const fills=g.fillsRoutineKey&&p.routines.find(r=>r.key===g.fillsRoutineKey);
     const w={id:'gl_'+g.key,key:g.key,title:g.title,kind:g.kind,requiredTotalMinutes:g.requiredTotalMinutes!=null?g.requiredTotalMinutes:null,requiredPerWeekMinutes:g.requiredPerWeekMinutes!=null?g.requiredPerWeekMinutes:null,
-      deadline:g.deadline||null,trialAllocationMinutes:null,fillsRoutineId:fills?fills.id:null,minSession:45,rigidity:g.deadline?'hard':'flexible',source:'user'};
+      deadline:g.deadline||null,trialAllocationMinutes:null,fillsRoutineId:fills?fills.id:null,minSession:45,rigidity:g.deadline?'hard':'flexible',source:'user_said'};
     if(w.requiredTotalMinutes==null&&w.requiredPerWeekMinutes==null){
       w.trialAllocationMinutes=ONB_TRIAL_GOAL_WEEK_MIN;unk('goal.'+g.key+'.total',g.key,'לא נאמר כמה שעות דרושות — הניסוי שלי הוא לא דרישה','nonblocking','tentative_proposal');
       p.proposals.push({id:'pr_goal_'+g.key,ref:g.key,title:g.title,kind:g.kind,domain:'work',value:{perWeek:1,minutes:ONB_TRIAL_GOAL_WEEK_MIN},reason:'לא ידוע כמה שעות צריך — אני מציעה להתחיל משעתיים וחצי בשבוע ולבדוק',status:'pending',trial:true,goalId:w.id});
@@ -10425,6 +10444,8 @@ function onbBuildProfile(st){
 }
 
 // ── profile → InitialWeeklyTemplate ──
+// TODO(onboarding-scheduler): the placement below (least-loaded day, window preference) is a TEMPORARY FALLBACK. It must be replaced by the existing planner
+// (scheduleSet / buildContextSnapshot / validatePlan) fed with routines+goals; it exists only so stage 1 can be exercised end to end. Marked in the output as placement:'fallback_greedy'.
 // Items: {id,title,origin:'calendar'|'proposal'|'hold',status:'existing'|'proposed'|'tentative',date,startMin,endMin,kind,needsApproval,...}.
 // Placement uses ONLY free time + binding availability (user_setting/user_said/calendar). It never relies on system Friday/Saturday fallbacks.
 function onbBuildTemplate(profile,o){
@@ -10532,56 +10553,96 @@ function onbBuildTemplate(profile,o){
       totalMinutes:items.filter(i=>i.routineId===g.fillsRoutineId||(i.goalId===g.id&&i.routineId!==g.fillsRoutineId&&i.origin==='proposal')).reduce((t,i)=>t+i.endMin-i.startMin,0)};
   });
   items.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
-  return{v:1,weekStart,dates,items,unplaced,partialDays:Object.keys(partial).map(d=>({date:d,reasons:partial[d]})),guards:(profile.guards||[]).slice(),accounting,
+  return{v:1,placement:'fallback_greedy',weekStart,dates,items,unplaced,partialDays:Object.keys(partial).map(d=>({date:d,reasons:partial[d]})),guards:(profile.guards||[]).slice(),accounting,
     assumptions:[{field:'bufferAfterEvents',value:AFTER_EVENT,risk:'low'},{field:'gapBetweenItems',value:GAP,risk:'low'}]};
 }
 
-// ── approval: returns what to write; writes NOTHING itself ──
-// sel: 'all' | {accept:[ids]|'all', reject:[ids]}. Existing calendar items and holds are never approvable. A Proposal becomes a Routine only when one of its items is accepted.
+// ── approval + materialization: returns what to write; writes NOTHING itself ──
+// sel: 'all' | {accept:[ids]|'all', reject:[ids]}. Existing calendar items and holds are never approvable.
+// Lifecycle: Proposal(pending) → accepted → materialize() → Routine / WorkloadGoal.trialAllocation / Boundary, source "maya_proposal".
+// A rejected Proposal leaves the active profile (kept only in `decisions`). Un-decided ones stay pending.
+function onbMaterialize(pr,p){
+  if(p.goalId){const g=pr.workloadGoals.find(x=>x.id===p.goalId);if(g){g.trialAccepted=true;return{type:'WorkloadGoal.trialAllocation',id:g.id};}return null;}
+  if(p.kind==='boundary'&&p.value&&p.value.rule){pr.boundaries.push({rule:p.value.rule,source:'maya_proposal',definition:'known'});
+    if(p.value.availability)pr.availability.push({rule:p.value.availability,source:'maya_proposal'});return{type:'Boundary',id:p.id};}
+  const id='rt_'+p.ref;if(pr.routines.some(r=>r.id===id))return{type:'Routine',id};
+  pr.routines.push({id,key:p.ref,title:p.title,domain:p.domain,kind:p.kind,maintenanceClass:null,targetFrequency:{perWeek:p.value.perWeek},targetDuration:{minutes:p.value.minutes},rigidity:'flexible',
+    inMinimumViableWeek:false,protected:false,confidence:0.7,source:'maya_proposal',fromProposal:p.id});
+  return{type:'Routine',id};
+}
 function onbApprove(profile,tpl,sel){
   const pr=JSON.parse(JSON.stringify(profile));const s=sel==='all'?{accept:'all',reject:[]}:(sel||{accept:[],reject:[]});
   const approvable=tpl.items.filter(i=>i.needsApproval&&i.status!=='existing'&&i.origin!=='hold'&&i.origin!=='calendar');
   const accIds=s.accept==='all'?approvable.map(i=>i.id):(s.accept||[]).filter(id=>approvable.some(i=>i.id===id));
   const rejIds=(s.reject||[]).filter(id=>approvable.some(i=>i.id===id)&&accIds.indexOf(id)<0);
   const accepted=approvable.filter(i=>accIds.indexOf(i.id)>=0),rejected=approvable.filter(i=>rejIds.indexOf(i.id)>=0);
+  pr.decisions=(pr.decisions||[]).slice();
+  const keep=[];
   pr.proposals.forEach(p=>{
     const mine=approvable.filter(i=>i.proposalId===p.id);
-    if(mine.some(i=>accIds.indexOf(i.id)>=0)){p.status='accepted';
-      if(!p.goalId&&p.id!=='pr_review'&&!pr.routines.some(r=>r.id==='rt_'+p.ref))pr.routines.push({id:'rt_'+p.ref,key:p.ref,title:p.title,domain:p.domain,kind:p.kind,maintenanceClass:null,targetFrequency:{perWeek:p.value.perWeek},targetDuration:{minutes:p.value.minutes},rigidity:'flexible',
-        inMinimumViableWeek:false,protected:false,confidence:0.7,source:'accepted_proposal',fromProposal:p.id});}
-    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0))p.status='rejected';
+    if(mine.some(i=>accIds.indexOf(i.id)>=0)){p.status='accepted';pr.decisions.push({proposalId:p.id,status:'accepted',materializedAs:onbMaterialize(pr,p)});}
+    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0)){p.status='rejected';pr.decisions.push({proposalId:p.id,status:'rejected',materializedAs:null});}
+    else keep.push(p);
   });
+  pr.proposals=keep;                                                   // active profile: only still-pending proposals
   return{profile:pr,accepted,rejected,pending:approvable.filter(i=>accIds.indexOf(i.id)<0&&rejIds.indexOf(i.id)<0),calendarWrites:accepted.map(i=>({title:i.title,date:i.date,startMin:i.startMin,endMin:i.endMin,origin:'maya_onboarding',itemId:i.id}))};
 }
 
-// ── confirmation text (written by code, in Maya's voice) ──
-function onbTemplateText(profile,tpl){
-  const today=profile.today,L=[];
-  const line=i=>_mayaDayLabel(i.date,today).replace(/^יום /,'')+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.title+(i.serves?' (להצעה: '+i.serves+')':'')+(i.cadence==='every_two_weeks'?' (אחת לשבועיים)':'')+(i.approxStart?' (התחלה משוערת)':'');
-  const existing=tpl.items.filter(i=>i.status==='existing'),proposed=tpl.items.filter(i=>i.origin==='proposal'&&i.status==='proposed'),trial=tpl.items.filter(i=>i.origin==='proposal'&&i.status==='tentative'),holds=tpl.items.filter(i=>i.origin==='hold');
-  L.push('לפי מה שסיפרת, אני מציעה להתחיל כך (השבוע של '+_mayaDayLabel(tpl.weekStart,today).replace(/^יום /,'')+'):');
-  if(existing.length)L.push('','כבר ביומן, השארתי כמו שהוא ואין צורך באישור:',...existing.map(i=>'• '+line(i)));
-  if(proposed.length)L.push('','הצעות חדשות לאישור:',...proposed.map(i=>'• '+line(i)));
-  if(trial.length)L.push('','לניסוי, אפשר לשנות או להוריד:',...trial.map(i=>'• '+line(i)));
-  if(holds.length)L.push('','מחזיקה פנוי, בלי לבקש אישור:',...holds.map(i=>'• '+_mayaDayLabel(i.date,today).replace(/^יום /,'')+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.hold.reason+', עד שתדע את השעה'));
-  (tpl.partialDays||[]).forEach(p=>L.push('','ב'+_mayaDayLabel(p.date,today).replace(/^יום /,'')+' לא הוספתי כלום: '+p.reasons.join(', ')+'.'));
+// ── confirmation: semantic MessageIntents (facts + decisions) are separate from wording. V1 renderer is deterministic.
+// A future language renderer may only rephrase a MessageIntent — it may not add facts or decisions. ──
+function onbMessages(profile,tpl){
+  const M=[],pick=i=>({date:i.date,startMin:i.startMin,endMin:i.endMin,title:i.title,serves:i.serves||null,cadence:i.cadence||null,approxStart:!!i.approxStart,holdReason:i.hold?i.hold.reason:null});
+  const ex=tpl.items.filter(i=>i.status==='existing'),pr=tpl.items.filter(i=>i.origin==='proposal'&&i.status==='proposed'),tr=tpl.items.filter(i=>i.origin==='proposal'&&i.status==='tentative'),ho=tpl.items.filter(i=>i.origin==='hold');
+  M.push({type:'present_template',data:{weekStart:tpl.weekStart}});
+  if(ex.length)M.push({type:'show_existing',data:{items:ex.map(pick)}});
+  if(pr.length)M.push({type:'propose_items',data:{items:pr.map(pick)}});
+  if(tr.length)M.push({type:'propose_trial_items',data:{items:tr.map(pick)}});
+  if(ho.length)M.push({type:'state_holds',data:{items:ho.map(pick)}});
+  (tpl.partialDays||[]).forEach(p=>M.push({type:'state_partial_day',data:{date:p.date,reasons:p.reasons}}));
   const unpl=profile.routines.filter(r=>!r.targetFrequency&&r.protected).map(r=>r.title);
-  if(unpl.length)L.push('','שמרתי כמוגן ולא שיבצתי בזה כלום: '+unpl.join(', ')+'.');
-  if(tpl.guards.length)L.push('','זהירות שלי, לא כלל שלך: לא משבצת כלום אחרי '+_fmtMin(tpl.guards[0].min)+' '+tpl.guards[0].reason+'.');
-  if(tpl.unplaced.length)L.push('','לא הצלחתי למצוא מקום ל: '+tpl.unplaced.map(u=>u.title).join(', ')+'.');
-  const asm=profile.assumptions.filter(a=>a.field==='duration'&&a.ref&&a.source==='system_trial_default').map(a=>{const it=profile.routines.find(r=>r.key===a.ref)||profile.proposals.find(p=>p.id===a.ref||p.ref===a.ref);return it?it.title+' '+_mayaDur(a.value):null;}).filter(Boolean);
-  if(profile.assumptions.some(x=>x.field==='dayStart'))L.push('','לא שיבצתי כלום לפני '+_fmtMin(profile.dayStart)+', כי אמרת שאתה קם מאוחר. זו הצעה שלי, לא כלל.');
-  if(asm.length)L.push('','הנחות שעשיתי (נבדוק אחרי שבוע–שבועיים): '+asm.join(', ')+'.');
+  if(unpl.length)M.push({type:'state_protected_unscheduled',data:{titles:unpl}});
+  if(profile.assumptions.some(x=>x.field==='dayStart'))M.push({type:'state_day_start',data:{min:profile.dayStart}});
+  if(tpl.guards.length)M.push({type:'state_guard',data:{min:tpl.guards[0].min,reason:tpl.guards[0].reason}});
+  if(tpl.unplaced.length)M.push({type:'state_unplaced',data:{titles:tpl.unplaced.map(u=>u.title)}});
+  const asm=profile.assumptions.filter(a=>a.field==='duration'&&a.ref&&a.source==='system_trial_default').map(a=>{const it=profile.routines.find(r=>r.key===a.ref)||profile.proposals.find(p=>p.id===a.ref||p.ref===a.ref);return it?{title:it.title,minutes:a.value}:null;}).filter(Boolean);
+  if(asm.length)M.push({type:'state_assumptions',data:{items:asm}});
   const ttl=ref=>{const f=profile.fixedConstraints.find(x=>x.key===ref);return f?f.title:ref;};
   const unk=profile.unknowns.filter(u=>u.field==='workHours'||u.field==='evening'||u.field.indexOf('goal.')===0||/\.(start|travel|day)$/.test(u.field)||u.field==='minimumViableWeek').map(u=>
-    u.field==='workHours'?'שעות העבודה שלך':u.field==='evening'?'מאיזו שעה זה ערב':u.field==='minimumViableWeek'?'מה חשוב במיוחד שלא יאבד בשבוע עמוס':
-    u.field.indexOf('goal.')===0?'כמה שעות צריך ל'+((profile.workloadGoals.find(g=>g.key===u.ref)||{}).title||'היעד'):
-    /\.start$/.test(u.field)?'מתי בדיוק '+ttl(u.ref):/\.travel$/.test(u.field)?'זמן הנסיעה ל'+ttl(u.ref):'באיזה יום '+ttl(u.ref));
-  const uu=unk.filter((x,i)=>unk.indexOf(x)===i);
-  if(uu.length)L.push('','עוד לא ידוע, ואני לא מנחשת: '+uu.join(', ')+'. אשאל בסגירת השבוע.');
-  L.push('','רוצה שאבנה את השבוע כך? אפשר לאשר הכול או רק חלק.');
-  return L.join('\n');
+    u.field==='workHours'?{what:'work_hours'}:u.field==='evening'?{what:'evening_definition'}:u.field==='minimumViableWeek'?{what:'minimum_viable_week'}:
+    u.field.indexOf('goal.')===0?{what:'goal_total',title:(profile.workloadGoals.find(g=>g.key===u.ref)||{}).title||null}:
+    /\.start$/.test(u.field)?{what:'event_time',title:ttl(u.ref)}:/\.travel$/.test(u.field)?{what:'travel_time',title:ttl(u.ref)}:{what:'event_day',title:ttl(u.ref)});
+  const seen=new Set(),uu=unk.filter(x=>{const k=JSON.stringify(x);if(seen.has(k))return false;seen.add(k);return true;});
+  if(uu.length)M.push({type:'state_unknowns',data:{items:uu}});
+  M.push({type:'ask_approval',data:{}});
+  return M;
 }
+function onbRender(m,ctx){
+  if(!m)return'';const d=m.data||{},today=ctx&&ctx.today,dl=x=>(today?_mayaDayLabel(x,today):x).replace(/^יום /,'');
+  const line=i=>'• '+dl(i.date)+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.title+(i.serves?' (להצעה: '+i.serves+')':'')+(i.cadence==='every_two_weeks'?' (אחת לשבועיים)':'')+(i.approxStart?' (התחלה משוערת)':'');
+  switch(m.type){
+    case 'ask_topic':return d.topic==='q2'?(d.calendar?ONB_QUESTIONS.q2cal:ONB_QUESTIONS.q2):ONB_QUESTIONS[d.topic];
+    case 'ask_missing_constraint':
+      if(d.kind==='day')return'באיזה יום ובערך באיזו שעה '+d.title+'? גם "אחה״צ" מספיק.';
+      if(d.kind==='start')return'מתי '+(d.startKnown?'מסתיים ':'מתחיל ')+d.title+'? גם "בערך" מספיק.';
+      return'כמה זמן לוקח להגיע ל'+d.title+(d.startApprox?', והאם '+_fmtMin(d.startMin)+' מדויק?':'?');
+    case 'present_template':return'לפי מה שסיפרת, אני מציעה להתחיל כך (השבוע של '+dl(d.weekStart)+'):';
+    case 'show_existing':return'כבר ביומן, השארתי כמו שהוא ואין צורך באישור:\n'+d.items.map(line).join('\n');
+    case 'propose_items':return'הצעות חדשות לאישור:\n'+d.items.map(line).join('\n');
+    case 'propose_trial_items':return'לניסוי, אפשר לשנות או להוריד:\n'+d.items.map(line).join('\n');
+    case 'state_holds':return'מחזיקה פנוי, בלי לבקש אישור:\n'+d.items.map(i=>'• '+dl(i.date)+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.holdReason+', עד שתדע את השעה').join('\n');
+    case 'state_partial_day':return'ב'+dl(d.date)+' לא הוספתי כלום: '+d.reasons.join(', ')+'.';
+    case 'state_protected_unscheduled':return'שמרתי כמוגן ולא שיבצתי בזה כלום: '+d.titles.join(', ')+'.';
+    case 'state_day_start':return'לא שיבצתי כלום לפני '+_fmtMin(d.min)+', כי אמרת שאתה קם מאוחר. זו הצעה שלי, לא כלל.';
+    case 'state_guard':return'זהירות שלי, לא כלל שלך: לא משבצת כלום אחרי '+_fmtMin(d.min)+' '+d.reason+'.';
+    case 'state_unplaced':return'לא הצלחתי למצוא מקום ל: '+d.titles.join(', ')+'.';
+    case 'state_assumptions':return'הנחות שעשיתי (נבדוק אחרי שבוע–שבועיים): '+d.items.map(a=>a.title+' '+_mayaDur(a.minutes)).join(', ')+'.';
+    case 'state_unknowns':return'עוד לא ידוע, ואני לא מנחשת: '+d.items.map(u=>({work_hours:'שעות העבודה שלך',evening_definition:'מאיזו שעה זה ערב',minimum_viable_week:'מה חשוב במיוחד שלא יאבד בשבוע עמוס',
+      goal_total:'כמה שעות צריך ל'+(u.title||'היעד'),event_time:'מתי בדיוק '+u.title,travel_time:'זמן הנסיעה ל'+u.title,event_day:'באיזה יום '+u.title}[u.what])).join(', ')+'. אשאל בסגירת השבוע.';
+    case 'ask_approval':return'רוצה שאבנה את השבוע כך? אפשר לאשר הכול או רק חלק.';
+  }
+  return'';
+}
+function onbTemplateText(profile,tpl){return onbMessages(profile,tpl).map(m=>onbRender(m,{today:profile.today})).join('\n\n');}
 // PURE: the whole pipeline from a finished conversation state.
 function onbFinish(st){const profile=onbBuildProfile(st);const template=onbBuildTemplate(profile);return{profile,template,text:onbTemplateText(profile,template)};}
 
