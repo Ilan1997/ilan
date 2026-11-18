@@ -575,6 +575,189 @@
     },
     "items": []
    }
+  },
+  {
+   "id": "N01_chat_howareyou",
+   "text": "מה שלומך היום? קצת עייף",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "none",
+    "items": []
+   }
+  },
+  {
+   "id": "N02_chat_thanks",
+   "text": "תודה רבה, את מדהימה",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "none",
+    "items": []
+   }
+  },
+  {
+   "id": "N03_chat_advice",
+   "text": "איך אפשר ללמוד יותר יעיל לפני מבחן?",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "none",
+    "items": []
+   }
+  },
+  {
+   "id": "N04_chat_calendar_question",
+   "text": "מה היה לי אתמול ביומן?",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "none",
+    "items": []
+   }
+  },
+  {
+   "id": "N05_free_phrasing_three",
+   "text": "מחר יש לי בנק, קניות ושיחה עם דנה, תארגני לי",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "arrange",
+    "items": [
+     {
+      "ref": "i1",
+      "title": "בנק",
+      "kind": "errand",
+      "date": "2026-11-16"
+     },
+     {
+      "ref": "i2",
+      "title": "קניות",
+      "kind": "shopping",
+      "date": "2026-11-16"
+     },
+     {
+      "ref": "i3",
+      "title": "שיחה עם דנה",
+      "kind": "phone_call",
+      "date": "2026-11-16"
+     }
+    ]
+   }
+  },
+  {
+   "id": "N06_free_phrasing_need",
+   "text": "אני חייב להספיק להחזיר ספר לספרייה ולעבור בדואר",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "arrange",
+    "items": [
+     {
+      "ref": "i1",
+      "title": "להחזיר ספר לספרייה",
+      "kind": "errand"
+     },
+     {
+      "ref": "i2",
+      "title": "לעבור בדואר",
+      "kind": "errand"
+     }
+    ]
+   }
+  },
+  {
+   "id": "N07_goal_8h_study",
+   "text": "אני צריך 8 שעות לימוד עד ה-23",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "goal",
+    "items": [],
+    "goals": [
+     {
+      "title": "לימוד",
+      "kind": "study",
+      "totalMinutes": 480,
+      "deadline": "2026-11-23"
+     }
+    ]
+   }
+  },
+  {
+   "id": "N08_goal_project_max2h",
+   "text": "חמש שעות עבודה על הפרויקט עד יום חמישי, לא יותר משעתיים בפעם",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "goal",
+    "items": [],
+    "goals": [
+     {
+      "title": "עבודה על הפרויקט",
+      "kind": "work",
+      "totalMinutes": 300,
+      "deadline": "2026-11-19",
+      "maxSessionMin": 120
+     }
+    ]
+   }
+  },
+  {
+   "id": "N09_goal_exam",
+   "text": "יש לי מבחן ביום ראשון הבא, תפרסי לי 6 שעות לימוד",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "goal",
+    "items": [],
+    "goals": [
+     {
+      "title": "לימוד למבחן",
+      "kind": "study",
+      "totalMinutes": 360,
+      "deadline": "2026-11-22"
+     }
+    ]
+   }
+  },
+  {
+   "id": "N10_pref_morning_study",
+   "text": "אני רוצה ללמוד בבקרים",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "preference",
+    "items": [],
+    "preference": {
+     "preferredWindow": {
+      "kind": "study",
+      "from": "08:00",
+      "to": "12:00"
+     }
+    }
+   }
+  },
+  {
+   "id": "N11_pref_light_monday",
+   "text": "אל תעמיס לי את יום שני",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "preference",
+    "items": [],
+    "preference": {
+     "dayRule": {
+      "dow": 1,
+      "mode": "light"
+     }
+    }
+   }
+  },
+  {
+   "id": "N12_find_two_hours",
+   "text": "תמצא לי שעתיים פנויות השבוע ללימוד",
+   "today": "2026-11-15",
+   "expected": {
+    "op": "find",
+    "items": [
+     {
+      "ref": "i1",
+      "title": "לימוד",
+      "kind": "study",
+      "durationMin": 120
+     }
+    ]
+   }
   }
  ]
 }

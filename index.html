@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.3';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10185,7 +10185,8 @@ function intentProblems(raw){
   const p=[];if(!raw||typeof raw!=='object')return['not_object'];
   if(['create','move','find','prune','arrange','preference','goal','none'].indexOf(raw.op)<0)p.push('op לא חוקי — חייב להיות אחד מ: create,move,find,prune,arrange,preference,goal,none');
   if(raw.op==='goal'){if(!(Array.isArray(raw.goals)&&raw.goals.length))p.push('goals ריק');}
-  else if(raw.op!=='none'&&raw.op!=='preference'&&!(Array.isArray(raw.items)&&raw.items.length))p.push('items ריק');
+  else if(['create','arrange','find'].indexOf(raw.op)>=0&&!(Array.isArray(raw.items)&&raw.items.length))p.push('items ריק');
+  else if(raw.op==='move'&&!(Array.isArray(raw.targetDays)&&raw.targetDays.length)&&!(raw.filter&&raw.filter.kind)&&!(Array.isArray(raw.items)&&raw.items.length))p.push('move בלי מה להעביר');
   (Array.isArray(raw.items)?raw.items:[]).forEach((it,i)=>{if(!it||typeof it.title!=='string'||!it.title.trim())p.push('לפריט '+(i+1)+' אין title');});
   return p;
 }

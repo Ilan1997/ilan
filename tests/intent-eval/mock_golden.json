@@ -428,5 +428,128 @@
    "lateBiasMin": 15
   },
   "items": []
+ },
+ "N01_chat_howareyou": {
+  "op": "none",
+  "items": []
+ },
+ "N02_chat_thanks": {
+  "op": "none",
+  "items": []
+ },
+ "N03_chat_advice": {
+  "op": "none",
+  "items": []
+ },
+ "N04_chat_calendar_question": {
+  "op": "none",
+  "items": []
+ },
+ "N05_free_phrasing_three": {
+  "op": "arrange",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "בנק",
+    "kind": "errand",
+    "date": "2026-11-16"
+   },
+   {
+    "ref": "i2",
+    "title": "קניות",
+    "kind": "shopping",
+    "date": "2026-11-16"
+   },
+   {
+    "ref": "i3",
+    "title": "שיחה עם דנה",
+    "kind": "phone_call",
+    "date": "2026-11-16"
+   }
+  ]
+ },
+ "N06_free_phrasing_need": {
+  "op": "arrange",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "להחזיר ספר לספרייה",
+    "kind": "errand"
+   },
+   {
+    "ref": "i2",
+    "title": "לעבור בדואר",
+    "kind": "errand"
+   }
+  ]
+ },
+ "N07_goal_8h_study": {
+  "op": "goal",
+  "items": [],
+  "goals": [
+   {
+    "title": "לימוד",
+    "kind": "study",
+    "totalMinutes": 480,
+    "deadline": "2026-11-23"
+   }
+  ]
+ },
+ "N08_goal_project_max2h": {
+  "op": "goal",
+  "items": [],
+  "goals": [
+   {
+    "title": "עבודה על הפרויקט",
+    "kind": "work",
+    "totalMinutes": 300,
+    "deadline": "2026-11-19",
+    "maxSessionMin": 120
+   }
+  ]
+ },
+ "N09_goal_exam": {
+  "op": "goal",
+  "items": [],
+  "goals": [
+   {
+    "title": "לימוד למבחן",
+    "kind": "study",
+    "totalMinutes": 360,
+    "deadline": "2026-11-22"
+   }
+  ]
+ },
+ "N10_pref_morning_study": {
+  "op": "preference",
+  "items": [],
+  "preference": {
+   "preferredWindow": {
+    "kind": "study",
+    "from": "08:00",
+    "to": "12:00"
+   }
+  }
+ },
+ "N11_pref_light_monday": {
+  "op": "preference",
+  "items": [],
+  "preference": {
+   "dayRule": {
+    "dow": 1,
+    "mode": "light"
+   }
+  }
+ },
+ "N12_find_two_hours": {
+  "op": "find",
+  "items": [
+   {
+    "ref": "i1",
+    "title": "לימוד",
+    "kind": "study",
+    "durationMin": 120
+   }
+  ]
  }
 }

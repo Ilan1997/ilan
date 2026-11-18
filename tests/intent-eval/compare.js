@@ -35,9 +35,21 @@ function compareIntent(actual,expected){
     const ap=actual.preference||{};
     Object.keys(expected.preference).forEach(k=>{
       if(k==='dayRule')chk('dayRule',ap.dayRule&&ap.dayRule.dow===expected.preference.dayRule.dow&&ap.dayRule.mode===expected.preference.dayRule.mode,'dayRule '+JSON.stringify(ap.dayRule));
+      else if(k==='preferredWindow'){const e=expected.preference.preferredWindow,w=ap.preferredWindow||{};chk('prefWindow',w.kind===e.kind&&w.from===e.from&&w.to===e.to,'preferredWindow '+JSON.stringify(ap.preferredWindow));}
       else chk('pref_'+k,ap[k]===expected.preference[k],k+' '+ap[k]+' ≠ '+expected.preference[k]);
     });
   }
+  if(expected.goals){
+    const AG=Array.isArray(actual.goals)?actual.goals:[];
+    chk('goalCount',AG.length===expected.goals.length,'goals '+AG.length+' ≠ '+expected.goals.length);
+    expected.goals.forEach((e,i)=>{const g=AG[i];if(!g){chk('goal',false,'יעד '+(i+1)+' חסר');return;}const tag='יעד '+(i+1);
+      chk('goalMinutes',Math.abs((+g.totalMinutes||-999)-e.totalMinutes)<=5,tag+' totalMinutes '+g.totalMinutes+' ≠ '+e.totalMinutes);
+      chk('goalDeadline',g.deadline===e.deadline,tag+' deadline '+g.deadline+' ≠ '+e.deadline);
+      if(e.kind)chk('goalKind',g.kind===e.kind,tag+' kind '+g.kind+' ≠ '+e.kind);
+      if(e.maxSessionMin!=null)chk('goalMaxSession',+g.maxSessionMin===e.maxSessionMin,tag+' maxSession '+g.maxSessionMin+' ≠ '+e.maxSessionMin);
+      else chk('noInventedSession',g.maxSessionMin==null&&g.minSessionMin==null,tag+' המציא אורך מפגש '+g.minSessionMin+'/'+g.maxSessionMin);
+    });
+  }else if(expected.op!=='goal')chk('noInventedGoal',!(Array.isArray(actual.goals)&&actual.goals.length),'המציא יעד שעות');
   const failed=f.filter(x=>!x.ok);
   return{pass:failed.length===0,checks:f,failed};
 }
@@ -47,4 +59,33 @@ function summarize(results){
   results.forEach(r=>{if(r.pass)pass++;r.checks.forEach(c=>{const b=by[c.k]=by[c.k]||{ok:0,n:0};b.n++;if(c.ok)b.ok++;});});
   return{cases:results.length,pass,byCheck:by};
 }
-module.exports={compareIntent,summarize,toks,overlap};
+// Map a failed check to an error type (the categories the product owner asked to see).
+const ERROR_TYPES={
+  'missed planning request':'הבקשה לתכנון לא זוהתה (op=none/שגוי כשצריך תכנון)',
+  'false planning request':'זוהתה בקשת תכנון בשיחה רגילה',
+  'wrong op':'op שגוי',
+  'wrong kind':'סוג פעילות שגוי',
+  'wrong sequence':'סדר/רצף שגוי',
+  'anchor resolution error':'עוגן לא נפתר נכון (יחס/יעד/תאריך)',
+  'hallucinated detail':'פרט שהומצא (משך/עוגן/יעד/scope)',
+  'wrong value':'ערך שגוי (תאריך/משך/שעה/מקום/כותרת/כמות)',
+  'unnecessary question':'שאלה מיותרת',
+  'missing question':'לא נשאלה שאלה שנדרשה',
+  'call/JSON error':'כשל קריאה או JSON לא תקין'
+};
+function classifyCheck(c,actual,expected){
+  const k=c.k;
+  if(k==='call')return'call/JSON error';
+  if(k==='op'){const a=(actual&&actual.op)||'create',e=(expected&&expected.op)||'create';if(e!=='none'&&a==='none')return'missed planning request';if(e==='none'&&a!=='none')return'false planning request';return'wrong op';}
+  if(k==='kind'||k==='goalKind')return'wrong kind';
+  if(k==='afterItem'||k==='itemCount'&&false)return'wrong sequence';
+  if(k==='anchor'||k==='anchorDate')return'anchor resolution error';
+  if(/^noInvented|^durationUnknown$/.test(k))return'hallucinated detail';
+  return'wrong value';
+}
+// Does the app need to ASK something for this Intent?  (injected from the app: planningGaps)
+function summarizeByError(results){
+  const by={};results.forEach(r=>{(r.errors||[]).forEach(e=>{const b=by[e.type]=by[e.type]||{n:0,cases:new Set()};b.n++;b.cases.add(r.id);});});
+  return Object.fromEntries(Object.entries(by).map(([k,v])=>[k,{n:v.n,cases:[...v.cases]}]));
+}
+module.exports={compareIntent,summarize,toks,overlap,classifyCheck,summarizeByError,ERROR_TYPES};

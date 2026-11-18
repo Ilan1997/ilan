@@ -152,6 +152,7 @@
     o.k3_freeTextAnswer=calls===2&&lastUser.indexOf(SAY)>=0&&lastUser.indexOf('תלוי בפקקים')>=0;
     // 6i) the model answers garbage twice → we fall back to normal chat (never crash, never invent a plan)
     STATE_ACTIVE=mkState(E1,TRAVEL);AI_PENDING_MAYA=null;AI_PENDING_ASK=null;calls=0;reply='לא יודעת מה לעשות';
+    o.a4_moveWithoutItemsIsValid=intentProblems({op:'move',items:[],filter:{kind:'work'},targetDays:['2026-11-17']}).length===0&&intentProblems({op:'move',items:[]}).length>0;
     const g=await _mayaHandleStructured(SAY);
     o.l1_garbageFallsBack=g===false&&calls===2&&AI_PENDING_MAYA===null;
     // 6j) the model says "this is not a planning request" → chat
