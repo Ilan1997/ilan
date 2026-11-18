@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.4';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.5';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10274,7 +10274,8 @@ function _mayaFindProposal(it,snap,gaps,o,raw){
 // PURE: "move all the work to Tuesday and Wednesday" — re-slots matching items of the ACTIVE plan on the requested days, around everything else.
 function _mayaMoveProposal(it,snap,gaps,st,o,raw){
   const plan=o.currentPlan;const say=text=>({status:'needs_decision',text,raw});
-  if(!plan||!plan.items||!plan.items.length)return say('אני יכולה להזיז רק דברים שסידרתי כאן יחד איתך, ובינתיים אין תכנית פעילה. אם זה אירוע שכבר ביומן — אפשר לגרור אותו ישירות.');
+  if(!plan||!plan.items||!plan.items.length)return{...say('אני יכולה להזיז רק דברים שסידרתי כאן יחד איתך, ובינתיים אין תכנית פעילה. אם זה אירוע שכבר ביומן — אפשר לגרור אותו ישירות.'),reason:'MOVE_EXISTING_CALENDAR_EVENT_NOT_SUPPORTED'};   // known limitation, deliberately not lifted before the parser is proven on live Gemini
+  if(0)return say('אני יכולה להזיז רק דברים שסידרתי כאן יחד איתך, ובינתיים אין תכנית פעילה. אם זה אירוע שכבר ביומן — אפשר לגרור אותו ישירות.');
   const start=(o.now&&o.now.today)||snap.today,nowMin=(o.now&&o.now.nowMin)||0;
   const days=it.targetDays.filter(d=>d>=start).sort();
   if(!days.length)return{status:'ask',ask:{field:'targetDays',question:'לאיזה ימים להעביר?'},text:'הימים האלה כבר עברו. לאיזה ימים להעביר?',raw};
@@ -10311,7 +10312,7 @@ function _mayaMoveProposal(it,snap,gaps,st,o,raw){
   const base=buildContextSnapshot(_planStateWithoutOwnEvents(st,plan.rootId||plan.planId),{engine:false});   // same signature the approval step will recompute
   const np=makePlan(base,allItems,{rootId:plan.rootId||plan.planId,supersedes:plan.planId,intentRef:'move'});
   const L=['הנה מה שאזיז:'];
-  placed.forEach(q=>L.push('• "'+q.old.title+'" — מ'+_mayaDayLabel(q.old.date,start)+' '+_fmtMin(q.old.startMin)+' ל'+_mayaDayLabel(q.date,start)+' '+_fmtMin(q.startMin)+'–'+_fmtMin(q.endMin)));
+  placed.forEach(q=>{const f=byId[q.old.itemId||q.old.ref];if(!f||f.status==='cancelled')L.push('• "'+q.old.title+'" — בוטל כדי שיסתדר');else L.push('• "'+q.old.title+'" — מ'+_mayaDayLabel(q.old.date,start)+' '+_fmtMin(q.old.startMin)+' ל'+_mayaDayLabel(f.date,start)+' '+_fmtMin(f.startMin)+'–'+_fmtMin(f.endMin));});
   unplaced.forEach(x=>L.push('• "'+x.title+'" — לא מצאתי לו מקום בימים האלה, נשאר במקום'));
   skipped.forEach(([x,why])=>L.push('• "'+x.title+'" — נשאר במקומו ('+why+')'));
   warnings.forEach(w=>L.push('⚠️ '+w));

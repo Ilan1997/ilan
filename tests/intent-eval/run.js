@@ -7,22 +7,22 @@
 //   --only id1,id2   --out report.json   --md report.md   --record golden.json (save raw model outputs for later --mock)
 const fs=require('fs'),path=require('path');
 const {JSDOM,VirtualConsole}=require('jsdom');
-const {compareIntent,summarize,classifyCheck,summarizeByError,ERROR_TYPES}=require('./compare.js');
+const {compareIntent,summarize,classifyCheck,summarizeByError,ERROR_TYPES,severityOf,caseSeverity}=require('./compare.js');
 const args=process.argv.slice(2);const has=f=>args.includes(f);const val=f=>{const i=args.indexOf(f);return i>=0?args[i+1]:null;};
 const cases=JSON.parse(fs.readFileSync(path.join(__dirname,'cases.json'),'utf8')).cases;
 const only=val('--only')?new Set(val('--only').split(',')):null;
 const html=fs.readFileSync(path.join(__dirname,'..','..','index.html'),'utf8');
 function loadApp(){return new Promise(res=>{const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',virtualConsole:new VirtualConsole(),beforeParse(w){const m={};w.storage={get:async k=>{if(!(k in m))throw new Error('nf');return{value:m[k]}},set:async(k,v)=>{m[k]=v;return{}},delete:async k=>{delete m[k];return{}}};if(!w.structuredClone)w.structuredClone=o=>JSON.parse(JSON.stringify(o));w.requestAnimationFrame=f=>setTimeout(f,0);w.HTMLElement.prototype.scrollIntoView=()=>{};w.scrollTo=()=>{};}});setTimeout(()=>res(dom.window),1500);});}
 const parseJSON=t=>{t=String(t||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');return JSON.parse(a>=0?t.slice(a,b+1):t);};
-let SCHEMA=null;   // AI_INTENT_SCHEMA from the app — the live runs use the SAME structured-output contract as production
-async function callGemini(sys,text,hist){
+let SCHEMA=null;let CALLS=0;   // AI_INTENT_SCHEMA from the app — the live runs use the SAME structured-output contract as production
+async function callGemini(sys,text,hist){CALLS++;
   const key=process.env.GEMINI_API_KEY;if(!key)throw new Error('GEMINI_API_KEY is not set');
   const model=val('--model')||process.env.GEMINI_MODEL||'gemini-2.5-flash';
   const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:(hist||[{role:'user',content:text}]).map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]})),generationConfig:{temperature:0,responseMimeType:'application/json',...(SCHEMA?{responseSchema:SCHEMA}:{})}})});
   const d=await r.json();if(!r.ok)throw new Error('gemini '+r.status+' '+JSON.stringify(d).slice(0,200));
   return d.candidates&&d.candidates[0]&&d.candidates[0].content.parts.map(p=>p.text||'').join('');
 }
-async function callFunction(w,sys,text,hist){
+async function callFunction(w,sys,text,hist){CALLS++;
   const jwt=val('--jwt');if(!jwt)throw new Error('--jwt <token> required');
   const cfg=w.eval('CLOUD_CONFIG');
   const r=await fetch(cfg.url+'/functions/v1/'+(cfg.aiFunction||'maya-ai'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt,apikey:cfg.anonKey},body:JSON.stringify({system:sys,messages:hist||[{role:'user',content:text}],mode:'intent',schema:SCHEMA,temperature:0})});
@@ -65,16 +65,24 @@ function gapsOf(w,intent){
       if(needsQuestion&&!expectedQuestion){const x={k:'question',ok:false,msg:'שאלה מיותרת: '+ga.ask[0]};r.checks.push(x);r.failed.push(x);r.pass=false;}
       else if(!needsQuestion&&expectedQuestion){const x={k:'question',ok:false,msg:'לא נשאלה שאלה שנדרשה: '+ge.ask[0]};r.checks.push(x);r.failed.push(x);r.pass=false;}
     }
-    r.errors=r.failed.map(x=>({type:x.k==='question'?(x.msg.startsWith('שאלה מיותרת')?'unnecessary question':'missing question'):classifyCheck(x,out,c.expected),field:x.k,msg:x.msg}));
+    r.errors=r.failed.map(x=>{const type=x.k==='question'?(x.msg.startsWith('שאלה מיותרת')?'unnecessary question':'missing question'):classifyCheck(x,out,c.expected);return{type,field:x.k,msg:x.msg,severity:severityOf(x,type)};});
+    r.severity=caseSeverity(r.errors);
     Object.assign(r,{id:c.id,text:c.text,expectedIntent:c.expected,modelIntent:out,needsQuestion,expectedQuestion,questions:ga.ask,hasAssumption:ga.assumptions.length>0,assumptions:ga.assumptions,latencyMs:meta.latencyMs,repairAttempted:meta.repairAttempted,attempts:meta.attempts});
     results.push(r);
-    console.log((r.pass?'PASS ':'FAIL ')+c.id+(mock?'':' ['+meta.latencyMs+'ms'+(meta.repairAttempted?', repair':'')+']')+(r.pass?'':'  — '+r.errors.map(x=>x.type+': '+x.msg).join(' | ')));
+    console.log((r.pass?'PASS ':'FAIL['+r.severity+'] ')+c.id+(mock?'':' ['+meta.latencyMs+'ms'+(meta.repairAttempted?', repair':'')+']')+(r.pass?'':'  — '+r.errors.map(x=>x.type+': '+x.msg).join(' | ')));
   }
   const sum=summarize(results);sum.byError=summarizeByError(results);
   const lat=results.map(r=>r.latencyMs).filter(x=>x>0).sort((a,b)=>a-b);
   sum.latency=lat.length?{p50:lat[Math.floor(lat.length*0.5)],p95:lat[Math.min(lat.length-1,Math.floor(lat.length*0.95))],max:lat[lat.length-1]}:null;
   sum.repairAttempts=results.filter(r=>r.repairAttempted).length;sum.questionsNeeded=results.filter(r=>r.needsQuestion).length;sum.withAssumption=results.filter(r=>r.hasAssumption).length;
-  console.log('\n'+sum.pass+'/'+sum.cases+' cases passed');
+  sum.bySeverity={pass:0,minor:0,major:0,critical:0};results.forEach(r=>sum.bySeverity[r.severity]++);
+  sum.modelCalls=CALLS;sum.callsPerCase=results.length?+(CALLS/results.length).toFixed(2):0;
+  const has_=t=>results.filter(r=>r.errors.some(e=>e.type===t)).length;
+  const plan_=results.filter(r=>r.expectedIntent.op!=='none').length,chat_=results.length-plan_;
+  sum.product={unnecessaryQuestions:has_('unnecessary question'),assumedInsteadOfAsking:has_('missing question'),missedPlanning:has_('missed planning request'),falsePositive:has_('false planning request'),planningCases:plan_,chatCases:chat_,
+    askRateInPlanning:plan_?+(results.filter(r=>r.expectedIntent.op!=='none'&&r.needsQuestion).length/plan_).toFixed(2):0};
+  console.log('\n'+sum.pass+'/'+sum.cases+' cases passed   [pass '+sum.bySeverity.pass+' · minor '+sum.bySeverity.minor+' · major '+sum.bySeverity.major+' · critical '+sum.bySeverity.critical+']');
+  console.log('מאיה מציקה?  שאלות מיותרות '+sum.product.unnecessaryQuestions+' · הנחה במקום לשאול '+sum.product.assumedInsteadOfAsking+' · בקשת תכנון שפוספסה '+sum.product.missedPlanning+'/'+plan_+' · שיחה שהפכה לתכנון '+sum.product.falsePositive+'/'+chat_+' · קריאות מודל '+CALLS+' ('+sum.callsPerCase+' לכל מקרה)');
   Object.keys(sum.byCheck).sort().forEach(k=>{const b=sum.byCheck[k];console.log('  '+k.padEnd(20)+b.ok+'/'+b.n);});
   console.log('\nשגיאות לפי סוג:');
   Object.keys(ERROR_TYPES).forEach(t=>{const b=sum.byError[t];console.log('  '+t.padEnd(26)+(b?b.n+'  ('+b.cases.join(', ')+')':'0'));});
@@ -85,11 +93,11 @@ function gapsOf(w,intent){
   process.exit(sum.pass===sum.cases?0:1);
 })();
 function toMarkdown(sum,results){
-  const L=['# Intent-eval — '+sum.pass+'/'+sum.cases+' עברו','','| שגיאה | מספר | מקרים |','|---|---|---|'];
+  const L=['# Intent-eval — '+sum.pass+'/'+sum.cases+' עברו','','חומרה: pass '+sum.bySeverity.pass+' · minor '+sum.bySeverity.minor+' · major '+sum.bySeverity.major+' · critical '+sum.bySeverity.critical,'','מאיה מציקה? שאלות מיותרות '+sum.product.unnecessaryQuestions+' · הנחה במקום לשאול '+sum.product.assumedInsteadOfAsking+' · תכנון שפוספס '+sum.product.missedPlanning+'/'+sum.product.planningCases+' · שיחה שהפכה לתכנון '+sum.product.falsePositive+'/'+sum.product.chatCases+' · קריאות מודל '+sum.modelCalls,'','| שגיאה | מספר | מקרים |','|---|---|---|'];
   Object.keys(ERROR_TYPES).forEach(t=>{const b=sum.byError[t];L.push('| '+t+' | '+(b?b.n:0)+' | '+(b?b.cases.join(', '):'')+' |');});
   if(sum.latency)L.push('','latency p50 '+sum.latency.p50+'ms · p95 '+sum.latency.p95+'ms · max '+sum.latency.max+'ms · repair '+sum.repairAttempts+' · שאלות '+sum.questionsNeeded+' · הנחות '+sum.withAssumption);
   results.forEach(r=>{
-    L.push('','## '+(r.pass?'✅':'❌')+' '+r.id,'**טקסט:** '+r.text,'','- שאלה נדרשה: '+(r.needsQuestion?'כן — '+r.questions.join('; '):'לא')+' (צפוי: '+(r.expectedQuestion?'כן':'לא')+')','- הנחה: '+(r.hasAssumption?'כן — '+r.assumptions.join(', '):'לא'),'- latency: '+r.latencyMs+'ms · repair: '+(r.repairAttempted?'כן':'לא'));
+    L.push('','## '+(r.pass?'✅':'❌ '+r.severity)+' '+r.id,'**טקסט:** '+r.text,'','- שאלה נדרשה: '+(r.needsQuestion?'כן — '+r.questions.join('; '):'לא')+' (צפוי: '+(r.expectedQuestion?'כן':'לא')+')','- הנחה: '+(r.hasAssumption?'כן — '+r.assumptions.join(', '):'לא'),'- latency: '+r.latencyMs+'ms · repair: '+(r.repairAttempted?'כן':'לא'));
     L.push('','| שדה | תוצאה | פירוט |','|---|---|---|');r.checks.forEach(c=>L.push('| '+c.k+' | '+(c.ok?'pass':'FAIL')+' | '+(c.msg||'')+' |'));
     L.push('','צפוי: `'+JSON.stringify(r.expectedIntent)+'`','','המודל: `'+JSON.stringify(r.modelIntent)+'`');
   });

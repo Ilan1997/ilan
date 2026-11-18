@@ -88,4 +88,14 @@ function summarizeByError(results){
   const by={};results.forEach(r=>{(r.errors||[]).forEach(e=>{const b=by[e.type]=by[e.type]||{n:0,cases:new Set()};b.n++;b.cases.add(r.id);});});
   return Object.fromEntries(Object.entries(by).map(([k,v])=>[k,{n:v.n,cases:[...v.cases]}]));
 }
-module.exports={compareIntent,summarize,toks,overlap,classifyCheck,summarizeByError,ERROR_TYPES};
+// Severity of a failed check: minor (name-level), major (the system could assume/recover, or product annoyance), critical (wrong action or plan).
+const SEVERITY_RANK={pass:0,minor:1,major:2,critical:3};
+function severityOf(c,errType){
+  const k=c.k;
+  if(['op','anchor','anchorDate','afterItem','itemCount','call','goalMinutes','goalDeadline','goalCount','targetDays','filter','goal'].indexOf(k)>=0)return'critical';
+  if(errType==='missed planning request'||errType==='false planning request')return'critical';
+  if(k==='title')return'minor';
+  return'major';
+}
+function caseSeverity(errors){return errors.reduce((m,e)=>SEVERITY_RANK[e.severity]>SEVERITY_RANK[m]?e.severity:m,'pass');}
+module.exports={severityOf,caseSeverity,SEVERITY_RANK,compareIntent,summarize,toks,overlap,classifyCheck,summarizeByError,ERROR_TYPES};

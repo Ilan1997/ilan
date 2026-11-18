@@ -81,13 +81,16 @@
      o.mv5_noOverlapAmongThem=mvd.every((x,i)=>mvd.every((y,j)=>i===j||x.date!==y.date||x.endMin<=y.startMin||y.endMin<=x.startMin));
      {const sv=STATE_ACTIVE;STATE_ACTIVE=stM;try{o.mv6_approvalSigMatches=_mayaFreshSig(r.plan.rootId,MON)===r.plan.snapshotSig;}finally{STATE_ACTIVE=sv;}}
      o.mv7_textListsMoves=/הנה מה שאזיז/.test(r.text)&&/דוח/.test(r.text)&&lintOk(r.text);
-     o.mv8_noPlan=mayaPlanFromIntent(stM,MV,{now}).status==='needs_decision';
+     o.mv8_noPlan=(r=>r.status==='needs_decision'&&r.reason==='MOVE_EXISTING_CALENDAR_EVENT_NOT_SUPPORTED')(mayaPlanFromIntent(stM,MV,{now}));
      o.mv9_noDaysAsks=mayaPlanFromIntent(stM,{op:'move',items:[],filter:{kind:'work'},targetDays:[]},{now,currentPlan:cur}).status==='ask';
      const locked=lockPlanItems(cur,cur.items.filter(x=>x.title==='דוח').map(x=>x.itemId));
      const r2=mayaPlanFromIntent(stM,MV,{now,currentPlan:locked});
      o.mv10_lockedStays=r2.status==='proposal'&&r2.plan.items.filter(x=>x.title==='דוח').every(x=>x.date===MON)&&/נעול/.test(r2.text);
-     {const r1=mayaPlanFromIntent(stM,{op:'move',items:[],filter:{kind:'work'},targetDays:[TUE]},{now,currentPlan:cur});const w1=r1.plan.items.filter(x=>x.kind==='work');
-      o.mv12_sameDayNoOverlap=r1.status==='proposal'&&w1.length===2&&w1.every(x=>x.date===TUE)&&(w1[0].endMin<=w1[1].startMin||w1[1].endMin<=w1[0].startMin)&&w1.every(x=>x.endMin<=HM(9)||x.startMin>=HM(11));}
+     // proves the 'reserved' guard: one free gap (13:00–17:00) on the only target day, two 60-min items whose ideal slots overlap
+     {const tight=mkState([{...EV('t1','תפוס בוקר',HM(10),HM(13)),date:TUE},{...EV('t2','תפוס ערב',HM(17),HM(19)),date:TUE}],{});
+      const two={...cur,items:cur.items.map(x=>x.title==='דוח'?{...x,date:MON,startMin:HM(14),endMin:HM(15)}:x.title==='לסיים תקציב'?{...x,date:MON,startMin:HM(14,30),endMin:HM(15,30)}:x)};
+      const r1=mayaPlanFromIntent(tight,{op:'move',items:[],filter:{kind:'work'},targetDays:[TUE]},{now,currentPlan:two});const w1=r1.plan?r1.plan.items.filter(x=>x.kind==='work'):[];
+      o.mv12_tightGapNoOverlap=r1.status==='proposal'&&!r1.repair&&w1.length===2&&w1.every(x=>x.date===TUE&&x.startMin>=HM(13)-0&&x.endMin<=HM(17))&&(w1[0].endMin<=w1[1].startMin||w1[1].endMin<=w1[0].startMin);}
      o.mv11_nothingMatches=mayaPlanFromIntent(stM,{op:'move',items:[],filter:{kind:'fitness'},targetDays:[TUE]},{now,currentPlan:cur}).status==='needs_decision';}
     // ── 4b) "N hours until a date": a workload goal spread around the life that is already in the calendar ──
     {const G=(x)=>({op:'goal',goals:[{ref:'g1',title:'לימוד',kind:'study',totalMinutes:480,deadline:'2026-11-23',...(x||{})}]});
