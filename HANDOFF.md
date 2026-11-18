@@ -47,3 +47,8 @@ A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיס�
 2. Hard-refresh the app (build label `2026-11-18.1` in the header).
 3. Live accuracy run: `node tests/intent-eval/run.js --function --jwt <JWT> --out report.json` (or `--gemini` with GEMINI_API_KEY). Send the report; failing cases drive prompt/schema tweaks.
 4. Try in the chat: "אחרי הפגישה בפתח תקווה תכנן לי נסיעה לאריאל ואז שעה בית מדרש", then "איחרתי ב-20 דקות".
+
+## Production validation — what the owner runs (cannot be done from the sandbox)
+1. Redeploy `maya-ai` (structured output + temperature), consider raising `DAILY_LIMIT` (parser-first routing = one extra call per message). Hard refresh; build label should read 2026-11-18.4.
+2. `node tests/intent-eval/run.js --function --jwt <JWT> --out report.json --md report.md` → send `report.md`. It lists, per case, expected vs model intent, per-field pass/fail, question/assumption, latency, repair attempt, and a summary by error type.
+3. Then end-to-end: chat → Gemini → engine → Google Calendar (write path).

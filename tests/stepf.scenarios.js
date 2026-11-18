@@ -47,11 +47,48 @@
      o.d5_eventsWellFormed=ev.length===2&&ev.every(e=>e.id.indexOf('mplan:'+r.plan.rootId+':')===0&&e.startMin<e.endMin&&e.startH===Math.floor(e.startMin/60)&&e.endH===Math.ceil(e.endMin/60)&&_cleanEvMinutes(e)===e)&&/^נסיעה/.test(ev[0].title);
      const tr=mayaPlanFromIntent(mkState(E1,{}),CHAIN);
      o.d6_unknownTravelAsks=tr.status==='ask'&&tr.ask.field==='travel'&&tr.ask.from==='פתח תקווה'&&tr.ask.to==='אריאל'&&lintOk(tr.text);
-     o.d7_notPlan=mayaPlanFromIntent(st,{op:'none'}).status==='not_plan'&&mayaPlanFromIntent(st,{op:'find',items:[{ref:'i1',title:'x',kind:'errand'}]}).status==='not_plan'&&mayaPlanFromIntent(st,{op:'create',items:[]}).status==='not_plan';
+     o.d7_notPlan=mayaPlanFromIntent(st,{op:'none'}).status==='not_plan'&&mayaPlanFromIntent(st,{op:'prune',items:[{ref:'i1',title:'x',kind:'errand'}]}).status==='not_plan'&&mayaPlanFromIntent(st,{op:'create',items:[]}).status==='not_plan';
      const arr=mayaPlanFromIntent(mkState([EV('m','פגישה',HM(9),HM(12))],{}),{op:'arrange',targetDays:[MON],items:[{ref:'a',title:'ללמוד סטטיסטיקה',kind:'study',durationMin:120},{ref:'b',title:'קניות',kind:'shopping',durationMin:60,rigidity:'optional'}]});
      o.d8_arrangeProposal=arr.status==='proposal'&&arr.items.length===2&&arr.items.every(x=>x.startMin>=HM(8))&&lintOk(arr.text);
      const nr=mayaPlanFromIntent(mkState(E1,TRAVEL),{op:'create',items:[{ref:'i1',title:'נסיעה לאריאל',kind:'travel',place:'אריאל',anchor:{rel:'after',target:{text:'הפגישה במאדים',date:MON}}}]});
      o.d9_unknownAnchorAsks=nr.status==='ask'&&lintOk(nr.text);}
+    // ── 4a) find: "find me two hours this week" ──
+    {const stF=mkState([EV('m1','פגישה',HM(9),HM(12))],{});const now={today:MON,nowMin:HM(14)};
+     const F={op:'find',items:[{ref:'i1',title:'לימוד',kind:'study',durationMin:120,confidence:{kind:0.95,duration:0.95}}]};
+     const r=mayaPlanFromIntent(stF,F,{now});
+     o.fd1_findProposal=r.status==='proposal'&&r.items.length===1&&r.items[0].endMin-r.items[0].startMin===120&&validatePlan(r.snap,r.items).ok;
+     o.fd2_notInPast=r.items[0].date>MON||r.items[0].startMin>=HM(14);
+     o.fd3_textHasOptions=/אפשרויות נוספות/.test(r.text)&&/לשריין/.test(r.text)&&lintOk(r.text);
+     const full=[];for(let d=0;d<7;d++){const dt=_isoAdd(MON,d);full.push({...EV('f'+d,'יום מלא',HM(6),HM(23)),date:dt});}
+     const r2=mayaPlanFromIntent(mkState(full,{}),F,{now});
+     o.fd4_fullWeekAsksDecision=r2.status==='needs_decision'&&/לא מצאתי/.test(r2.text);
+     const r3=mayaPlanFromIntent(stF,{op:'find',items:[{ref:'i1',title:'לימוד',kind:'study',durationMin:120,date:'2026-11-17',confidence:{kind:0.95,duration:0.95}}]},{now});
+     o.fd5_specificDay=r3.status==='proposal'&&r3.items[0].date==='2026-11-17';}
+    // ── 4a2) move: re-slot items of the ACTIVE plan on the requested days ──
+    {const TUE='2026-11-17',WED='2026-11-18';
+     const stM=mkState([{...EV('b1','פגישה',HM(9),HM(11)),date:TUE}],{});const now={today:MON,nowMin:HM(8)};
+     const base=mayaPlanFromIntent(stM,{op:'arrange',items:[{ref:'i1',title:'דוח',kind:'work',durationMin:90,date:MON,confidence:{kind:0.95,duration:0.95}},{ref:'i2',title:'לסיים תקציב',kind:'work',durationMin:60,date:MON,confidence:{kind:0.95,duration:0.95}},{ref:'i3',title:'קניות',kind:'shopping',durationMin:45,date:MON,confidence:{kind:0.95,duration:0.95}}]},{now});
+     o.mv0_basePlan=base.status==='proposal'&&base.plan.items.length===3;
+     const cur=base.plan;savedState&&0;
+     const MV={op:'move',items:[],filter:{kind:'work'},targetDays:[TUE,WED]};
+     const r=mayaPlanFromIntent(stM,MV,{now,currentPlan:cur});
+     const was=Object.fromEntries(cur.items.map(x=>[x.itemId,x]));
+     const mvd=r.plan?r.plan.items.filter(x=>x.kind==='work'):[];const rest=r.plan?r.plan.items.filter(x=>x.kind!=='work'):[];
+     o.mv1_proposal=r.status==='proposal'&&mvd.length===2&&mvd.every(x=>x.date===TUE||x.date===WED);
+     o.mv2_othersUntouched=rest.length===1&&rest.every(x=>x.date===was[x.itemId].date&&x.startMin===was[x.itemId].startMin);
+     o.mv3_sameRootSupersedes=r.plan.rootId===cur.rootId&&r.plan.supersedes===cur.planId&&r.oldPlan===cur;
+     o.mv4_noOverlapWithEvents=mvd.filter(x=>x.date===TUE).every(x=>x.endMin<=HM(9)||x.startMin>=HM(11));
+     o.mv5_noOverlapAmongThem=mvd.every((x,i)=>mvd.every((y,j)=>i===j||x.date!==y.date||x.endMin<=y.startMin||y.endMin<=x.startMin));
+     {const sv=STATE_ACTIVE;STATE_ACTIVE=stM;try{o.mv6_approvalSigMatches=_mayaFreshSig(r.plan.rootId,MON)===r.plan.snapshotSig;}finally{STATE_ACTIVE=sv;}}
+     o.mv7_textListsMoves=/הנה מה שאזיז/.test(r.text)&&/דוח/.test(r.text)&&lintOk(r.text);
+     o.mv8_noPlan=mayaPlanFromIntent(stM,MV,{now}).status==='needs_decision';
+     o.mv9_noDaysAsks=mayaPlanFromIntent(stM,{op:'move',items:[],filter:{kind:'work'},targetDays:[]},{now,currentPlan:cur}).status==='ask';
+     const locked=lockPlanItems(cur,cur.items.filter(x=>x.title==='דוח').map(x=>x.itemId));
+     const r2=mayaPlanFromIntent(stM,MV,{now,currentPlan:locked});
+     o.mv10_lockedStays=r2.status==='proposal'&&r2.plan.items.filter(x=>x.title==='דוח').every(x=>x.date===MON)&&/נעול/.test(r2.text);
+     {const r1=mayaPlanFromIntent(stM,{op:'move',items:[],filter:{kind:'work'},targetDays:[TUE]},{now,currentPlan:cur});const w1=r1.plan.items.filter(x=>x.kind==='work');
+      o.mv12_sameDayNoOverlap=r1.status==='proposal'&&w1.length===2&&w1.every(x=>x.date===TUE)&&(w1[0].endMin<=w1[1].startMin||w1[1].endMin<=w1[0].startMin)&&w1.every(x=>x.endMin<=HM(9)||x.startMin>=HM(11));}
+     o.mv11_nothingMatches=mayaPlanFromIntent(stM,{op:'move',items:[],filter:{kind:'fitness'},targetDays:[TUE]},{now,currentPlan:cur}).status==='needs_decision';}
     // ── 4b) "N hours until a date": a workload goal spread around the life that is already in the calendar ──
     {const G=(x)=>({op:'goal',goals:[{ref:'g1',title:'לימוד',kind:'study',totalMinutes:480,deadline:'2026-11-23',...(x||{})}]});
      const busy=[EV('m1','פגישה',HM(9),HM(12)),{...EV('full','יום מלא',HM(9),HM(18)),date:'2026-11-17'}];
