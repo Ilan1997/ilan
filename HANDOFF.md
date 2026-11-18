@@ -52,3 +52,7 @@ A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיס�
 1. Redeploy `maya-ai` (structured output + temperature), consider raising `DAILY_LIMIT` (parser-first routing = one extra call per message). Hard refresh; build label should read 2026-11-18.4.
 2. `node tests/intent-eval/run.js --function --jwt <JWT> --out report.json --md report.md` → send `report.md`. It lists, per case, expected vs model intent, per-field pass/fail, question/assumption, latency, repair attempt, and a summary by error type.
 3. Then end-to-end: chat → Gemini → engine → Google Calendar (write path).
+
+
+## Onboarding stage 1 (2026-11-18.6)
+Pure core in `index.html` (`onb*`), spec `ONBOARDING_SPEC_V2.md`, tests `tests/onboarding.scenarios.js` (+ fixtures `tests/fixtures/onboarding/`), demo `node tests/demo-onboarding.js [noam|yuval|dani]`. No UI, no calendar writes, no edge-function mode yet (extraction proven only with a stubbed model). Next: UI wiring after the demo is approved; then an `onboarding` extraction mode in `maya-ai` and a live run against Gemini.

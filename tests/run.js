@@ -735,6 +735,15 @@ const w=dom.window;
     const oke=/responseSchema/.test(edge)&&/responseMimeType/.test(edge)&&/body\.mode === "intent"/.test(edge)&&/schema.*8000|8000/.test(edge);
     rows.push(['edge function: structured output',String(oke)]);if(!oke)failed=true;
   }catch(e){rows.push(['chat ⇄ planning (F)','THROW '+e.message]);failed=true;}
+  // ---- Onboarding (ONBOARDING_SPEC_V2): conversation state → extraction → profile → weekly template → confirmation (stubbed model) ----
+  try{
+    const fx={};for(const n of ['noam','yuval','dani'])fx[n]=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'fixtures','onboarding',n+'.json'),'utf8'));
+    w.__ONB_FX__=fx;w.eval(require('fs').readFileSync(require('path').join(__dirname,'onboarding.driver.js'),'utf8'));
+    const body=require('fs').readFileSync(require('path').join(__dirname,'onboarding.scenarios.js'),'utf8');
+    const r=await w.eval(body.trim()+'()');
+    const okb=Object.values(r).every(v=>v===true);
+    rows.push(['onboarding (spec v2)',String(okb)+' ('+Object.keys(r).length+')'+(okb?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okb)failed=true;
+  }catch(e){rows.push(['onboarding (spec v2)','THROW '+e.message]);failed=true;}
   // ---- Maya's voice: enforced in code (polish + lint over real samples and every UI string) ----
   try{
     const samples=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'fixtures','voice_samples.json'),'utf8')).samples;

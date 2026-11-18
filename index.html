@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.5';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.6';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10154,6 +10154,437 @@ function _mayaDur(min){
   if(min<60)return min+' דק׳';
   const h=Math.floor(min/60),m=min%60;return m?(h===1?'שעה':h+' שעות')+' ו-'+m+' דק׳':h+' שעות';
 }
+// ═══ Onboarding (ONBOARDING_SPEC_V2) — pure core ═══
+// conversation state → extraction → OnboardingProfile → InitialWeeklyTemplate → confirmation. No UI, nothing is written to the calendar.
+// The model only EXTRACTS structure from a free answer; code decides what to ask next, what is a fact / assumption / proposal / unknown, where things go, and every word Maya says.
+const ONB_SEMANTIC_WINDOWS={'בוקר':[360,720],'צהריים':[720,900],'אחה״צ':[780,1080]};   // declared windows. "ערב" is intentionally NOT here (undefined until the user defines it)
+const ONB_KINDS=['payments','leads','feedback','bills','shopping','errands','email','fitness','family','social','lesson','deep_work','study','work','review','other'];
+const ONB_TRIAL_DEFAULTS={payments:60,leads:45,feedback:30,bills:30,shopping:60,errands:45,email:30,fitness:45,family:60,social:120,lesson:60,deep_work:120,study:90,work:60,review:30,other:45};
+const ONB_PROPOSAL_FREQ={fitness:2};          // Maya's own suggestion ("sport twice a week"): a Proposal, never an Assumption
+const ONB_GUARD_NO_EVENING_MIN=1020;          // Maya's own caution while "evening" is undefined: nothing new after 17:00 (announced, not a user rule)
+const ONB_TRIAL_GOAL_WEEK_MIN=150;            // Maya's experiment for a goal with unknown total — never a requirement
+const ONB_REVIEW_MIN=30,ONB_MAX_MAIN=7,ONB_DAY_LIMIT=1260;
+const ONB_QUESTIONS={
+  q1:'איך נראה שבוע טוב בשבילך? תן לי 3–5 דברים שהיית רוצה שיקרו כמעט תמיד. ומה מתוך הדברים האלה חשוב במיוחד שלא יאבד גם בשבוע עמוס?',
+  q2:'מה כבר קבוע ולא זז? (עבודה, ילדים, טיפולים, לימודים, נסיעות.)',
+  q2cal:'חוץ ממה שכבר ביומן — חסר משהו קבוע שלא רשום שם? (שעות עבודה, ילדים, טיפולים, לימודים, נסיעות.)',
+  q3:'מה בעבודה או בחיים נוטה להצטבר אם לא קובעים לזה זמן?',
+  q4:'מה בחיים אסור שהעבודה תדחק החוצה?',
+  q5:'יש משהו שצריך שעות מצטברות? קורס, פרויקט, מבחן.',
+  q6:'מה בדרך כלל גורם לשבוע שלך להתפרק?',
+  q7:'אילו גבולות לשמור בשבילך? ערבים, שעות בלי עבודה, מרווח לפני אירועים.'};
+const ONB_OPENING='אני רוצה להכיר מספיק את השבוע שלך כדי לבנות לך שגרת עבודה וחיים ראשונה. זה ייקח כמה דקות. לא צריך לדעת הכול במדויק — אם לא יודע, תגיד לי ואציע משהו לניסיון.';
+const ONB_ORDER=['q1','q2','q3','q4','q5','q6','q7'];
+
+// ── extraction contract (what the model may return; everything is validated/clamped by onbNormalizeExtraction) ──
+const ONB_EXTRACT_SCHEMA=(()=>{
+  const S={type:'STRING'},N={type:'NUMBER'},I={type:'INTEGER'},B={type:'BOOLEAN'};const A=t=>({type:'ARRAY',items:t});
+  const TF={type:'OBJECT',properties:{hhmm:S,precision:{type:'STRING',enum:['exact','approx']}}};
+  return{type:'OBJECT',properties:{
+    answeredTopics:A(S),successCriteria:A(S),minimumViableWeek:A(S),
+    routines:A({type:'OBJECT',properties:{key:S,title:S,kind:{type:'STRING',enum:ONB_KINDS},domain:{type:'STRING',enum:['work','life']},maintenance:{type:'STRING',enum:['work','life']},
+      stated:{type:'STRING',enum:['fact','maybe']},perWeek:I,perDay:B,perTwoWeeks:B,durationMin:I,days:A(I),window:{type:'OBJECT',properties:{from:S,to:S}},protected:B,inMvw:B,confidence:N},required:['key','title']}),
+    fixed:A({type:'OBJECT',properties:{key:S,title:S,days:A(I),dayUnknown:B,start:TF,end:TF,travelMin:{type:'OBJECT',properties:{min:I,precision:{type:'STRING',enum:['exact','approx']}}},travelNeeded:B,
+      semanticWindow:S,window:{type:'OBJECT',properties:{from:S,to:S}}},required:['key','title']}),
+    officeHours:{type:'OBJECT',properties:{days:A(I),from:S,to:S}},
+    goals:A({type:'OBJECT',properties:{key:S,title:S,kind:{type:'STRING',enum:ONB_KINDS},requiredTotalMinutes:I,requiredPerWeekMinutes:I,deadline:S,fillsRoutineKey:S},required:['key','title']}),
+    goalsNone:B,chaosTriggers:A(S),
+    boundaries:A({type:'OBJECT',properties:{rule:S,kind:{type:'STRING',enum:['no_work_after','closed_day','no_work_evening','other']},time:S,dow:I,semanticWindow:S,defined:B},required:['rule','kind']}),
+    lateRiser:{type:'OBJECT',properties:{earliest:S}},
+    dontKnow:A(S)},required:[]};
+})();
+function onbExtractPrompt(st,answer){
+  const cur=st&&st.current||{};
+  return 'אתה מחלץ מבנה מתשובה חופשית של משתמש בשיחת היכרות עם מזכירה אישית. אל תמציא דבר שלא נאמר. פרט שלא נאמר — השמט אותו (אל תנחש שעות, ימים, משכים או תדירויות).\n'+
+    'השאלה שנשאלה (נושא '+(cur.id||'?')+(cur.field?', שדה '+cur.field:'')+'): '+(cur.text||'')+'\n'+
+    'התשובה: '+String(answer||'').slice(0,1500)+'\n'+
+    'כללים: "לא יודע"/"אין לי מושג" → dontKnow עם מפתח השדה (workHours, evening, minimumViableWeek, maintenance, maintenance.work, maintenance.life, chaos, fixed.<key>.start|day|travel, goal.<key>.total). '+
+    'ימים: 0=ראשון … 6=שבת. שעות HH:MM. precision=approx כשנאמר "בערך". answeredTopics = נושאים q1..q7 שהתשובה כיסתה. stated=maybe כשהמשתמש אמר "אולי". החזר JSON לפי הסכמה בלבד.';
+}
+function onbNormalizeExtraction(raw){
+  const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
+  const hm=v=>/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v||''))?_hhmm(v):null;
+  const arr=v=>Array.isArray(v)?v:[];const str=(v,n)=>typeof v==='string'?v.trim().slice(0,n||120):'';
+  const put=(o,k,v)=>{if(v!==undefined&&v!==null&&!(typeof v==='string'&&!v)&&!(Array.isArray(v)&&!v.length))o[k]=v;};
+  const dows=v=>arr(v).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6);
+  const tf=v=>{if(!v||typeof v!=='object')return undefined;const m=hm(v.hhmm);return m==null?undefined:{min:m,precision:v.precision==='approx'?'approx':'exact'};};
+  const win=v=>{if(!v||typeof v!=='object')return undefined;const a=hm(v.from),b=hm(v.to);return a!=null&&b!=null&&a<b?{from:a,to:b}:undefined;};
+  const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))?String(v):undefined;
+  const o={answeredTopics:arr(x.answeredTopics).map(String).filter(t=>/^q[1-7]$/.test(t)),successCriteria:arr(x.successCriteria).map(s=>str(s,100)).filter(Boolean).slice(0,8),
+    minimumViableWeek:arr(x.minimumViableWeek).map(s=>str(s,100)).filter(Boolean).slice(0,6),chaosTriggers:arr(x.chaosTriggers).map(s=>str(s,100)).filter(Boolean).slice(0,6),
+    dontKnow:arr(x.dontKnow).map(s=>str(s,80)).filter(Boolean).slice(0,12),goalsNone:x.goalsNone===true,routines:[],fixed:[],goals:[],boundaries:[],officeHours:null,lateRiser:null};
+  arr(x.routines).slice(0,16).forEach(r=>{if(!r||typeof r!=='object')return;const key=str(r.key,40)||str(r.title,40),title=str(r.title,80);if(!key||!title)return;
+    const d=Math.round(Number(r.durationMin)),pw=Math.round(Number(r.perWeek));
+    const q={key,title,kind:ONB_KINDS.includes(r.kind)?r.kind:'other',domain:r.domain==='work'?'work':'life',stated:r.stated==='maybe'?'maybe':'fact',protected:r.protected===true,inMvw:r.inMvw===true};
+    put(q,'maintenance',r.maintenance==='work'||r.maintenance==='life'?r.maintenance:undefined);put(q,'perWeek',pw>=1&&pw<=14?pw:undefined);if(r.perDay===true)q.perDay=true;if(r.perTwoWeeks===true)q.perTwoWeeks=true;
+    put(q,'durationMin',d>=10&&d<=480?d:undefined);put(q,'days',dows(r.days));put(q,'window',win(r.window));
+    const c=Number(r.confidence);if(c>=0&&c<=1)q.confidence=c;o.routines.push(q);});
+  arr(x.fixed).slice(0,10).forEach(f=>{if(!f||typeof f!=='object')return;const key=str(f.key,40)||str(f.title,40);if(!key)return;const q={key};
+    put(q,'title',str(f.title,80));put(q,'days',dows(f.days));if(typeof f.dayUnknown==='boolean')q.dayUnknown=f.dayUnknown;put(q,'start',tf(f.start));put(q,'end',tf(f.end));
+    if(f.travelMin&&Number(f.travelMin.min)>=5&&Number(f.travelMin.min)<=240)q.travelMin={min:Math.round(Number(f.travelMin.min)),precision:f.travelMin.precision==='exact'?'exact':'approx'};
+    if(typeof f.travelNeeded==='boolean')q.travelNeeded=f.travelNeeded;put(q,'semanticWindow',str(f.semanticWindow,20));put(q,'window',win(f.window));o.fixed.push(q);});
+  const oh=x.officeHours;if(oh&&typeof oh==='object'){const a=hm(oh.from),b=hm(oh.to);if(a!=null&&b!=null&&a<b)o.officeHours={days:dows(oh.days).length?dows(oh.days):[0,1,2,3,4],from:a,to:b};}
+  arr(x.goals).slice(0,5).forEach(g=>{if(!g||typeof g!=='object')return;const key=str(g.key,40)||str(g.title,40),title=str(g.title,100);if(!key||!title)return;
+    const q={key,title,kind:ONB_KINDS.includes(g.kind)?g.kind:'work'};const t=Math.round(Number(g.requiredTotalMinutes)),w=Math.round(Number(g.requiredPerWeekMinutes));
+    q.requiredTotalMinutes=t>=15&&t<=6000?t:null;q.requiredPerWeekMinutes=w>=15&&w<=3000?w:null;q.deadline=date(g.deadline)||null;q.fillsRoutineKey=str(g.fillsRoutineKey,40)||null;o.goals.push(q);});
+  arr(x.boundaries).slice(0,8).forEach(b=>{if(!b||typeof b!=='object')return;const rule=str(b.rule,100);if(!rule)return;
+    const q={rule,kind:['no_work_after','closed_day','no_work_evening'].includes(b.kind)?b.kind:'other',defined:b.defined!==false};
+    if(hm(b.time)!=null)q.time=hm(b.time);if(Number.isInteger(b.dow)&&b.dow>=0&&b.dow<=6)q.dow=b.dow;put(q,'semanticWindow',str(b.semanticWindow,20));
+    if(q.kind==='no_work_after'&&q.time==null)q.defined=false;o.boundaries.push(q);});
+  if(x.lateRiser&&hm(x.lateRiser.earliest)!=null)o.lateRiser={earliest:hm(x.lateRiser.earliest)};
+  return o;
+}
+function onbEmptyFacts(){return{successCriteria:[],minimumViableWeek:[],routines:[],fixed:[],goals:[],goalsNone:false,chaosTriggers:[],boundaries:[],officeHours:null,lateRiser:null,dontKnow:[]};}
+function onbMerge(facts,ex){
+  const o=JSON.parse(JSON.stringify(facts));
+  const uniq=(a,b)=>{b.forEach(v=>{if(a.indexOf(v)<0)a.push(v);});};
+  uniq(o.successCriteria,ex.successCriteria);uniq(o.minimumViableWeek,ex.minimumViableWeek);uniq(o.chaosTriggers,ex.chaosTriggers);uniq(o.dontKnow,ex.dontKnow);
+  const keyed=(arr,items)=>items.forEach(it=>{const i=arr.findIndex(z=>z.key===it.key);if(i<0)arr.push(JSON.parse(JSON.stringify(it)));else Object.keys(it).forEach(k=>{if(it[k]!==undefined)arr[i][k]=it[k];});});
+  keyed(o.routines,ex.routines);keyed(o.fixed,ex.fixed);keyed(o.goals,ex.goals);
+  ex.boundaries.forEach(b=>{if(!o.boundaries.some(z=>z.rule===b.rule))o.boundaries.push(b);});
+  if(ex.goalsNone)o.goalsNone=true;if(ex.officeHours)o.officeHours=ex.officeHours;if(ex.lateRiser)o.lateRiser=ex.lateRiser;
+  return o;
+}
+
+// ── conversation state ──
+function onbNew(o){
+  o=o||{};const cal=Array.isArray(o.calendar)?o.calendar:null;
+  return{v:1,today:o.today,calendar:cal,calendarConnected:!!cal,answered:[],askedFields:[],mainCount:0,followups:0,fuBudget:1,current:null,facts:onbEmptyFacts(),done:false,log:[]};
+}
+function onbCalendarLine(cal){
+  if(!cal||!cal.length)return'';
+  const dn=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+  return'קראתי ביומן: '+cal.slice(0,8).map(e=>e.title+' '+(e.dow!=null?'ב'+dn[e.dow]:'ב-'+String(e.date).slice(8,10)+'/'+String(e.date).slice(5,7))+' '+_fmtMin(e.startMin)+(e.oneTime||e.date?' (חד־פעמי)':'')).join(', ')+'.';
+}
+// PURE: blocking gaps — things that decide how a day can be built and were neither said nor already asked / declared unknown.
+function onbGaps(facts,askedFields){
+  const out=[],skip=f=>askedFields.indexOf(f)>=0||facts.dontKnow.indexOf(f)>=0;
+  facts.fixed.forEach(f=>{
+    const title=f.title||f.key,hasDays=(f.days||[]).length>0;
+    const fd='fixed.'+f.key+'.day',fs='fixed.'+f.key+'.start',ft='fixed.'+f.key+'.travel';
+    if(!hasDays&&f.dayUnknown!==false&&!skip(fd)){out.push({field:fd,ref:f.key,kind:'day',why:'ביום לא ידוע',question:'באיזה יום ובערך באיזו שעה '+title+'? גם "אחה״צ" מספיק.'});return;}
+    const hasWin=f.semanticWindow&&ONB_SEMANTIC_WINDOWS[f.semanticWindow]||f.window;
+    if((!f.start||!f.end)&&!hasWin&&!skip(fs)&&hasDays)out.push({field:fs,ref:f.key,kind:'start',why:'חסר '+(f.start?'סיום':'התחלה')+' לפגישה קשיחה',question:'מתי '+(f.start?'מסתיים ':'מתחיל ')+title+'? גם "בערך" מספיק.'});
+    if(f.travelNeeded&&!f.travelMin&&!skip(ft))out.push({field:ft,ref:f.key,kind:'travel',why:'זמן נסיעה לא ידוע',question:'כמה זמן לוקח להגיע ל'+title+(f.start&&f.start.precision==='approx'?', והאם '+_fmtMin(f.start.min)+' מדויק?':'?')});
+  });
+  const pri={day:0,start:1,travel:2};return out.sort((a,b)=>pri[a.kind]-pri[b.kind]);
+}
+function onbMainText(s,id){
+  if(id==='q2')return s.calendarConnected?ONB_QUESTIONS.q2cal:ONB_QUESTIONS.q2;
+  if(id==='q4'){const p=s.facts.routines.filter(r=>r.protected);if(p.length)return'סימנתי '+p.map(r=>r.title).join(', ')+' כמוגנים. יש עוד משהו בחיים שאסור שהעבודה תדחק החוצה?';}
+  return ONB_QUESTIONS[id];
+}
+// PURE: advance the conversation. `extraction` = normalized extraction of the answer to s.current (null at the start).
+// Returns a NEW state; state.current = the next question {id,kind:'main'|'followup',text,field?} or null when done.
+function onbAdvance(st,extraction){
+  const s=JSON.parse(JSON.stringify(st));
+  if(s.current){
+    const ex=onbNormalizeExtraction(extraction);
+    s.facts=onbMerge(s.facts,ex);
+    if(s.current.kind==='main'&&s.answered.indexOf(s.current.id)<0)s.answered.push(s.current.id);
+    ex.answeredTopics.forEach(t=>{if(s.answered.indexOf(t)<0)s.answered.push(t);});
+    s.log.push({q:s.current.id,kind:s.current.kind,field:s.current.field||null});
+  }
+  const gaps=onbGaps(s.facts,s.askedFields);
+  if(gaps.length>=2&&s.fuBudget<2)s.fuBudget=2;                       // two follow-ups only when two blocking gaps exist at once
+  if(gaps.length&&s.followups<s.fuBudget){
+    const g=gaps[0];s.followups++;s.askedFields.push(g.field);
+    s.current={id:'f'+s.followups,kind:'followup',field:g.field,text:g.question};return s;
+  }
+  const next=ONB_ORDER.find(id=>s.answered.indexOf(id)<0&&!(s.log.some(l=>l.q===id)));
+  if(next&&s.mainCount<ONB_MAX_MAIN){s.mainCount++;s.current={id:next,kind:'main',text:onbMainText(s,next)};return s;}
+  s.current=null;s.done=true;return s;
+}
+// Glue: model call is injected (callModel({prompt,schema}) → raw JSON or text). One repair retry; never throws — an unusable reply becomes an empty extraction.
+async function onbExtractWith(callModel,st,answer){
+  const tryOnce=async(extra)=>{try{const r=await callModel({prompt:onbExtractPrompt(st,answer)+(extra||''),schema:ONB_EXTRACT_SCHEMA});
+    if(r&&typeof r==='object')return{ok:true,raw:r};const p=parseIntentText(r);return p.ok?{ok:true,raw:p.raw}:{ok:false};}catch(_e){return{ok:false};}};
+  let r=await tryOnce('');let repaired=false;
+  if(!r.ok){repaired=true;r=await tryOnce('\nהתשובה הקודמת לא הייתה JSON תקין. החזר JSON בלבד.');}
+  return{raw:r.ok?r.raw:{},extraction:onbNormalizeExtraction(r.ok?r.raw:{}),ok:r.ok,repaired};
+}
+
+// ── Hold / availability / assumptions ──
+// PURE: a hold exists ONLY with a basis. No basis → null (the day is then marked "not fully plannable", never blocked on a guess).
+function makeHold(o){
+  o=o||{};const d=o.derivedFrom;let from=null,to=null,conf=o.confidence;
+  if(d==='semantic_window'){const w=ONB_SEMANTIC_WINDOWS[o.semanticWindow];if(!w)return null;from=w[0];to=w[1];if(conf==null)conf=0.6;}
+  else if(d==='user_time_window'){const w=o.userWindow;if(!w||!Number.isFinite(w.from)||!Number.isFinite(w.to)||w.from>=w.to)return null;from=w.from;to=w.to;if(conf==null)conf=0.9;}
+  else if(d==='calendar_fact'){const e=o.event;if(!e||!Number.isFinite(e.startMin)||!Number.isFinite(e.endMin)||e.startMin>=e.endMin)return null;from=e.startMin;to=e.endMin;if(conf==null)conf=1;}
+  else if(d==='known_travel_requirement'){const t=o.travel;if(!t||!Number.isFinite(t.from)||!Number.isFinite(t.to)||t.from>=t.to)return null;from=t.from;to=t.to;if(conf==null)conf=0.8;}
+  else return null;
+  return{from,to,reason:String(o.reason||'').slice(0,120),derivedFrom:d,confidence:conf};
+}
+const ONB_AVAIL_SOURCES=['user_setting','user_said','calendar','system_default'];
+// PURE: only rules that came from the user (settings / words) or the calendar bind. system_default never blocks anything.
+function onbBindingAvailability(rules){return(rules||[]).filter(r=>r&&r.rule&&r.rule.kind&&r.source&&r.source!=='system_default'&&ONB_AVAIL_SOURCES.includes(r.source));}
+// PURE: closures the user ALREADY has in the engine's settings → AvailabilityRule[] (source user_setting). Dates outside the engine's range produce nothing (no system fallback).
+function onbAvailabilityFromSnap(snap){
+  const out=[];if(!snap||!snap.freeHours)return out;
+  Object.keys(snap.freeHours).forEach(date=>{
+    const free=_mergeIv(snap.freeHours[date].map(h=>[h*60,h*60+60]));
+    const closed=_subIv([[PLAN_DAY_START,PLAN_DAY_END]],free);
+    if(!free.length)out.push({rule:{kind:'closed',date,fromMin:0,toMin:1440},source:'user_setting'});
+    else closed.forEach(c=>out.push({rule:{kind:'closed',date,fromMin:c[0],toMin:c[1]},source:'user_setting'}));
+  });
+  return out;
+}
+function onbNextSunday(today){const dw=new Date(today+'T12:00:00Z').getUTCDay();return _isoAdd(today,(7-dw)%7||7);}
+// An assumption may only be low-risk. A consequential one is NEVER kept as an assumption/constraint: it becomes an Unknown.
+function onbAddAssumption(p,a){
+  if(a&&a.risk==='consequential'){p.unknowns.push({field:a.field,ref:a.ref||null,why:'לא נאמר ולא ידוע — לא מניחה',planningImpact:'nonblocking',handling:'held',recheckAt:'weekly_review'});return null;}
+  const x={id:'as'+(p.assumptions.length+1),field:a.field,ref:a.ref||null,value:a.value,source:a.source||'system_trial_default',assumed:true,risk:'low',status:'shown'};p.assumptions.push(x);return x;
+}
+function _onbTimeFact(t,src){
+  if(!t)return{value:null,precision:'unknown',source:'user'};
+  return{value:t.min,precision:t.precision,source:t.precision==='approx'?'user_estimate':(src||'user')};
+}
+
+// ── facts → OnboardingProfile ──
+function onbBuildProfile(st){
+  const F=st.facts,dk=k=>F.dontKnow.indexOf(k)>=0;
+  const p={v:1,today:st.today,successCriteria:F.successCriteria.slice(),minimumViableWeek:F.minimumViableWeek.length&&!dk('minimumViableWeek')?F.minimumViableWeek.slice():'unknown',
+    fixedConstraints:[],calendarEvents:[],workMaintenance:[],lifeMaintenance:[],protectedLife:[],routines:[],workloadGoals:[],chaosTriggers:F.chaosTriggers.slice(),boundaries:[],
+    availability:[],proposals:[],assumptions:[],unknowns:[],holds:[],guards:[],partialDays:[],dayStart:480,calendarConnected:st.calendarConnected};
+  const unk=(field,ref,why,impact,handling)=>p.unknowns.push({field,ref:ref||null,why,planningImpact:impact||'nonblocking',handling:handling||'held',recheckAt:'weekly_review'});
+  // calendar → FixedConstraint(origin calendar, needsApproval false)
+  (st.calendar||[]).forEach((e,i)=>{p.calendarEvents.push(e);p.fixedConstraints.push({id:'cal'+(i+1),title:e.title,days:e.dow!=null?[e.dow]:[],date:e.date||null,start:{value:e.startMin,precision:'exact',source:'calendar'},end:{value:e.endMin,precision:'exact',source:'calendar'},rigidity:'hard',origin:'calendar',needsApproval:false});});
+  // user-said fixed constraints (+ holds only with a basis)
+  F.fixed.forEach(f=>{
+    const days=f.days||[];const fc={id:'fx_'+f.key,key:f.key,title:f.title||f.key,days:days.slice(),start:_onbTimeFact(f.start),end:_onbTimeFact(f.end),rigidity:'hard',origin:'user_said',needsApproval:true};
+    if(f.travelMin)fc.travelBefore={value:f.travelMin.min,precision:f.travelMin.precision,source:f.travelMin.precision==='approx'?'user_estimate':'user'};
+    p.fixedConstraints.push(fc);
+    if(!days.length){unk('fixed.'+f.key+'.day',f.key,'היום לא ידוע','blocking',F.dontKnow.indexOf('fixed.'+f.key+'.day')>=0?'held':'asked');return;}
+    if(fc.start.value==null||fc.end.value==null){
+      let h=null;
+      if(f.window)h=makeHold({derivedFrom:'user_time_window',userWindow:f.window,reason:fc.title});
+      else if(f.semanticWindow)h=makeHold({derivedFrom:'semantic_window',semanticWindow:f.semanticWindow,reason:fc.title});
+      if(h){days.forEach(d=>p.holds.push(Object.assign({id:'hold_'+f.key+'_'+d,dow:d,ref:f.key},h)));unk('fixed.'+f.key+'.'+(fc.start.value==null?'start':'end'),f.key,'שעה מדויקת לא ידועה','nonblocking','held');}
+      else{days.forEach(d=>p.partialDays.push({dow:d,ref:f.key,reason:'לא ידוע מתי '+fc.title+' '+(fc.start.value==null?'מתחיל':'מסתיים')}));unk('fixed.'+f.key+'.'+(fc.start.value==null?'start':'end'),f.key,'שעה לא ידועה ואין ממה לגזור טווח','blocking',(st.askedFields.indexOf('fixed.'+f.key+'.start')>=0?'asked':'held'));}
+    }
+    if(f.travelNeeded&&!f.travelMin){days.forEach(d=>p.partialDays.push({dow:d,ref:f.key,reason:'לא ידוע כמה זמן לוקח להגיע ל'+fc.title}));unk('fixed.'+f.key+'.travel',f.key,'זמן נסיעה לא ידוע','blocking',st.askedFields.indexOf('fixed.'+f.key+'.travel')>=0?'asked':'held');}
+    if(fc.start.precision==='approx'&&fc.start.value!=null)unk('fixed.'+f.key+'.start',f.key,'שעת התחלה משוערת — לאשר בסגירת השבוע','nonblocking','held');
+  });
+  // availability (provenance on every rule)
+  if(F.officeHours)p.availability.push({rule:{kind:'work_hours',days:F.officeHours.days,fromMin:F.officeHours.from,toMin:F.officeHours.to},source:'user_said'});
+  else unk('workHours',null,'לא נאמרו שעות עבודה — לא ממציאה','nonblocking','tentative_proposal');
+  F.boundaries.forEach(b=>{
+    const bd={rule:b.rule,source:'user_said',definition:b.defined===false?'undefined':'known'};p.boundaries.push(bd);
+    if(b.kind==='no_work_after'&&b.time!=null)p.availability.push({rule:{kind:'no_work_after',fromMin:b.time},source:'user_said'});
+    else if(b.kind==='closed_day'&&b.dow!=null){
+      const w=b.semanticWindow&&ONB_SEMANTIC_WINDOWS[b.semanticWindow];
+      p.availability.push({rule:{kind:'closed',dow:b.dow,fromMin:w?w[0]:0,toMin:1440},source:'user_said'});
+    }else if(b.kind==='no_work_evening'&&b.defined===false){
+      unk('evening',null,'לא הוגדר מאיזו שעה זה ערב','nonblocking','held');
+      p.guards.push({kind:'no_new_items_after',min:ONB_GUARD_NO_EVENING_MIN,reason:'עד שנגדיר מאיזו שעה זה ערב',source:'maya_caution'});
+    }
+  });
+  if(F.lateRiser)onbAddAssumption(p,{field:'dayStart',ref:null,value:_fmtMin(F.lateRiser.earliest),source:'learned',risk:'low'}),p.dayStart=F.lateRiser.earliest;
+  // routines: user facts become Routines; "maybe" becomes a Maya Proposal (never a Routine before approval)
+  const dur=r=>{if(r.durationMin)return{minutes:r.durationMin};const m=ONB_TRIAL_DEFAULTS[r.kind]||ONB_TRIAL_DEFAULTS.other;const a=onbAddAssumption(p,{field:'duration',ref:r.key,value:m,source:'system_trial_default',risk:'low'});return{minutes:m,assumption:a.id};};
+  F.routines.forEach(r=>{
+    if(r.stated==='maybe'){
+      p.protectedLife.push({title:r.title,confidence:r.confidence!=null?r.confidence:0.4});
+      const mins=r.durationMin||ONB_TRIAL_DEFAULTS[r.kind]||45;const per=ONB_PROPOSAL_FREQ[r.kind]||1;
+      if(!r.durationMin)onbAddAssumption(p,{field:'duration',ref:r.key,value:mins,source:'system_trial_default',risk:'low'});
+      p.proposals.push({id:'pr_'+r.key,ref:r.key,title:r.title,kind:r.kind,domain:r.domain,value:{perWeek:per,minutes:mins},reason:'אמרת "אולי" — אני מציעה לנסות '+per+' בשבוע',status:'pending',trial:true});
+      return;
+    }
+    const hasFreq=!!(r.perDay||r.perTwoWeeks||r.perWeek||r.maintenance);
+    const d=hasFreq?dur(r):{minutes:r.durationMin||null};
+    const rt={id:'rt_'+r.key,key:r.key,title:r.title,domain:r.domain,kind:r.kind,maintenanceClass:r.maintenance==='work'?'workMaintenance':r.maintenance==='life'?'lifeMaintenance':null,
+      targetFrequency:r.perDay?{perDay:1}:r.perTwoWeeks?{perTwoWeeks:1}:r.perWeek?{perWeek:r.perWeek}:r.maintenance?{perWeek:1}:null,targetDuration:d,days:r.days||null,window:r.window||null,
+      rigidity:r.window?'hard':'flexible',inMinimumViableWeek:r.inMvw===true,protected:r.protected===true,confidence:r.confidence!=null?r.confidence:0.9,source:'user'};
+    p.routines.push(rt);
+    if(r.maintenance==='work')p.workMaintenance.push(rt.id);else if(r.maintenance==='life')p.lifeMaintenance.push(rt.id);
+    if(r.protected)p.protectedLife.push({title:r.title,routineId:rt.id,confidence:rt.confidence});
+  });
+  // maintenance the user could not name → "unknown" + one Maya proposal (what piled up is NOT invented)
+  const mUnknown=dk('maintenance')||dk('maintenance.work')||dk('maintenance.life');
+  if(dk('maintenance')||(dk('maintenance.work')&&!p.workMaintenance.length)){if(!p.workMaintenance.length)p.workMaintenance='unknown';unk('maintenance.work',null,'לא ידוע מה מצטבר בעבודה');}
+  if(dk('maintenance')||(dk('maintenance.life')&&!p.lifeMaintenance.length)){if(!p.lifeMaintenance.length)p.lifeMaintenance='unknown';unk('maintenance.life',null,'לא ידוע מה מצטבר בחיים');}
+  if(mUnknown){onbAddAssumption(p,{field:'duration',ref:'pr_pile',value:45,source:'system_trial_default',risk:'low'});
+    p.proposals.push({id:'pr_pile',ref:'pile',title:'מה שהצטבר',kind:'work',domain:'work',value:{perWeek:1,minutes:45},reason:'לא ידוע מה מצטבר — אני מציעה זמן קבוע קטן בלי להגדיר מה נכנס אליו',status:'pending',trial:true});}
+  if(p.minimumViableWeek==='unknown')unk('minimumViableWeek',null,'לא ידוע מה חשוב במיוחד שלא יאבד','nonblocking','tentative_proposal');
+  if(dk('chaos'))unk('chaosTriggers',null,'לא ידוע מה מפרק לך שבוע');
+  // goals
+  F.goals.forEach(g=>{
+    const fills=g.fillsRoutineKey&&p.routines.find(r=>r.key===g.fillsRoutineKey);
+    const w={id:'gl_'+g.key,key:g.key,title:g.title,kind:g.kind,requiredTotalMinutes:g.requiredTotalMinutes!=null?g.requiredTotalMinutes:null,requiredPerWeekMinutes:g.requiredPerWeekMinutes!=null?g.requiredPerWeekMinutes:null,
+      deadline:g.deadline||null,trialAllocationMinutes:null,fillsRoutineId:fills?fills.id:null,minSession:45,rigidity:g.deadline?'hard':'flexible',source:'user'};
+    if(w.requiredTotalMinutes==null&&w.requiredPerWeekMinutes==null){
+      w.trialAllocationMinutes=ONB_TRIAL_GOAL_WEEK_MIN;unk('goal.'+g.key+'.total',g.key,'לא נאמר כמה שעות דרושות — הניסוי שלי הוא לא דרישה','nonblocking','tentative_proposal');
+      p.proposals.push({id:'pr_goal_'+g.key,ref:g.key,title:g.title,kind:g.kind,domain:'work',value:{perWeek:1,minutes:ONB_TRIAL_GOAL_WEEK_MIN},reason:'לא ידוע כמה שעות צריך — אני מציעה להתחיל משעתיים וחצי בשבוע ולבדוק',status:'pending',trial:true,goalId:w.id});
+    }
+    p.workloadGoals.push(w);
+  });
+  p.proposals.push({id:'pr_review',ref:'review',title:'סגירת שבוע',kind:'review',domain:'work',value:{perWeek:1,minutes:ONB_REVIEW_MIN},reason:'סגירת שבוע קצרה לבדוק מה עבד',status:'pending',trial:p.minimumViableWeek==='unknown'});
+  onbAddAssumption(p,{field:'duration',ref:'pr_review',value:ONB_REVIEW_MIN,source:'system_trial_default',risk:'low'});
+  if(p.calendarEvents.length||p.fixedConstraints.some(f=>f.origin==='user_said'))onbAddAssumption(p,{field:'bufferAfterEvents',ref:null,value:15,source:'system_trial_default',risk:'low'});
+  return p;
+}
+
+// ── profile → InitialWeeklyTemplate ──
+// Items: {id,title,origin:'calendar'|'proposal'|'hold',status:'existing'|'proposed'|'tentative',date,startMin,endMin,kind,needsApproval,...}.
+// Placement uses ONLY free time + binding availability (user_setting/user_said/calendar). It never relies on system Friday/Saturday fallbacks.
+function onbBuildTemplate(profile,o){
+  o=o||{};const weekStart=onbNextSunday(profile.today);const dates=[];for(let i=0;i<7;i++)dates.push(_isoAdd(weekStart,i));
+  const dowOf=d=>new Date(d+'T12:00:00Z').getUTCDay();
+  const AFTER_EVENT=15,GAP=10;
+  const items=[],unplaced=[],busy={},closedAll={},partial={};let seq=0;const nid=p=>p+'_'+(++seq);
+  dates.forEach(d=>{busy[d]=[];});
+  const rules=onbBindingAvailability((profile.availability||[]).concat(o.availability||[]));
+  const office=rules.find(r=>r.rule.kind==='work_hours');
+  const noWorkAfter=rules.filter(r=>r.rule.kind==='no_work_after').map(r=>r.rule.fromMin);
+  rules.forEach(r=>{if(r.rule.kind!=='closed')return;dates.forEach(d=>{if((r.rule.date&&r.rule.date===d)||(r.rule.dow!=null&&r.rule.dow===dowOf(d))){
+    if(r.rule.fromMin<=0&&r.rule.toMin>=1440)closedAll[d]=true;else busy[d].push([r.rule.fromMin,r.rule.toMin]);}});});
+  const officeIv=d=>office&&office.rule.days.indexOf(dowOf(d))>=0?[[office.rule.fromMin,office.rule.toMin]]:[];
+  const guardMin=Math.min.apply(null,[ONB_DAY_LIMIT].concat((profile.guards||[]).filter(g=>g.kind==='no_new_items_after').map(g=>g.min)));
+  const add=(it)=>{const x=Object.assign({id:nid(it.origin==='calendar'?'cal':it.origin==='hold'?'hold':'it'),needsApproval:it.status!=='existing'&&it.origin!=='hold'},it);items.push(x);return x;};
+  // 1) the calendar: existing, no approval
+  (profile.calendarEvents||[]).forEach(e=>dates.forEach(d=>{if((e.date&&e.date===d)||(e.dow!=null&&e.dow===dowOf(d))){
+    add({title:e.title,origin:'calendar',status:'existing',date:d,startMin:e.startMin,endMin:e.endMin,kind:'calendar'});busy[d].push([e.startMin,e.endMin+AFTER_EVENT]);}}));
+  // 2) what the user said is fixed (new to the calendar → proposed) + holds (only with a basis, shown, no approval)
+  profile.fixedConstraints.filter(f=>f.origin==='user_said').forEach(f=>f.days.forEach(dw=>{
+    const d=dates.find(x=>dowOf(x)===dw);if(!d)return;
+    if(f.start.value==null||f.end.value==null)return;
+    const tr=f.travelBefore?f.travelBefore.value:0;
+    if(tr)add({title:'נסיעה ל'+f.title,origin:'proposal',status:'proposed',date:d,startMin:f.start.value-tr,endMin:f.start.value,kind:'travel',ref:f.key,timeFacts:{travel:f.travelBefore}});
+    add({title:f.title,origin:'proposal',status:'proposed',date:d,startMin:f.start.value,endMin:f.end.value,kind:'fixed',ref:f.key,approxStart:f.start.precision==='approx',timeFacts:{start:f.start,end:f.end}});
+    busy[d].push([f.start.value-tr-(f.start.precision==='approx'&&!tr?30:0),f.end.value+AFTER_EVENT]);
+  }));
+  (profile.holds||[]).forEach(h=>{const d=dates.find(x=>dowOf(x)===h.dow);if(!d)return;
+    add({title:'מחזיקה פנוי: '+h.reason,origin:'hold',status:'tentative',date:d,startMin:h.from,endMin:h.to,kind:'hold',ref:h.ref,hold:h});busy[d].push([h.from,h.to]);});
+  (profile.partialDays||[]).forEach(pd=>{const d=dates.find(x=>dowOf(x)===pd.dow);if(d){(partial[d]=partial[d]||[]).push(pd.reason);}});
+  // 3) requests for NEW items
+  const reqs=[];let rq=0;
+  const winOf=(r)=>{                                    // windows in preference order
+    if(r.window)return[[r.window.from,r.window.to]];
+    const ds=profile.dayStart||PLAN_DAY_START,lim=guardMin;
+    if(r.domain==='work'||r.kind==='review'){
+      const lo=office?office.rule.fromMin:ds,hi=Math.min(office?office.rule.toMin:ONB_DAY_LIMIT,lim,noWorkAfter.length?Math.min.apply(null,noWorkAfter):ONB_DAY_LIMIT);
+      return[[Math.max(lo,ds),hi]];}
+    if(r.kind==='fitness')return office?[[390,office.rule.fromMin],[office.rule.toMin,lim]]:[[Math.max(720,ds),Math.min(900,lim)],[Math.max(900,ds),lim],[ds,Math.min(720,lim)]];
+    if(r.kind==='family'||r.kind==='social')return[[1080,lim]];
+    return office?[[office.rule.toMin,lim]]:[[Math.max(720,ds),lim],[ds,lim]];
+  };
+  const stat=(trial)=>trial?'tentative':'proposed';
+  const R=(r)=>{reqs.push(Object.assign({id:'rq'+(++rq)},r));};
+  const dayDefault=[0,1,2,3,4];
+  profile.routines.forEach(r=>{
+    if(!r.targetFrequency)return;                                    // a protected habit with no frequency: kept as protected, nothing to place
+    const f=r.targetFrequency,mins=r.targetDuration.minutes;
+    const base={title:r.title,kind:r.kind,domain:r.domain,minutes:mins,routineId:r.id,status:stat(false),prio:r.inMinimumViableWeek?0:r.protected?1:r.maintenanceClass?3:2,window:r.window||null,allowed:r.days||null,assumption:r.targetDuration.assumption||null};
+    if(f.perDay)R(Object.assign({},base,{each:true,allowed:r.days||(office?office.rule.days:dayDefault)}));
+    else R(Object.assign({},base,{count:f.perTwoWeeks?1:(f.perWeek||1),cadence:f.perTwoWeeks?'every_two_weeks':'weekly'}));
+  });
+  const weeksLeft=g=>g.deadline?Math.max(1,Math.ceil(((new Date(g.deadline+'T12:00:00Z')-new Date(weekStart+'T12:00:00Z'))/864e5+1)/7)):1;
+  const accounting={deepWork:null,goals:[]};
+  profile.workloadGoals.forEach(g=>{
+    const acc={goalId:g.id,title:g.title,requiredTotalMinutes:g.requiredTotalMinutes,requiredPerWeekMinutes:g.requiredPerWeekMinutes,trialAllocationMinutes:g.trialAllocationMinutes,fillsRoutineId:g.fillsRoutineId,coveredByRoutineMin:0,newBlockMinutes:0};accounting.goals.push(acc);
+    if(g.fillsRoutineId)return;                                        // handled after the routine blocks are placed (never added on top)
+    const trial=g.requiredTotalMinutes==null&&g.requiredPerWeekMinutes==null;
+    const total=g.requiredPerWeekMinutes!=null?g.requiredPerWeekMinutes:g.requiredTotalMinutes!=null?Math.ceil(g.requiredTotalMinutes/Math.ceil(weeksLeft(g))):g.trialAllocationMinutes;
+    const maxS=trial?150:120,n=Math.max(1,Math.ceil(total/maxS)),each=Math.round(total/n/15)*15||15;acc.newBlockMinutes=each*n;
+    R({title:g.title,kind:g.kind,domain:'work',minutes:each,count:n,goalId:g.id,status:stat(trial),proposalId:trial?'pr_goal_'+g.key:null,prio:4,deadline:g.deadline});
+  });
+  profile.proposals.forEach(pr=>{
+    if(pr.id==='pr_review'||pr.goalId)return;
+    R({title:pr.title,kind:pr.kind,domain:pr.domain,minutes:pr.value.minutes,count:pr.value.perWeek,proposalId:pr.id,status:stat(true),prio:5});
+  });
+  const review=profile.proposals.find(p=>p.id==='pr_review');
+  if(review)R({title:review.title,kind:'review',domain:'work',minutes:review.value.minutes,count:1,proposalId:review.id,status:stat(review.trial),prio:6,reverse:true});
+  reqs.sort((a,b)=>a.prio-b.prio||a.id.localeCompare(b.id,'en',{numeric:true}));
+  // slot search
+  const load=d=>items.filter(i=>i.date===d).reduce((t,i)=>t+(i.endMin-i.startMin),0);
+  const slot=(d,r)=>{
+    const cut=busy[d].concat(r.domain==='life'?officeIv(d):[]);
+    for(const w of winOf(r)){const lo=w[0],hi=Math.min(w[1],r.window?w[1]:guardMin);if(hi-lo<r.minutes)continue;
+      for(const iv of _subIv([[lo,hi]],cut)){const s=Math.ceil(iv[0]/15)*15;if(s+r.minutes<=iv[1])return s;}}
+    return null;
+  };
+  const okDay=(d,r)=>!closedAll[d]&&!partial[d]&&(!r.allowed||r.allowed.indexOf(dowOf(d))>=0)&&(!r.deadline||d<=r.deadline)&&
+    !(r.domain==='work'&&office&&office.rule.days.indexOf(dowOf(d))<0&&!r.allowed);
+  const order=[0,1,2,3,4,5,6];                                          // preference only (Sun–Thu first); Friday/Saturday are NOT blocked unless a binding rule says so
+  const placeOne=(r,d,s)=>{const it=add({title:r.title,origin:'proposal',status:r.status,date:d,startMin:s,endMin:s+r.minutes,kind:r.kind,domain:r.domain,routineId:r.routineId||null,proposalId:r.proposalId||null,goalId:r.goalId||null,cadence:r.cadence||null,assumption:r.assumption||null});
+    busy[d].push([s,s+r.minutes+GAP]);return it;};
+  reqs.forEach(r=>{
+    let cands=dates.filter(d=>okDay(d,r)).sort((a,b)=>order.indexOf(dowOf(a))-order.indexOf(dowOf(b)));
+    if(r.reverse)cands=cands.filter(d=>dowOf(d)<=4).reverse();
+    if(r.each){cands.filter(d=>dowOf(d)<=4||(r.allowed&&r.allowed.indexOf(dowOf(d))>=0)).forEach(d=>{const s=slot(d,r);if(s==null)unplaced.push({title:r.title,date:d,reason:'אין זמן פנוי מתאים'});else placeOne(r,d,s);});return;}
+    const used=new Set();
+    for(let k=0;k<(r.count||1);k++){
+      const pool=cands.filter(d=>!used.has(d)).sort((a,b)=>(dowOf(a)>=5)-(dowOf(b)>=5)||load(a)-load(b)||(a<b?-1:1));
+      let done=false;for(const d of (r.reverse?cands:pool)){if(used.has(d))continue;const s=slot(d,r);if(s!=null){placeOne(r,d,s);used.add(d);done=true;break;}}
+      if(!done)unplaced.push({title:r.title,reason:(profile.guards||[]).length&&guardMin<ONB_DAY_LIMIT?'לא שיבצתי אחרי '+_fmtMin(guardMin)+' ולא נמצא זמן מתאים':'אין זמן פנוי מתאים'});
+    }
+  });
+  // goals that FILL a routine: count the routine's blocks first; only the shortfall becomes new blocks (no double counting)
+  profile.workloadGoals.filter(g=>g.fillsRoutineId).forEach(g=>{
+    const acc=accounting.goals.find(a=>a.goalId===g.id);const need=g.requiredTotalMinutes!=null?g.requiredTotalMinutes:g.requiredPerWeekMinutes||0;
+    const blocks=items.filter(i=>i.routineId===g.fillsRoutineId&&(!g.deadline||i.date<=g.deadline)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
+    let cov=0;for(const b of blocks){if(cov>=need)break;b.goalId=g.id;b.serves=g.title;cov+=b.endMin-b.startMin;}
+    acc.coveredByRoutineMin=Math.min(need,cov);acc.newBlockMinutes=Math.max(0,need-cov);
+    if(acc.newBlockMinutes>0){const r={title:g.title,kind:g.kind,domain:'work',minutes:Math.min(120,Math.round(acc.newBlockMinutes/15)*15||15),count:Math.ceil(acc.newBlockMinutes/120),goalId:g.id,status:'proposed',deadline:g.deadline};
+      for(let k=0;k<r.count;k++){const d=dates.filter(x=>okDay(x,r)).sort((a,b)=>load(a)-load(b))[0];const s=d?slot(d,r):null;if(s!=null)placeOne(r,d,s);else unplaced.push({title:g.title,reason:'אין זמן פנוי מתאים'});}}
+    const rtMin=items.filter(i=>i.routineId===g.fillsRoutineId).reduce((t,i)=>t+i.endMin-i.startMin,0);
+    accounting.deepWork={routineId:g.fillsRoutineId,routineMinutes:rtMin,goalRequiredMin:need,goalCoveredByRoutineMin:acc.coveredByRoutineMin,newBlockMinutes:acc.newBlockMinutes,
+      totalMinutes:items.filter(i=>i.routineId===g.fillsRoutineId||(i.goalId===g.id&&i.routineId!==g.fillsRoutineId&&i.origin==='proposal')).reduce((t,i)=>t+i.endMin-i.startMin,0)};
+  });
+  items.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
+  return{v:1,weekStart,dates,items,unplaced,partialDays:Object.keys(partial).map(d=>({date:d,reasons:partial[d]})),guards:(profile.guards||[]).slice(),accounting,
+    assumptions:[{field:'bufferAfterEvents',value:AFTER_EVENT,risk:'low'},{field:'gapBetweenItems',value:GAP,risk:'low'}]};
+}
+
+// ── approval: returns what to write; writes NOTHING itself ──
+// sel: 'all' | {accept:[ids]|'all', reject:[ids]}. Existing calendar items and holds are never approvable. A Proposal becomes a Routine only when one of its items is accepted.
+function onbApprove(profile,tpl,sel){
+  const pr=JSON.parse(JSON.stringify(profile));const s=sel==='all'?{accept:'all',reject:[]}:(sel||{accept:[],reject:[]});
+  const approvable=tpl.items.filter(i=>i.needsApproval&&i.status!=='existing'&&i.origin!=='hold'&&i.origin!=='calendar');
+  const accIds=s.accept==='all'?approvable.map(i=>i.id):(s.accept||[]).filter(id=>approvable.some(i=>i.id===id));
+  const rejIds=(s.reject||[]).filter(id=>approvable.some(i=>i.id===id)&&accIds.indexOf(id)<0);
+  const accepted=approvable.filter(i=>accIds.indexOf(i.id)>=0),rejected=approvable.filter(i=>rejIds.indexOf(i.id)>=0);
+  pr.proposals.forEach(p=>{
+    const mine=approvable.filter(i=>i.proposalId===p.id);
+    if(mine.some(i=>accIds.indexOf(i.id)>=0)){p.status='accepted';
+      if(!p.goalId&&p.id!=='pr_review'&&!pr.routines.some(r=>r.id==='rt_'+p.ref))pr.routines.push({id:'rt_'+p.ref,key:p.ref,title:p.title,domain:p.domain,kind:p.kind,maintenanceClass:null,targetFrequency:{perWeek:p.value.perWeek},targetDuration:{minutes:p.value.minutes},rigidity:'flexible',
+        inMinimumViableWeek:false,protected:false,confidence:0.7,source:'accepted_proposal',fromProposal:p.id});}
+    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0))p.status='rejected';
+  });
+  return{profile:pr,accepted,rejected,pending:approvable.filter(i=>accIds.indexOf(i.id)<0&&rejIds.indexOf(i.id)<0),calendarWrites:accepted.map(i=>({title:i.title,date:i.date,startMin:i.startMin,endMin:i.endMin,origin:'maya_onboarding',itemId:i.id}))};
+}
+
+// ── confirmation text (written by code, in Maya's voice) ──
+function onbTemplateText(profile,tpl){
+  const today=profile.today,L=[];
+  const line=i=>_mayaDayLabel(i.date,today).replace(/^יום /,'')+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.title+(i.serves?' (להצעה: '+i.serves+')':'')+(i.cadence==='every_two_weeks'?' (אחת לשבועיים)':'')+(i.approxStart?' (התחלה משוערת)':'');
+  const existing=tpl.items.filter(i=>i.status==='existing'),proposed=tpl.items.filter(i=>i.origin==='proposal'&&i.status==='proposed'),trial=tpl.items.filter(i=>i.origin==='proposal'&&i.status==='tentative'),holds=tpl.items.filter(i=>i.origin==='hold');
+  L.push('לפי מה שסיפרת, אני מציעה להתחיל כך (השבוע של '+_mayaDayLabel(tpl.weekStart,today).replace(/^יום /,'')+'):');
+  if(existing.length)L.push('','כבר ביומן, השארתי כמו שהוא ואין צורך באישור:',...existing.map(i=>'• '+line(i)));
+  if(proposed.length)L.push('','הצעות חדשות לאישור:',...proposed.map(i=>'• '+line(i)));
+  if(trial.length)L.push('','לניסוי, אפשר לשנות או להוריד:',...trial.map(i=>'• '+line(i)));
+  if(holds.length)L.push('','מחזיקה פנוי, בלי לבקש אישור:',...holds.map(i=>'• '+_mayaDayLabel(i.date,today).replace(/^יום /,'')+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.hold.reason+', עד שתדע את השעה'));
+  (tpl.partialDays||[]).forEach(p=>L.push('','ב'+_mayaDayLabel(p.date,today).replace(/^יום /,'')+' לא הוספתי כלום: '+p.reasons.join(', ')+'.'));
+  const unpl=profile.routines.filter(r=>!r.targetFrequency&&r.protected).map(r=>r.title);
+  if(unpl.length)L.push('','שמרתי כמוגן ולא שיבצתי בזה כלום: '+unpl.join(', ')+'.');
+  if(tpl.guards.length)L.push('','זהירות שלי, לא כלל שלך: לא משבצת כלום אחרי '+_fmtMin(tpl.guards[0].min)+' '+tpl.guards[0].reason+'.');
+  if(tpl.unplaced.length)L.push('','לא הצלחתי למצוא מקום ל: '+tpl.unplaced.map(u=>u.title).join(', ')+'.');
+  const asm=profile.assumptions.filter(a=>a.field==='duration'&&a.ref&&a.source==='system_trial_default').map(a=>{const it=profile.routines.find(r=>r.key===a.ref)||profile.proposals.find(p=>p.id===a.ref||p.ref===a.ref);return it?it.title+' '+_mayaDur(a.value):null;}).filter(Boolean);
+  if(profile.assumptions.some(x=>x.field==='dayStart'))L.push('','לא שיבצתי כלום לפני '+_fmtMin(profile.dayStart)+', כי אמרת שאתה קם מאוחר. זו הצעה שלי, לא כלל.');
+  if(asm.length)L.push('','הנחות שעשיתי (נבדוק אחרי שבוע–שבועיים): '+asm.join(', ')+'.');
+  const ttl=ref=>{const f=profile.fixedConstraints.find(x=>x.key===ref);return f?f.title:ref;};
+  const unk=profile.unknowns.filter(u=>u.field==='workHours'||u.field==='evening'||u.field.indexOf('goal.')===0||/\.(start|travel|day)$/.test(u.field)||u.field==='minimumViableWeek').map(u=>
+    u.field==='workHours'?'שעות העבודה שלך':u.field==='evening'?'מאיזו שעה זה ערב':u.field==='minimumViableWeek'?'מה חשוב במיוחד שלא יאבד בשבוע עמוס':
+    u.field.indexOf('goal.')===0?'כמה שעות צריך ל'+((profile.workloadGoals.find(g=>g.key===u.ref)||{}).title||'היעד'):
+    /\.start$/.test(u.field)?'מתי בדיוק '+ttl(u.ref):/\.travel$/.test(u.field)?'זמן הנסיעה ל'+ttl(u.ref):'באיזה יום '+ttl(u.ref));
+  const uu=unk.filter((x,i)=>unk.indexOf(x)===i);
+  if(uu.length)L.push('','עוד לא ידוע, ואני לא מנחשת: '+uu.join(', ')+'. אשאל בסגירת השבוע.');
+  L.push('','רוצה שאבנה את השבוע כך? אפשר לאשר הכול או רק חלק.');
+  return L.join('\n');
+}
+// PURE: the whole pipeline from a finished conversation state.
+function onbFinish(st){const profile=onbBuildProfile(st);const template=onbBuildTemplate(profile);return{profile,template,text:onbTemplateText(profile,template)};}
+
 // ═══ Step F: chat ⇄ planning layers ═══
 // The model ONLY interprets (structured JSON, enforced by the schema below). Everything the user reads about a plan is written HERE, in code.
 const AI_INTENT_SCHEMA=(()=>{

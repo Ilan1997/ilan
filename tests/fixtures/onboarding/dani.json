@@ -1,0 +1,128 @@
+{
+ "name": "דני — כמעט לא יודע",
+ "today": "2026-11-18",
+ "calendar": [
+  {
+   "dow": 1,
+   "startMin": 600,
+   "endMin": 660,
+   "title": "ישיבת צוות שבועית"
+  },
+  {
+   "date": "2026-11-25",
+   "startMin": 900,
+   "endMin": 960,
+   "title": "תור לרופא",
+   "oneTime": true
+  }
+ ],
+ "script": [
+  {
+   "expect": "q1",
+   "answer": "לא יודע. שיהיה רגוע? ... לא יודע.",
+   "extraction": {
+    "answeredTopics": [
+     "q1"
+    ],
+    "successCriteria": [
+     "רגוע"
+    ],
+    "dontKnow": [
+     "minimumViableWeek"
+    ]
+   }
+  },
+  {
+   "expect": "q2",
+   "answer": "עובד ברוב הימים. לא יודע בדיוק באילו שעות.",
+   "extraction": {
+    "answeredTopics": [
+     "q2"
+    ],
+    "dontKnow": [
+     "workHours"
+    ]
+   }
+  },
+  {
+   "expect": "q3",
+   "answer": "אין לי מושג.",
+   "extraction": {
+    "answeredTopics": [
+     "q3"
+    ],
+    "dontKnow": [
+     "maintenance"
+    ]
+   }
+  },
+  {
+   "expect": "q4",
+   "answer": "ערבים עם המשפחה. וספורט אולי.",
+   "extraction": {
+    "answeredTopics": [
+     "q4"
+    ],
+    "routines": [
+     {
+      "key": "family",
+      "title": "ערבים עם המשפחה",
+      "kind": "family",
+      "domain": "life",
+      "protected": true
+     },
+     {
+      "key": "sport",
+      "title": "ספורט",
+      "kind": "fitness",
+      "domain": "life",
+      "stated": "maybe",
+      "protected": true,
+      "confidence": 0.4
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q5",
+   "answer": "לא.",
+   "extraction": {
+    "answeredTopics": [
+     "q5"
+    ],
+    "goalsNone": true
+   }
+  },
+  {
+   "expect": "q6",
+   "answer": "אין לי מושג.",
+   "extraction": {
+    "answeredTopics": [
+     "q6"
+    ],
+    "dontKnow": [
+     "chaos"
+    ]
+   }
+  },
+  {
+   "expect": "q7",
+   "answer": "לא יודע. שלא יעבדו אותי בערב.",
+   "extraction": {
+    "answeredTopics": [
+     "q7"
+    ],
+    "boundaries": [
+     {
+      "rule": "בלי עבודה בערב",
+      "kind": "no_work_evening",
+      "defined": false
+     }
+    ],
+    "dontKnow": [
+     "evening"
+    ]
+   }
+  }
+ ]
+}

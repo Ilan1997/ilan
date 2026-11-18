@@ -1,0 +1,209 @@
+{
+ "name": "יובל — מבולגן, בלי יומן",
+ "today": "2026-11-18",
+ "calendar": null,
+ "script": [
+  {
+   "expect": "q1",
+   "answer": "תזה, אימונים פעמיים בשבוע וערב עם חברים. הכי חשוב שלא יאבד: התזה והאימונים. אני קם מאוחר.",
+   "extraction": {
+    "answeredTopics": [
+     "q1",
+     "q4"
+    ],
+    "successCriteria": [
+     "להתקדם בתזה",
+     "אימונים",
+     "ערב עם חברים"
+    ],
+    "minimumViableWeek": [
+     "תזה",
+     "2 אימונים"
+    ],
+    "lateRiser": {
+     "earliest": "10:00"
+    },
+    "routines": [
+     {
+      "key": "workout",
+      "title": "אימון",
+      "kind": "fitness",
+      "domain": "life",
+      "perWeek": 2,
+      "protected": true,
+      "inMvw": true
+     },
+     {
+      "key": "friends",
+      "title": "ערב עם חברים",
+      "kind": "social",
+      "domain": "life",
+      "perWeek": 1,
+      "protected": true
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q2",
+   "answer": "הקורס בסטטיסטיקה ביום ג׳ בערב, בערך 18 עד 21, באוניברסיטה. בשאר הימים אני עובד מהבית. ויש פגישה שבועית עם המנחה, לא זוכר איזה יום.",
+   "extraction": {
+    "answeredTopics": [
+     "q2"
+    ],
+    "fixed": [
+     {
+      "key": "course",
+      "title": "קורס סטטיסטיקה",
+      "days": [
+       2
+      ],
+      "start": {
+       "hhmm": "18:00",
+       "precision": "approx"
+      },
+      "end": {
+       "hhmm": "21:00",
+       "precision": "approx"
+      },
+      "travelNeeded": true
+     },
+     {
+      "key": "advisor",
+      "title": "פגישה עם המנחה",
+      "dayUnknown": true
+     }
+    ]
+   }
+  },
+  {
+   "expect": "f1",
+   "answer": "חמישי, אחה״צ. שעה לא יודע.",
+   "extraction": {
+    "fixed": [
+     {
+      "key": "advisor",
+      "days": [
+       4
+      ],
+      "dayUnknown": false,
+      "semanticWindow": "אחה״צ"
+     }
+    ],
+    "dontKnow": [
+     "fixed.advisor.start"
+    ]
+   }
+  },
+  {
+   "expect": "f2",
+   "answer": "בערך שעה. מתחיל ב-18:15.",
+   "extraction": {
+    "fixed": [
+     {
+      "key": "course",
+      "start": {
+       "hhmm": "18:15",
+       "precision": "exact"
+      },
+      "travelMin": {
+       "min": 60,
+       "precision": "approx"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q3",
+   "answer": "חשבוניות, ואני מזניח גבייה. עוד מיילים ללקוחות. ובחיים: סידורים בבנק ובדואר, וקניות.",
+   "extraction": {
+    "answeredTopics": [
+     "q3"
+    ],
+    "routines": [
+     {
+      "key": "invoices",
+      "title": "חשבוניות וגבייה",
+      "kind": "payments",
+      "domain": "work",
+      "maintenance": "work",
+      "perWeek": 1
+     },
+     {
+      "key": "emails",
+      "title": "מיילים ללקוחות",
+      "kind": "email",
+      "domain": "work",
+      "maintenance": "work",
+      "perDay": true
+     },
+     {
+      "key": "errands",
+      "title": "סידורים וקניות",
+      "kind": "shopping",
+      "domain": "life",
+      "maintenance": "life",
+      "perWeek": 1
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q5",
+   "answer": "התזה, לפחות שש שעות בשבוע. ובסטטיסטיקה יש מבחן ב-14 בדצמבר.",
+   "extraction": {
+    "answeredTopics": [
+     "q5"
+    ],
+    "goals": [
+     {
+      "key": "thesis",
+      "title": "תזה",
+      "kind": "study",
+      "requiredPerWeekMinutes": 360
+     },
+     {
+      "key": "stats",
+      "title": "סטטיסטיקה",
+      "kind": "study",
+      "deadline": "2026-12-14"
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q6",
+   "answer": "מטלות שנדחפות מהאוניברסיטה.",
+   "extraction": {
+    "answeredTopics": [
+     "q6"
+    ],
+    "chaosTriggers": [
+     "מטלות שנדחפות מהאוניברסיטה"
+    ]
+   }
+  },
+  {
+   "expect": "q7",
+   "answer": "אחרי 21 לא עובד, ובשישי בכלל לא.",
+   "extraction": {
+    "answeredTopics": [
+     "q7"
+    ],
+    "boundaries": [
+     {
+      "rule": "אין עבודה אחרי 21:00",
+      "kind": "no_work_after",
+      "time": "21:00"
+     },
+     {
+      "rule": "שישי סגור",
+      "kind": "closed_day",
+      "dow": 5
+     }
+    ]
+   }
+  }
+ ]
+}

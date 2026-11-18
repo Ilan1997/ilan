@@ -1,0 +1,281 @@
+{
+ "name": "נועם — מסודר, יומן מחובר",
+ "today": "2026-11-18",
+ "calendar": [
+  {
+   "dow": 0,
+   "startMin": 570,
+   "endMin": 630,
+   "title": "סטטוס עם לקוח"
+  },
+  {
+   "dow": 2,
+   "startMin": 480,
+   "endMin": 510,
+   "title": "הסעת ילדים"
+  },
+  {
+   "dow": 3,
+   "startMin": 990,
+   "endMin": 1050,
+   "title": "חוג"
+  },
+  {
+   "dow": 4,
+   "startMin": 600,
+   "endMin": 660,
+   "title": "ישיבת צוות"
+  }
+ ],
+ "script": [
+  {
+   "expect": "q1",
+   "answer": "שלוש ריצות, ארוחת ערב עם הילדים לפחות ארבעה ערבים, שעתיים עבודה עמוקה ביום על האסטרטגיה, ושיעור תורה בשישי בבוקר. אם השבוע עמוס — לא לוותר על שני ערבים עם הילדים ועל שתי ריצות.",
+   "extraction": {
+    "answeredTopics": [
+     "q1"
+    ],
+    "successCriteria": [
+     "3 ריצות",
+     "ארוחת ערב עם הילדים 4 ערבים",
+     "עבודה עמוקה 2 שעות ביום",
+     "שיעור תורה בשישי"
+    ],
+    "minimumViableWeek": [
+     "2 ערבי משפחה",
+     "2 ריצות"
+    ],
+    "routines": [
+     {
+      "key": "run",
+      "title": "ריצה",
+      "kind": "fitness",
+      "domain": "life",
+      "perWeek": 3,
+      "protected": true,
+      "inMvw": true
+     },
+     {
+      "key": "family",
+      "title": "ארוחת ערב עם הילדים",
+      "kind": "family",
+      "domain": "life",
+      "perWeek": 4,
+      "protected": true,
+      "inMvw": true
+     },
+     {
+      "key": "deep",
+      "title": "עבודה עמוקה",
+      "kind": "deep_work",
+      "domain": "work",
+      "perDay": true,
+      "durationMin": 120,
+      "days": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ]
+     },
+     {
+      "key": "lesson",
+      "title": "שיעור תורה",
+      "kind": "lesson",
+      "domain": "life",
+      "perWeek": 1,
+      "days": [
+       5
+      ],
+      "window": {
+       "from": "08:00",
+       "to": "09:00"
+      },
+      "durationMin": 60,
+      "protected": true
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q2",
+   "answer": "כן. כל יום 08:30–17:30 במשרד חוץ מההסעות, ובב׳ יש טיפול משפחתי אחה״צ עד 17:00. זה לא ביומן.",
+   "extraction": {
+    "answeredTopics": [
+     "q2"
+    ],
+    "officeHours": {
+     "days": [
+      0,
+      1,
+      2,
+      3,
+      4
+     ],
+     "from": "08:30",
+     "to": "17:30"
+    },
+    "fixed": [
+     {
+      "key": "therapy",
+      "title": "טיפול משפחתי",
+      "days": [
+       1
+      ],
+      "end": {
+       "hhmm": "17:00",
+       "precision": "exact"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "expect": "f1",
+   "answer": "15:30 בערך",
+   "extraction": {
+    "fixed": [
+     {
+      "key": "therapy",
+      "start": {
+       "hhmm": "15:30",
+       "precision": "approx"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q3",
+   "answer": "בעבודה תשלומים לספקים, מעקב לידים ומשוב לעובדים. בבית חשבונות וקניות.",
+   "extraction": {
+    "answeredTopics": [
+     "q3"
+    ],
+    "routines": [
+     {
+      "key": "payments",
+      "title": "תשלומים לספקים",
+      "kind": "payments",
+      "domain": "work",
+      "maintenance": "work",
+      "perWeek": 1
+     },
+     {
+      "key": "leads",
+      "title": "מעקב לידים",
+      "kind": "leads",
+      "domain": "work",
+      "maintenance": "work",
+      "perWeek": 1
+     },
+     {
+      "key": "feedback",
+      "title": "משוב לעובדים",
+      "kind": "feedback",
+      "domain": "work",
+      "maintenance": "work",
+      "perTwoWeeks": true
+     },
+     {
+      "key": "bills",
+      "title": "חשבונות הבית",
+      "kind": "bills",
+      "domain": "life",
+      "maintenance": "life",
+      "perWeek": 1
+     },
+     {
+      "key": "shopping",
+      "title": "קניות",
+      "kind": "shopping",
+      "domain": "life",
+      "maintenance": "life",
+      "perWeek": 1
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q4",
+   "answer": "כבר אמרתי: ערבים עם הילדים, והריצות. ועוד שיעור הגמרא בשישי.",
+   "extraction": {
+    "answeredTopics": [
+     "q4"
+    ]
+   }
+  },
+  {
+   "expect": "q5",
+   "answer": "הצעת מחיר גדולה ללקוח חדש. בערך 6 שעות, עד יום רביעי הבא.",
+   "extraction": {
+    "answeredTopics": [
+     "q5"
+    ],
+    "goals": [
+     {
+      "key": "quote",
+      "title": "הצעת מחיר ללקוח חדש",
+      "kind": "work",
+      "requiredTotalMinutes": 360,
+      "deadline": "2026-11-25",
+      "fillsRoutineKey": "deep"
+     }
+    ]
+   }
+  },
+  {
+   "expect": "q6",
+   "answer": "לקוחות שמתקשרים באמצע היום, וישיבות שמתארכות.",
+   "extraction": {
+    "answeredTopics": [
+     "q6"
+    ],
+    "chaosTriggers": [
+     "שיחות לקוחות באמצע היום",
+     "ישיבות שמתארכות"
+    ]
+   }
+  },
+  {
+   "expect": "q7",
+   "answer": "אחרי 19:00 אין עבודה, ובשישי אחר הצהריים וכל שבת כלום.",
+   "extraction": {
+    "answeredTopics": [
+     "q7"
+    ],
+    "boundaries": [
+     {
+      "rule": "אין עבודה אחרי 19:00",
+      "kind": "no_work_after",
+      "time": "19:00"
+     },
+     {
+      "rule": "שישי אחר הצהריים סגור",
+      "kind": "closed_day",
+      "dow": 5,
+      "semanticWindow": "אחה״צ"
+     },
+     {
+      "rule": "שבת סגורה",
+      "kind": "closed_day",
+      "dow": 6
+     }
+    ]
+   }
+  }
+ ],
+ "variantDontKnowTherapyStart": {
+  "replaceIndex": 2,
+  "step": {
+   "expect": "f1",
+   "answer": "לא יודע",
+   "extraction": {
+    "dontKnow": [
+     "fixed.therapy.start"
+    ]
+   }
+  }
+ }
+}
