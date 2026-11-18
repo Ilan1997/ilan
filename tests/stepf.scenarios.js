@@ -33,10 +33,10 @@
     o.b2_schemaEnumsMatchEngine=JSON.stringify(AI_INTENT_SCHEMA.properties.items.items.properties.kind.enum)===JSON.stringify(PLAN_KINDS)&&AI_INTENT_SCHEMA.required.indexOf('op')>=0&&AI_INTENT_SCHEMA.properties.op.enum.indexOf('none')>=0;
     o.b3_schemaSmall=JSON.stringify(AI_INTENT_SCHEMA).length<=8000;
     o.b4_promptKnowsNone=/op=none/.test(AI_INTENT_PROMPT);
-    // ── 3) who gets the planner path ──
-    const yes=[SAY,'אחרי הפגישה תסדר לי נסיעה','תסדר לי את מחר: קניות, בנק ושיחה עם דנה','סדר לי את היום','כשאני בדרך לאריאל תזכיר לי להתקשר'];
-    const no=['שלום','תודה רבה','יש לי 8 שעות לימוד עד ה-23 בנובמבר','מה דעתך שנלמד ברביעי','איך עושים בדיקה','',null];
-    o.c1_routerYes=yes.every(looksLikePlanRequest);o.c2_routerNo=no.every(x=>!looksLikePlanRequest(x));
+    // ── 3) the router is only a cost optimisation: it may skip pleasantries, never a real request ──
+    const trivial=['שלום','תודה רבה','אוקיי','מה שלומך?','בוקר טוב!','',null];
+    const real=[SAY,'תסדרי לי את מחר','אני צריך 8 שעות לימוד עד ה-23','יש לי רופא ברביעי ב-10, תוסיפי נסיעה','אל תעמיסי לי את יום שני','מה דעתך שנלמד ברביעי','תארגני לי את היום','קחי לי שעתיים השבוע'];
+    o.c1_trivialSkipped=trivial.every(isClearlyNotPlanning);o.c2_neverSkipsARequest=real.every(x=>!isClearlyNotPlanning(x));
     // ── 4) pure pipeline ──
     {const st=mkState(E1,TRAVEL);const r=mayaPlanFromIntent(st,CHAIN);
      o.d1_chainProposal=r.status==='proposal'&&r.items.length===2&&r.plan.items.every(x=>x.status==='planned'&&x.planId===r.plan.planId)&&r.plan.rootId===r.plan.planId;
@@ -52,6 +52,47 @@
      o.d8_arrangeProposal=arr.status==='proposal'&&arr.items.length===2&&arr.items.every(x=>x.startMin>=HM(8))&&lintOk(arr.text);
      const nr=mayaPlanFromIntent(mkState(E1,TRAVEL),{op:'create',items:[{ref:'i1',title:'נסיעה לאריאל',kind:'travel',place:'אריאל',anchor:{rel:'after',target:{text:'הפגישה במאדים',date:MON}}}]});
      o.d9_unknownAnchorAsks=nr.status==='ask'&&lintOk(nr.text);}
+    // ── 4b) "N hours until a date": a workload goal spread around the life that is already in the calendar ──
+    {const G=(x)=>({op:'goal',goals:[{ref:'g1',title:'לימוד',kind:'study',totalMinutes:480,deadline:'2026-11-23',...(x||{})}]});
+     const busy=[EV('m1','פגישה',HM(9),HM(12)),{...EV('full','יום מלא',HM(9),HM(18)),date:'2026-11-17'}];
+     const stG=mkState(busy,{});const now={today:MON,nowMin:HM(14)};
+     const r=mayaPlanFromIntent(stG,G(),{now});const tot=r.items?r.items.reduce((t,x)=>t+x.endMin-x.startMin,0):0;
+     o.n1_goalProposal=r.status==='proposal'&&tot===480&&r.goals[0].shortfallMin===0&&r.plan.items.every(x=>x.goalRef==='g1');
+     o.n2_sessionSizes=r.items.every(x=>x.endMin-x.startMin>=45&&x.endMin-x.startMin<=120)&&new Set(r.items.map(x=>x.date)).size>=4;
+     o.n3_valid=validatePlan(r.snap,r.items).ok&&r.items.every(x=>x.date>=MON&&x.date<='2026-11-23');
+     o.n4_nothingInThePast=r.items.filter(x=>x.date===MON).every(x=>x.startMin>=HM(14));
+     o.n5_busyDayRespected=!r.items.some(x=>x.date==='2026-11-17')&&r.items.filter(x=>x.date===MON).every(x=>x.startMin>=HM(14));
+     o.n6_deadlineDayLast=!r.items.some(x=>x.date==='2026-11-23');
+     o.n7_textPlain=/סה״כ 8 שעות/.test(r.text)&&/אין לי עדיין העדפת שעות/.test(r.text)&&/לאשר\?$/.test(r.text)&&lintOk(r.text)&&/עד יום ב׳ 23\/11/.test(r.text);
+     const r60=mayaPlanFromIntent(stG,G({maxSessionMin:60}),{now});
+     o.n8_maxSessionRespected=r60.status==='proposal'&&r60.items.every(x=>x.endMin-x.startMin<=60)&&r60.items.reduce((t,x)=>t+x.endMin-x.startMin,0)===480;
+     const rShort=mayaPlanFromIntent(stG,G({totalMinutes:1500,deadline:'2026-11-17'}),{now});
+     o.n9_shortfallSaidAloud=(rShort.status==='proposal'||rShort.status==='needs_decision')&&(rShort.status==='needs_decision'||(rShort.goals[0].shortfallMin>0&&/נשארו/.test(rShort.text)));
+     o.n10_asksWhatIsMissing=mayaPlanFromIntent(stG,G({deadline:undefined}),{now}).ask.field==='deadline'&&mayaPlanFromIntent(stG,G({deadline:'2026-11-10'}),{now}).ask.field==='deadline'&&mayaPlanFromIntent(stG,{op:'goal',goals:[{title:'לימוד',kind:'study'}]},{now}).ask.field==='totalMinutes';
+     const stW=mkState(busy,{preferredWindows:{study:[{from:'08:00',to:'12:00'}]}});const rw=mayaPlanFromIntent(stW,G(),{now:{today:MON,nowMin:HM(6)}});
+     o.n11_preferredWindowUsed=rw.status==='proposal'&&rw.items.filter(x=>x.startMin>=HM(8)&&x.startMin<HM(12)).length>=rw.items.length-1&&!/אין לי עדיין העדפת שעות/.test(rw.text);
+     o.n12_nonStudyKindsToo=mayaPlanFromIntent(stG,{op:'goal',goals:[{title:'עבודה על הפרויקט',kind:'work',totalMinutes:300,deadline:'2026-11-19',maxSessionMin:120}]},{now}).status==='proposal';}
+    // ── 4c) preferences become rules (after approval), and the planner then uses them ──
+    {const st=mkState(E1,{dayModes:{5:'rest'}});
+     const a=mayaPlanFromIntent(st,{op:'preference',scope:'global',preference:{dayRule:{dow:1,mode:'light'}}});
+     o.p1_dayRule=a.status==='rules_proposal'&&a.patch.dayModes[1]==='light'&&a.patch.dayModes[5]==='rest'&&/יום שני/.test(a.text)&&lintOk(a.text);
+     const b=mayaPlanFromIntent(st,{op:'preference',preference:{preferredWindow:{kind:'study',from:'08:00',to:'12:00'}}});
+     o.p2_preferredWindow=b.status==='rules_proposal'&&b.patch.preferredWindows.study[0].from==='08:00'&&/לימודים/.test(b.text)&&lintOk(b.text);
+     o.p3_nothingToSave=mayaPlanFromIntent(st,{op:'preference',preference:{}}).status==='not_plan'&&mayaPlanFromIntent(st,{op:'preference',preference:{preferredWindow:{kind:'study',from:'12:00',to:'08:00'}}}).status==='not_plan';
+     o.p4_globalAsksScope=mayaPlanFromIntent(st,{op:'preference',preference:{bufferBeforeMin:10}}).status==='ask';
+     STATE_ACTIVE=mkState(E1,{});AI_PENDING_MAYA=null;AI_PENDING_ASK=null;window.__MAYA_NOW__={iso:MON,minutes:HM(8)};
+     _aiCallModel=async()=>JSON.stringify({op:'preference',preference:{preferredWindow:{kind:'study',from:'08:00',to:'12:00'}}});_aiRoute=async()=>'proxy';
+     const h=await _mayaHandleStructured('אני רוצה ללמוד בבקרים');const had=!!(AI_PENDING_MAYA&&AI_PENDING_MAYA.rules);
+     _mayaApprove(null);
+     o.p5_savedThroughApproval=h===true&&had&&getUserRules(STATE_ACTIVE).preferredWindows.study[0].to==='12:00'&&AI_PENDING_MAYA===null;}
+    // ── 4d) every repair says WHY, from a code + data (the sentence is written in code) ──
+    {const r=mayaPlanFromIntent(mkState(E1,TRAVEL),CHAIN);const st1=r.repair.best.steps[0];
+     o.q1_stepHasExplanation=!!st1.explanationCode&&st1.explanationData&&st1.explanationData.eventTitle==='טיפול'&&st1.explanationCode==='SHORTENED_BEFORE_EVENT';
+     const plan=r.plan;const st=mkState(E1,TRAVEL);
+     const rp=mayaReplanFromState(st,plan,{type:'delay',minutes:20},{today:MON,nowMin:HM(10,5)});
+     const ch=rp.changes[0];
+     o.q2_replanSaysWhy=rp.changes.length>=1&&rp.changes.every(c=>c.explanationCode&&c.because)&&ch.explanationCode==='SHIFTED_AFTER_EVENT'&&/טיפול/.test(ch.because)&&/שאי אפשר להזיז/.test(ch.because);
+     o.q3_textHasBecause=/ — כי ב-11:20 יש לך "טיפול"/.test(replanSummaryText(rp))&&lintOk(replanSummaryText(rp));}
     // ── 5) spoken changes to a plan ──
     {const plan=makePlan(buildContextSnapshot(mkState(E1,TRAVEL),{engine:false}),[
        {ref:'a',title:'בית מדרש',kind:'religious',place:null,date:MON,startMin:HM(10),endMin:HM(11),origDurationMin:60,rigidity:'flexible',canMove:true,canShorten:false,canDrop:false,minDurationMin:null,earliest:null,latest:null,bufferMin:0,inTravel:false,chain:null,chainIdx:null,chainAnchor:null},
@@ -71,7 +112,7 @@
     const events=()=>((STATE_ACTIVE.constraintsGlobal||{}).events||[]).filter(e=>String(e.id).indexOf('mplan:')===0);
     STATE_ACTIVE=mkState(E1,TRAVEL);AI_CURRENT_PLAN=null;AI_PENDING_MAYA=null;AI_PENDING_ASK=null;
     // 6a) not a planning message → the planner path stays out of the way (no model call at all)
-    o.f1_chatUntouched=(await _mayaHandleStructured('שלום מאיה'))===false&&calls===0;
+    o.f1_chatUntouched=(await _mayaHandleStructured('שלום'))===false&&calls===0;
     // 6b) a planning request → structured call → proposal waiting for approval, calendar still untouched
     calls=0;const handled=await _mayaHandleStructured(SAY);
     o.f2_proposalShown=handled===true&&calls===1&&!!AI_PENDING_MAYA&&AI_PENDING_MAYA.plan.items.length===2&&events().length===0&&AI_CURRENT_PLAN===null;

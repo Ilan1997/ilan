@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -5969,6 +5969,7 @@ function _mayaCommitPlan(plan,oldPlan){
 function _mayaApprove(bubbleEl){
   const p=AI_PENDING_MAYA;if(!p){showToast('אין הצעה ממתינה');return;}
   if(bubbleEl){const row=bubbleEl.querySelector('div:last-child');if(row&&row.querySelector('button'))row.remove();}
+  if(p.rules){dispatchEvent('personal',{type:'SET_USER_RULES',patch:p.rules});AI_PENDING_MAYA=null;showToast('✅ נשמר');_mayaSay('שמרתי. אשתמש בזה מעכשיו.');return;}
   const plan=p.plan,root=plan.rootId||plan.planId,today=p.today;
   if(_mayaFreshSig(root,today)!==plan.snapshotSig){AI_PENDING_MAYA=null;_mayaSay('היומן השתנה מאז שהכנתי את ההצעה — אפשר לבקש שוב ואחשב מחדש.');return;}
   _mayaCommitPlan(plan,p.oldPlan);AI_PENDING_MAYA=null;
@@ -5989,6 +5990,7 @@ function _mayaShowPlanResult(res,originalText){
   if(res.status==='ask'){AI_PENDING_ASK={originalText,field:res.ask.field||null,from:res.ask.from||null,to:res.ask.to||null,raw:res.raw||null};_mayaSay(res.text);return true;}
   if(res.status==='needs_decision'){_mayaSay(res.text);return true;}
   if(res.status==='proposal'){_mayaOfferPlan(res,null);return true;}
+  if(res.status==='rules_proposal'){AI_PENDING_MAYA={rules:res.patch};_mayaSay(res.text,[{label:'✅ אשר',style:'background:var(--green);color:#fff;border-color:var(--green);',onclick:div=>_mayaApprove(div)},{label:'ביטול',onclick:div=>_mayaReject(div)}]);return true;}
   return false;
 }
 function _mayaShowReplan(r,now){
@@ -6010,7 +6012,7 @@ async function _mayaHandleStructured(text){
   if(ask){
     if(ask.field==='travel'&&ask.from&&ask.to&&ask.raw){
       const m=parseMinutesAnswer(text);
-      if(m>0){dispatchEvent('personal',{type:'SET_USER_RULES',patch:travelAnswerPatch(getUserRules(STATE_ACTIVE),ask.from,ask.to,m)});return _mayaShowPlanResult(mayaPlanFromIntent(STATE_ACTIVE,ask.raw,{excludeRootId:null}),ask.originalText);}
+      if(m>0){dispatchEvent('personal',{type:'SET_USER_RULES',patch:travelAnswerPatch(getUserRules(STATE_ACTIVE),ask.from,ask.to,m)});return _mayaShowPlanResult(mayaPlanFromIntent(STATE_ACTIVE,ask.raw,{excludeRootId:null,now}),ask.originalText);}
     }
     said=ask.originalText+' ('+text+')';
   }
@@ -6023,11 +6025,11 @@ async function _mayaHandleStructured(text){
     }
   }
   // 2) a new structured request
-  if(!ask&&!looksLikePlanRequest(text))return false;
+  if(!ask&&isClearlyNotPlanning(text))return false;
   if((await _aiRoute())==='none')return false;
   const raw=await _mayaCallIntent(said);
   if(!raw)return false;
-  return _mayaShowPlanResult(mayaPlanFromIntent(STATE_ACTIVE,raw,{excludeRootId:null}),said);
+  return _mayaShowPlanResult(mayaPlanFromIntent(STATE_ACTIVE,raw,{excludeRootId:null,now}),said);
 }
 
 async function sendAIMessage(){
@@ -9068,6 +9070,7 @@ function normalizeUserRules(raw){
   const zoneIds=new Set(zones.map(z=>z.id));
   const travelMatrix={};if(r.travelMatrix&&typeof r.travelMatrix==='object')Object.keys(r.travelMatrix).forEach(k=>{const [a,b]=String(k).split('|');if(a&&b&&zoneIds.has(a)&&zoneIds.has(b)&&a!==b){const v=_pm_int(r.travelMatrix[k],1,600,NaN);if(Number.isFinite(v))travelMatrix[[a,b].sort().join('|')]=v;}});
   const mob={};if(r.mobilityByKind&&typeof r.mobilityByKind==='object')Object.keys(r.mobilityByKind).forEach(k=>{if(!PLAN_KINDS.includes(k))return;const m=r.mobilityByKind[k]||{},o={};['canMove','canShorten','canDrop'].forEach(f=>{if(typeof m[f]==='boolean')o[f]=m[f];});const md=_pm_int(m.minDurationMin,5,480,NaN);if(Number.isFinite(md))o.minDurationMin=md;mob[k]=o;});
+  const pwin={};if(r.preferredWindows&&typeof r.preferredWindows==='object')Object.keys(r.preferredWindows).forEach(k=>{if(!PLAN_KINDS.includes(k))return;const arr=(Array.isArray(r.preferredWindows[k])?r.preferredWindows[k]:[]).map(w=>w&&_hhmm(w.from)!=null&&_hhmm(w.to)!=null&&_hhmm(w.from)<_hhmm(w.to)?{from:w.from,to:w.to}:null).filter(Boolean).slice(0,3);if(arr.length)pwin[k]=arr;});   // kind → preferred time windows (null/absent = no saved preference)
   const learned={duration:{}};if(r.learned&&r.learned.duration&&typeof r.learned.duration==='object')Object.keys(r.learned.duration).forEach(k=>{const e=r.learned.duration[k];if(PLAN_KINDS.includes(k)&&e&&Number.isFinite(+e.avg)&&Number.isFinite(+e.n)&&e.n>0)learned.duration[k]={avg:Math.max(5,Math.min(480,+e.avg)),n:Math.min(1000,Math.round(+e.n))};});
   return{
     dayModes,anchors,
@@ -9076,7 +9079,7 @@ function normalizeUserRules(raw){
     bufferBeforeMin:_pm_int(r.bufferBeforeMin,0,120,null),   // user-wide "arrive early" (null = per-kind defaults)
     lateBiasMin:_pm_int(r.lateBiasMin,0,60,0),               // leave this many minutes earlier than the computed departure
     travelCompatibleKinds:(Array.isArray(r.travelCompatibleKinds)?r.travelCompatibleKinds.filter(k=>PLAN_KINDS.includes(k)):['phone_call']),
-    colorMap,zones,travelMatrix,mobilityByKind:mob,homePlace:String(r.homePlace||'בית').trim().slice(0,40)||'בית',
+    preferredWindows:pwin,colorMap,zones,travelMatrix,mobilityByKind:mob,homePlace:String(r.homePlace||'בית').trim().slice(0,40)||'בית',
     maxLoadMin:_pm_int(r.maxLoadMin,60,960,null),             // null → system overload thresholds
     assertiveness:['soft','normal','firm'].includes(r.assertiveness)?r.assertiveness:'normal',
     learned
@@ -9146,13 +9149,24 @@ function normalizeParsedItem(raw,i){
     confidence:{kind:kindOk?_pm_conf(c.kind,true):0,duration:_pm_conf(c.duration,hasDur),place:_pm_conf(c.place,!!place),rigidity:_pm_conf(c.rigidity,PLAN_RIGIDITIES.includes(x.rigidity)),anchor:_pm_conf(c.anchor,!!anc)}
   };
 }
-// PURE: a validated Intent. op: create | move | find | prune | arrange | preference.
+// PURE: a workload goal — "N hours of X until a date" (not one event, not a chain).
+function normalizeGoal(raw,i){
+  const x=raw&&typeof raw==='object'?raw:{};
+  const tot=Math.round(Number(x.totalMinutes)),mn=Math.round(Number(x.minSessionMin)),mx=Math.round(Number(x.maxSessionMin));
+  const pw=(Array.isArray(x.preferredWindows)?x.preferredWindows:[]).map(w=>w&&_hhmm(w.from)!=null&&_hhmm(w.to)!=null&&_hhmm(w.from)<_hhmm(w.to)?{from:w.from,to:w.to}:null).filter(Boolean).slice(0,4);
+  return{ref:String(x.ref||'g'+(i+1)),title:String(x.title||'').trim().slice(0,100),kind:PLAN_KINDS.includes(x.kind)?x.kind:'study',
+    totalMinutes:tot>=15&&tot<=6000?Math.round(tot/5)*5:null,deadline:/^\d{4}-\d{2}-\d{2}$/.test(String(x.deadline||''))?x.deadline:null,
+    minSessionMin:mn>=15&&mn<=480?mn:null,maxSessionMin:mx>=15&&mx<=480?mx:null,preferredWindows:pw.length?pw:null,
+    rigidity:PLAN_RIGIDITIES.includes(x.rigidity)?x.rigidity:null};
+}
+// PURE: a validated Intent. op: create | move | find | prune | arrange | preference | goal.
 function normalizeIntent(raw){
   const x=raw&&typeof raw==='object'?raw:{};
-  const op=['create','move','find','prune','arrange','preference'].includes(x.op)?x.op:'create';
+  const op=['create','move','find','prune','arrange','preference','goal'].includes(x.op)?x.op:'create';
   const items=(Array.isArray(x.items)?x.items:[]).slice(0,20).map(normalizeParsedItem).filter(it=>it.title);
   const td=(Array.isArray(x.targetDays)?x.targetDays:[]).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d)));
-  return{op,items,filter:x.filter&&typeof x.filter==='object'?{kind:PLAN_KINDS.includes(x.filter.kind)?x.filter.kind:null}:null,
+  const goals=(Array.isArray(x.goals)?x.goals:[]).slice(0,5).map(normalizeGoal).filter(g=>g.title);
+  return{op,items,goals,filter:x.filter&&typeof x.filter==='object'?{kind:PLAN_KINDS.includes(x.filter.kind)?x.filter.kind:null}:null,
     targetDays:td,scope:['event','global'].includes(x.scope)?x.scope:null,
     preference:x.preference&&typeof x.preference==='object'?x.preference:null,
     context:{currentPlace:x.context&&x.context.currentPlace?String(x.context.currentPlace).slice(0,40):null}};
@@ -9375,8 +9389,8 @@ function chainSummaryText(res){
 const AI_INTENT_PROMPT=`את מפענחת בקשות תכנון בעברית ומחזירה JSON בלבד — בלי טקסט, בלי הסברים, בלי בלוקי קוד.
 חוק ברזל: לעולם אל תחשבי שעות התחלה/סיום ואל תמציאי אירועים. רק תעתיקי מה שנאמר. אם לא נאמר משך — אל תנחשי (השאירי durationMin חסר; אם נאמר "לא יודע כמה זמן" שימי durationUnknown:true).
 הפורמט:
-{"op":"create|move|find|prune|arrange|preference","items":[{"ref":"i1","title":"...","kind":"travel|meeting|work|deep_work|errand|shopping|phone_call|admin|study|creative|religious|fitness|personal|waiting_for_response","durationMin":מספר (רק אם נאמר),"durationUnknown":true (רק אם נאמר שלא יודע),"place":"מקום","date":"YYYY-MM-DD","window":{"from":"HH:MM","to":"HH:MM"},"anchor":{"rel":"after|before|at|while_in","target":{"text":"הביטוי כפי שנאמר","date":"YYYY-MM-DD"}},"afterItem":"i1","rigidity":"hard|flexible|optional" (רק אם נאמר),"confidence":{"kind":0..1,"duration":0..1,"place":0..1,"rigidity":0..1,"anchor":0..1}}],"filter":{"kind":"..."},"targetDays":["YYYY-MM-DD"],"scope":"event|global","preference":{"bufferBeforeMin":מספר,"lateBiasMin":מספר,"dayRule":{"dow":0-6,"mode":"work|study|flexible|errands|field|rest|spirit|light"}},"context":{"currentPlace":"..."}}
-כללים: (1) op=create כשמבקשים להוסיף; move להעביר קיים; find כששואלים "מתי/איפה מתאים"; prune כשאין זמן ומבקשים מה להוריד; arrange כשזורקים כמה דברים ליום ומבקשים לסדר; preference כשמעדכנים כלל קבוע (מרווח, איחור, יום עמוס). (2) anchor: "אחרי/לפני X" → rel + target.text בדיוק כפי שנאמר ("הפגישה בפתח תקווה"); "כשאני כבר ב-X" → rel=while_in; את target.date מלאי רק אם נאמר יום (מחר/ביום שלישי…) לפי התאריך של היום. (3) רצף "אחרי X: א, ב, ג" → הפריט הראשון עם anchor, השאר עם afterItem לקודם. (4) confidence נמוך (<0.6) כשאת לא בטוחה בסוג/מקום — אל תנחשי בביטחון. (5) "קניות" = shopping, "בנק/סידור" = errand, "זום/פגישה" = meeting, "בית מדרש/תורה/תפילה" = religious, "נסיעה" = travel (place=היעד), "להתקשר" = phone_call, "ללמוד" = study, "עבודה/דוח" = work/deep_work, "אימון/ריצה/כושר" = fitness. (6) "תמיד/לכל דבר" → scope=global; אם לא ברור — השמיטי scope. (7) אם ההודעה אינה בקשה לסדר/לקבוע דברים בזמן (שיחה, שאלה, ברכה, או בקשה לחלק מספר שעות עד תאריך) — op=none ו-items ריק.`;
+{"op":"create|move|find|prune|arrange|preference","items":[{"ref":"i1","title":"...","kind":"travel|meeting|work|deep_work|errand|shopping|phone_call|admin|study|creative|religious|fitness|personal|waiting_for_response","durationMin":מספר (רק אם נאמר),"durationUnknown":true (רק אם נאמר שלא יודע),"place":"מקום","date":"YYYY-MM-DD","window":{"from":"HH:MM","to":"HH:MM"},"anchor":{"rel":"after|before|at|while_in","target":{"text":"הביטוי כפי שנאמר","date":"YYYY-MM-DD"}},"afterItem":"i1","rigidity":"hard|flexible|optional" (רק אם נאמר),"confidence":{"kind":0..1,"duration":0..1,"place":0..1,"rigidity":0..1,"anchor":0..1}}],"filter":{"kind":"..."},"targetDays":["YYYY-MM-DD"],"scope":"event|global","goals":[{"ref":"g1","title":"לימוד","kind":"study","totalMinutes":מספר,"deadline":"YYYY-MM-DD","minSessionMin":מספר,"maxSessionMin":מספר,"preferredWindows":[{"from":"HH:MM","to":"HH:MM"}]}],"preference":{"bufferBeforeMin":מספר,"lateBiasMin":מספר,"dayRule":{"dow":0-6,"mode":"work|study|flexible|errands|field|rest|spirit|light"},"preferredWindow":{"kind":"study","from":"HH:MM","to":"HH:MM"}},"context":{"currentPlace":"..."}}
+כללים: (1) op=create כשמבקשים להוסיף; move להעביר קיים; find כששואלים "מתי/איפה מתאים"; prune כשאין זמן ומבקשים מה להוריד; arrange כשזורקים כמה דברים ליום ומבקשים לסדר; preference כשמעדכנים כלל קבוע (מרווח, איחור, יום עמוס, או שעות מועדפות לסוג פעילות — \"אני רוצה ללמוד בבקרים\" = preferredWindow {kind:study,from:08:00,to:12:00}); goal כשצריך לפרוס כמות שעות עד תאריך (\"אני צריך 8 שעות לימוד עד ה-23\" → goals:[{title:\"לימוד\",kind:\"study\",totalMinutes:480,deadline:\"YYYY-MM-DD\"}], items ריק; totalMinutes תמיד בדקות; מלאי minSessionMin/maxSessionMin/preferredWindows רק אם נאמרו) (2) anchor: "אחרי/לפני X" → rel + target.text בדיוק כפי שנאמר ("הפגישה בפתח תקווה"); "כשאני כבר ב-X" → rel=while_in; את target.date מלאי רק אם נאמר יום (מחר/ביום שלישי…) לפי התאריך של היום. (3) רצף "אחרי X: א, ב, ג" → הפריט הראשון עם anchor, השאר עם afterItem לקודם. (4) confidence נמוך (<0.6) כשאת לא בטוחה בסוג/מקום — אל תנחשי בביטחון. (5) "קניות" = shopping, "בנק/סידור" = errand, "זום/פגישה" = meeting, "בית מדרש/תורה/תפילה" = religious, "נסיעה" = travel (place=היעד), "להתקשר" = phone_call, "ללמוד" = study, "עבודה/דוח" = work/deep_work, "אימון/ריצה/כושר" = fitness. (6) "תמיד/לכל דבר" → scope=global; אם לא ברור — השמיטי scope. (7) אם ההודעה אינה בקשה לסדר/לקבוע דברים בזמן (שיחה, שאלה, ברכה, או בקשה לחלק מספר שעות עד תאריך) — op=none ו-items ריק.`;
 function buildIntentSystem(todayISO){
   const dn=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const d=new Date(todayISO+'T12:00:00Z');
@@ -9488,7 +9502,7 @@ function scheduleSet(snap,intent,gaps,opts){
   const order=list.map(x=>x.it.ref);
   const travelBlocks=d=>{const r=[];snap.events.forEach(e=>{if(e.date===d&&/^נסיעה/.test(e.title))r.push([e.startMin,e.endMin]);});placed.forEach(p=>{if(p.date===d&&p.kind==='travel')r.push([p.startMin,p.endMin]);});return r;};
   const neighbours=d=>{const n=[];snap.events.forEach(e=>{if(e.date===d)n.push({s:e.startMin,e:e.endMin,place:e.place||''});});placed.forEach(p=>{if(p.date===d)n.push({s:p.startMin,e:p.endMin,place:p.place||''});});return n;};
-  const kindHour=(kind,s)=>{if(['work','deep_work','study','creative'].includes(kind))return s>=540&&s<720?3:(s>=720&&s<900?1:0);if(['errand','shopping'].includes(kind))return s>=600&&s<1080?2:0;if(kind==='phone_call')return s>=600&&s<1080?1:0;return 0;};
+  const kindHour=(kind,s)=>{const pw=(rules.preferredWindows||{})[kind];if(pw)return pw.some(w=>s>=_hhmm(w.from)&&s<_hhmm(w.to))?4:0;if(['work','deep_work','study','creative'].includes(kind))return s>=540&&s<720?3:(s>=720&&s<900?1:0);if(['errand','shopping'].includes(kind))return s>=600&&s<1080?2:0;if(kind==='phone_call')return s>=600&&s<1080?1:0;return 0;};
   for(const x of list){
     const it=x.it,dur=it.duration.min;
     const ex=existing[it.ref];
@@ -9822,11 +9836,47 @@ function _rpRun(snap,items,banned,maxSteps){
       if(best){pick={issue,...best};break;}
     }
     if(!pick)break;
-    steps.push({type:pick.c.type,ref:pick.c.ref,chain:pick.c.chain||null,fixes:pick.issue.code,costScore:pick.c.cost,text:pick.c.text,from:pick.c.from,to:pick.c.to});
+    steps.push({type:pick.c.type,ref:pick.c.ref,chain:pick.c.chain||null,fixes:pick.issue.code,costScore:pick.c.cost,text:pick.c.text,from:pick.c.from,to:pick.c.to,..._rpExplain(pick.issue,pick.c,snap,cur)});
     (used[pick.c.ref]=used[pick.c.ref]||[]).push(pick.c.type);
     cur=pick.nxt;v=pick.nv;
   }
   return{steps,items:cur,validation:v,totalCost:steps.reduce((t,s)=>t+s.costScore,0),complete:v.blocks.length===0};
+}
+// PURE: WHY a repair step was chosen — a stable code + raw data; the sentence is written by _rpExplainText (never by the model).
+function _rpExplain(issue,c,snap,items){
+  let ev=null,other=null;
+  (issue.refs||[]).forEach(r=>{const x=String(r);if(x.indexOf('ev:')===0){const e=snap.events.find(y=>'ev:'+y.id===x);if(e)ev=e;}else if(x!==c.ref){const it=items.find(y=>y.ref===x);if(it)other=it;}});
+  const data={itemTitle:(items.find(x=>x.ref===c.ref)||{}).title||'',issue:issue.code};
+  if(ev){data.eventTitle=ev.title;data.eventStart=ev.startMin;data.eventEnd=ev.endMin;data.eventFixed=!!(ev.rigidity&&ev.rigidity.rigidity==='hard');}
+  if(other)data.otherTitle=other.title;
+  if(c.to&&c.to.startMin!=null){data.toStart=c.to.startMin;data.toEnd=c.to.endMin;data.toDate=c.to.date;}
+  let code='RESOLVE_CONFLICT';
+  if(issue.code==='load_exceeded')code='DAY_OVERLOADED';
+  else if(issue.code==='curfew'||issue.code==='anchor_conflict'){code='ANCHOR_LIMIT';}
+  else if(issue.code==='travel_gap'||issue.code==='travel_too_short')code='TRAVEL_NEEDS_TIME';
+  else if(ev){
+    if(c.type==='drop')code='DROPPED_FOR_ROOM';
+    else if(c.type==='shorten')code='SHORTENED_BEFORE_EVENT';
+    else if(c.type==='move_day')code='MOVED_DAY_NO_ROOM';
+    else code=(c.to&&c.to.startMin!=null&&c.to.startMin>=ev.endMin)?'SHIFTED_AFTER_EVENT':'SHIFTED_BEFORE_EVENT';
+  }else if(other)code=c.type==='drop'?'DROPPED_FOR_ROOM':'OVERLAP_WITH_ITEM';
+  return{explanationCode:code,explanationData:data};
+}
+function _rpExplainText(code,d){
+  d=d||{};const ev=d.eventTitle?'"'+d.eventTitle+'"':'';
+  switch(code){
+    case'SHIFTED_AFTER_EVENT':return'כי ב-'+_fmtMin(d.eventStart)+' יש '+(d.eventFixed?'לך ':'')+ev+(d.eventFixed?' שאי אפשר להזיז':'')+', אז זה ממשיך אחריו';
+    case'SHIFTED_BEFORE_EVENT':return'כדי שזה יסתיים לפני '+ev+' ב-'+_fmtMin(d.eventStart);
+    case'SHORTENED_BEFORE_EVENT':return'כדי שלא יתנגש עם '+ev+' ב-'+_fmtMin(d.eventStart);
+    case'MOVED_DAY_NO_ROOM':return d.eventTitle?'כי ביום הזה אין מקום ליד '+ev:'כי ביום הזה אין לזה מקום';
+    case'DROPPED_FOR_ROOM':return d.eventTitle?'כדי לפנות מקום ל-'+ev:'כדי לפנות מקום'+(d.otherTitle?' ל"'+d.otherTitle+'"':'');
+    case'DAY_OVERLOADED':return'כי היום עמוס מדי';
+    case'ANCHOR_LIMIT':return'כדי לכבד את ההגבלה שהגדרת';
+    case'OVERLAP_WITH_ITEM':return'כי זה התנגש עם "'+(d.otherTitle||'')+'"';
+    case'TRAVEL_NEEDS_TIME':return'כדי שיישאר זמן להגיע';
+    case'PUSHED_BY_DELAY':return d.minutes?'בגלל האיחור של '+d.minutes+' דק׳':'בגלל האיחור';
+    default:return'';
+  }
 }
 // PURE: what to ask when there is no automatic fix.
 function _rpDecision(issue,items,snap){
@@ -9952,6 +10002,7 @@ function replan(plan,trigger,snapNew,ctx){
   fixed.forEach(x=>{const from=x.date===today?nowMin:0;if(x.date>=today&&x.endMin>from)work.events.push(_rpPseudoEvent(x,from));});
   // ripple: only items that would start before the new floor (chains move together), in order, into the next free spot
   let mov=mov0.map(x=>tailIds[x.itemId]?{...x,canMove:false,minDurationMin:Math.max(x.minDurationMin||0,nowMin-x.startMin+5)}:{...x});
+  const whyBlocked={};
   if(floor!=null){
     const groups=[];const seen={};
     mov.filter(x=>x.date===today).sort((a,b)=>a.startMin-b.startMin).forEach(x=>{
@@ -9964,7 +10015,9 @@ function replan(plan,trigger,snapNew,ctx){
       const ivs=ctxFreeIntervals(work,today,placed);let s=null;
       for(const iv of ivs){const from=Math.max(iv[0],cursor);if(from+total<=iv[1]){s=from;break;}}
       if(s==null){g.forEach(m=>placed.push([m.startMin,m.endMin]));return;}   // no room: leave, validation/repair will say why
-      const sh=s-first;g.forEach(m=>{m.startMin+=sh;m.endMin+=sh;placed.push([m.startMin,m.endMin]);});cursor=Math.max(cursor,s+total);
+      const sh=s-first;
+      const blocker=s>cursor?work.events.filter(e=>e.date===today&&e.endMin>cursor&&e.endMin<=s&&e.startMin<s).sort((a,b)=>b.endMin-a.endMin)[0]:null;   // why it could not start right at the new floor
+      g.forEach(m=>{m.startMin+=sh;m.endMin+=sh;placed.push([m.startMin,m.endMin]);if(blocker)whyBlocked[m.itemId]=blocker;});cursor=Math.max(cursor,s+total);
     });
   }
   const v0=validatePlan(work,mov);let repair=null,final=mov,status='ok',decisions=[];
@@ -9997,6 +10050,14 @@ function replan(plan,trigger,snapNew,ctx){
     else{if(n.startMin!==o.startMin)changes.push({itemId:o.itemId,title:o.title,type:'moved',from:{date:o.date,startMin:o.startMin,endMin:o.endMin},to:{date:n.date,startMin:n.startMin,endMin:n.endMin}});
       if((n.endMin-n.startMin)<(o.endMin-o.startMin))changes.push({itemId:o.itemId,title:o.title,type:'shortened',from:{date:o.date,startMin:o.startMin,endMin:o.endMin},to:{date:n.date,startMin:n.startMin,endMin:n.endMin}});}
   });
+  changes.forEach(c=>{
+    const it=cur.find(x=>x.itemId===c.itemId);
+    const st=(repair&&repair.best?repair.best.steps:[]).find(x=>x.ref===c.itemId||(it&&it.chain&&x.chain===it.chain));
+    if(st){c.explanationCode=st.explanationCode;c.explanationData=st.explanationData;}
+    else if(whyBlocked[c.itemId]){const e=whyBlocked[c.itemId];c.explanationCode='SHIFTED_AFTER_EVENT';c.explanationData={eventTitle:e.title,eventStart:e.startMin,eventEnd:e.endMin,eventFixed:!!(e.rigidity&&e.rigidity.rigidity==='hard'),minutes:t==='delay'?trigger.minutes:null};}
+    else if(floor!=null){c.explanationCode='PUSHED_BY_DELAY';c.explanationData={minutes:t==='delay'?trigger.minutes:null,floor};}
+    if(c.explanationCode)c.because=_rpExplainText(c.explanationCode,c.explanationData);
+  });
   // free time that opened up: SUGGEST (never auto-apply) pulling the next flexible item forward
   if(freed&&status!=='needs_decision'&&freed.date===today&&freed.to>freed.from){
     const live=out.filter(x=>x.status==='planned'&&!x.lockedByUser&&x.date===today&&x.startMin>=freed.from&&x.canMove&&!x.chain&&x.rigidity!=='hard');
@@ -10022,13 +10083,76 @@ function replanSummaryText(r){
   const L=[];(r.notes||[]).forEach(n=>L.push(n));
   if(!r.changes.length)L.push(r.status==='unchanged'?'אין צורך לשנות כלום — שאר התכנית נשארת.':'שאר התכנית נשארת כמו שהייתה.');
   r.changes.forEach(c=>{
-    if(c.type==='dropped')L.push('• מורידה את "'+c.title+'" (היה '+_fmtMin(c.from.startMin)+'–'+_fmtMin(c.from.endMin)+').');
-    else if(c.type==='moved_day')L.push('• מעבירה את "'+c.title+'" ליום אחר ('+_fmtMin(c.to.startMin)+').');
-    else if(c.type==='shortened')L.push('• מקצרת את "'+c.title+'" ל-'+(c.to.endMin-c.to.startMin)+' דק׳.');
-    else L.push('• "'+c.title+'" זז מ-'+_fmtMin(c.from.startMin)+' ל-'+_fmtMin(c.to.startMin)+'.');
+    if(c.type==='dropped')L.push('• מורידה את "'+c.title+'" (היה '+_fmtMin(c.from.startMin)+'–'+_fmtMin(c.from.endMin)+')'+(c.because?' — '+c.because:'')+'.');
+    else if(c.type==='moved_day')L.push('• מעבירה את "'+c.title+'" ליום אחר ('+_fmtMin(c.to.startMin)+')'+(c.because?' — '+c.because:'')+'.');
+    else if(c.type==='shortened')L.push('• מקצרת את "'+c.title+'" ל-'+(c.to.endMin-c.to.startMin)+' דק׳'+(c.because?' — '+c.because:'')+'.');
+    else L.push('• "'+c.title+'" זז מ-'+_fmtMin(c.from.startMin)+' ל-'+_fmtMin(c.to.startMin)+(c.because?' — '+c.because:'')+'.');
   });
   (r.opportunities||[]).forEach(o=>{if(o.type==='pull_forward')L.push('התפנו '+o.gainMin+' דק׳ — רוצה שאקדים את "'+o.title+'" ל-'+_fmtMin(o.to.startMin)+'?');else if(o.type==='free_time')L.push('התפנה זמן ('+_fmtMin(o.from)+'–'+_fmtMin(o.to)+').');});
   return L.join('\n');
+}
+// ═══ Workload goals: "N hours of X until a date" ═══
+// PURE: spread totalMinutes across the days up to the deadline, around events/anchors, in sessions of minSession..maxSession.
+// Even spread (the emptiest day first), focus kinds prefer mid-morning unless a preferred window is saved; the deadline day is used last.
+function scheduleWorkload(snap,goal,o){
+  o=o||{};const rules=snap.rules,from=o.from||snap.today;
+  const kind=goal.kind,focus=['study','work','deep_work','creative'].indexOf(kind)>=0;
+  const minS=goal.minSessionMin||(focus?45:30),maxS=Math.max(minS,goal.maxSessionMin||(focus?120:90));
+  const dowOf=d=>new Date(d+'T12:00:00Z').getUTCDay();
+  const capOf=d=>{const m=rules.dayModes[dowOf(d)],base=rules.maxLoadMin||540;return m==='light'?Math.round(base/2):base;};
+  const evLoad=d=>snap.events.filter(e=>e.date===d).reduce((t,e)=>t+Math.max(0,Math.min(e.endMin,PLAN_DAY_END)-Math.max(e.startMin,PLAN_DAY_START)),0);
+  const days=[];for(let d=from,i=0;d<=goal.deadline&&i<60;d=_isoAdd(d,1),i++)days.push(d);
+  const reserved={};days.forEach(d=>{reserved[d]=((o.reserved||{})[d]||[]).map(r=>r.slice());});
+  const loadOf=d=>evLoad(d)+reserved[d].reduce((t,r)=>t+(r[1]-r[0]),0);
+  const windows=goal.preferredWindows||((rules.preferredWindows||{})[kind])||null;
+  const inWin=s0=>windows&&windows.some(w=>s0>=_hhmm(w.from)&&s0<_hhmm(w.to));
+  const score=s0=>{let sc=0;if(windows)sc+=inWin(s0)?6:0;else if(focus)sc+=s0>=540&&s0<720?3:(s0>=720&&s0<900?1:0);if(s0>=1140)sc-=2;if(s0>=1260)sc-=2;return sc;};
+  const usable=days.filter(d=>planKindAllowedOnMode(kind,rules.dayModes[dowOf(d)]||'flexible'));
+  const nonDead=usable.filter(d=>d!==goal.deadline),pool0=nonDead.length?nonDead:usable;
+  let remaining=goal.totalMinutes;const assigned={};usable.forEach(d=>{assigned[d]=0;});const sessions=[];
+  const target=Math.min(maxS,Math.max(minS,Math.round(goal.totalMinutes/Math.max(1,pool0.length)/15)*15));
+  const place=(d,want)=>{
+    if(loadOf(d)>=capOf(d))return null;
+    let best=null;
+    for(const iv of ctxFreeIntervals(snap,d,reserved[d])){
+      for(let s0=Math.ceil(iv[0]/15)*15;s0+15<=iv[1];s0+=15){
+        const L=Math.floor(Math.min(want,iv[1]-s0,capOf(d)-loadOf(d))/5)*5;
+        if(L<15||(L<minS&&L<remaining))continue;
+        const sc=score(s0)+(L>=want?2:0)-(s0-iv[0])*0.001;
+        if(!best||sc>best.sc)best={s:s0,e:s0+L,sc};
+      }
+    }
+    return best;
+  };
+  for(let guard=0;remaining>0&&guard<150;guard++){
+    const pools=[pool0];if(nonDead.length&&usable.indexOf(goal.deadline)>=0)pools.push(usable);
+    let placed=false;
+    for(const pool of pools){
+      for(const d of pool.slice().sort((a,b)=>assigned[a]-assigned[b]||(a<b?-1:1))){
+        let want=Math.min(target,remaining);if(remaining-want>0&&remaining-want<minS)want=Math.min(maxS,remaining);
+        const sl=place(d,want);
+        if(sl){reserved[d].push([sl.s,sl.e]);assigned[d]+=sl.e-sl.s;remaining-=sl.e-sl.s;sessions.push({date:d,startMin:sl.s,endMin:sl.e});placed=true;break;}
+      }
+      if(placed)break;
+    }
+    if(!placed)break;
+  }
+  sessions.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
+  const assumptions=[];
+  if(!windows)assumptions.push({field:'preferredWindows',text:'אין לי עדיין העדפת שעות ל"'+goal.title+'", אז בחרתי את הזמן הפנוי הכי טוב'});
+  return{sessions,placedMin:goal.totalMinutes-remaining,shortfallMin:remaining,assumptions,reserved,minSessionMin:minS,maxSessionMin:maxS,days:usable};
+}
+// PURE: sessions → PlanItems (same shape the validator/repair/replan already use).
+function workloadItems(snap,goal,w){
+  const rules=snap.rules,rig=goal.rigidity||'flexible',mob=mobilityFor(goal.kind,rig,rules,{});
+  return w.sessions.map((x,i)=>({ref:goal.ref+'_s'+(i+1),goalRef:goal.ref,title:goal.title,kind:goal.kind,place:null,date:x.date,startMin:x.startMin,endMin:x.endMin,origDurationMin:x.endMin-x.startMin,
+    rigidity:rig,canMove:!!mob.canMove,canShorten:!!mob.canShorten,canDrop:!!mob.canDrop,minDurationMin:mob.canShorten?Math.min(w.minSessionMin,x.endMin-x.startMin):(mob.minDurationMin||null),
+    earliest:_hhmm(mob.earliest),latest:_hhmm(mob.latest),bufferMin:resolveBuffer(goal.kind,rules).min,inTravel:false,chain:null,chainIdx:null,chainAnchor:null}));
+}
+function _mayaDur(min){
+  if(min===60)return'שעה';if(min===120)return'שעתיים';if(min===90)return'שעה וחצי';
+  if(min<60)return min+' דק׳';
+  const h=Math.floor(min/60),m=min%60;return m?(h===1?'שעה':h+' שעות')+' ו-'+m+' דק׳':h+' שעות';
 }
 // ═══ Step F: chat ⇄ planning layers ═══
 // The model ONLY interprets (structured JSON, enforced by the schema below). Everything the user reads about a plan is written HERE, in code.
@@ -10036,7 +10160,9 @@ const AI_INTENT_SCHEMA=(()=>{
   const S={type:'STRING'},N={type:'NUMBER'},I={type:'INTEGER'},B={type:'BOOLEAN'};
   const en=a=>({type:'STRING',enum:a});
   return{type:'OBJECT',properties:{
-    op:en(['create','move','find','prune','arrange','preference','none']),
+    op:en(['create','move','find','prune','arrange','preference','goal','none']),
+    goals:{type:'ARRAY',items:{type:'OBJECT',properties:{ref:S,title:S,kind:en(PLAN_KINDS),totalMinutes:I,deadline:S,minSessionMin:I,maxSessionMin:I,
+      preferredWindows:{type:'ARRAY',items:{type:'OBJECT',properties:{from:S,to:S}}},rigidity:en(['hard','flexible','optional'])},required:['title','totalMinutes']}},
     items:{type:'ARRAY',items:{type:'OBJECT',properties:{
       ref:S,title:S,kind:en(PLAN_KINDS),durationMin:I,durationUnknown:B,place:S,date:S,
       window:{type:'OBJECT',properties:{from:S,to:S}},
@@ -10045,7 +10171,7 @@ const AI_INTENT_SCHEMA=(()=>{
       confidence:{type:'OBJECT',properties:{kind:N,duration:N,place:N,rigidity:N,anchor:N}}},required:['ref','title']}},
     filter:{type:'OBJECT',properties:{kind:en(PLAN_KINDS)}},
     targetDays:{type:'ARRAY',items:S},scope:en(['event','global']),
-    preference:{type:'OBJECT',properties:{bufferBeforeMin:I,lateBiasMin:I,dayRule:{type:'OBJECT',properties:{dow:I,mode:en(PLAN_DAY_MODES)}}}},
+    preference:{type:'OBJECT',properties:{bufferBeforeMin:I,lateBiasMin:I,dayRule:{type:'OBJECT',properties:{dow:I,mode:en(PLAN_DAY_MODES)}},preferredWindow:{type:'OBJECT',properties:{kind:en(PLAN_KINDS),from:S,to:S}}}},
     context:{type:'OBJECT',properties:{currentPlace:S}}},required:['op']};
 })();
 // PURE: lenient parse of the model's reply (fences / chatter around the JSON are tolerated; anything else is an error, never a guess).
@@ -10057,17 +10183,17 @@ function parseIntentText(text){
 // PURE: what is wrong with a parsed reply (empty list = usable). Used to decide on the single repair retry.
 function intentProblems(raw){
   const p=[];if(!raw||typeof raw!=='object')return['not_object'];
-  if(['create','move','find','prune','arrange','preference','none'].indexOf(raw.op)<0)p.push('op לא חוקי — חייב להיות אחד מ: create,move,find,prune,arrange,preference,none');
-  if(raw.op!=='none'&&raw.op!=='preference'&&!(Array.isArray(raw.items)&&raw.items.length))p.push('items ריק');
+  if(['create','move','find','prune','arrange','preference','goal','none'].indexOf(raw.op)<0)p.push('op לא חוקי — חייב להיות אחד מ: create,move,find,prune,arrange,preference,goal,none');
+  if(raw.op==='goal'){if(!(Array.isArray(raw.goals)&&raw.goals.length))p.push('goals ריק');}
+  else if(raw.op!=='none'&&raw.op!=='preference'&&!(Array.isArray(raw.items)&&raw.items.length))p.push('items ריק');
   (Array.isArray(raw.items)?raw.items:[]).forEach((it,i)=>{if(!it||typeof it.title!=='string'||!it.title.trim())p.push('לפריט '+(i+1)+' אין title');});
   return p;
 }
-// PURE: cheap router. True only for requests whose meaning is "arrange things in time around real events/places".
-// (Hours-before-a-deadline requests stay on the older engine path; anything not matched here is plain chat.)
-function looksLikePlanRequest(text){
-  const t=String(text||'');if(t.length<6||t.length>600)return false;
-  if(/^(שלום|היי|הי|תודה|מה שלומך|בוקר טוב|ערב טוב)\b/.test(t.trim())&&t.length<40)return false;
-  return /(אחרי|לפני)\s+ה?(פגישה|ישיבה|טיפול|שיעור|אירוע|בחינה|מבחן|ארוחה|תפילה|עבודה)|ואז\s|\sואחר\s?כך\s|נסיעה\s+(ל|מ)|בדרך\s+ל|כשאני\s+(כבר\s+)?(ב|בדרך)|(סדר|תסדר|סדרי|תסדרי|לסדר)\s+לי|(תקבע|קבע|תכנן|תכנני|תתכנן)\s+לי\s.*(מחר|היום|ביום|בבוקר|בצהריים|בערב)/.test(t);
+// PURE: skip the model ONLY for messages that are obviously not a request (greetings/thanks/one-word replies).
+// This is a cost optimisation, never a gate: every other message goes to the structured parser, which answers op=none for plain chat.
+function isClearlyNotPlanning(text){
+  const t=String(text||'').trim();if(t.length<6)return true;
+  return /^(שלום|היי|הי|תודה(\s+רבה)?|אוקיי|אוקי|טוב|סבבה|יופי|מעולה|אחלה|בוקר טוב|ערב טוב|לילה טוב|מה שלומך|מה נשמע)[\s!.?,]*$/.test(t);
 }
 // PURE: the state as the planner should see it — without the calendar entries that belong to the plan being (re)planned.
 function _mayaOwnPrefix(rootId){return 'mplan:'+rootId+':';}
@@ -10087,13 +10213,17 @@ function _mayaLine(x,today){
 // PURE: intent → plan proposal, all in code. Returns {status:'not_plan'|'ask'|'proposal'|'needs_decision', text, ...}.
 function mayaPlanFromIntent(state,raw,o){
   o=o||{};const it=normalizeIntent(raw);
-  if((raw&&raw.op==='none')||!it.items.length)return{status:'not_plan'};
-  if(it.op!=='create'&&it.op!=='arrange')return{status:'not_plan',reason:'op_'+it.op};   // move/find/prune/preference stay on the older path for now
+  if(raw&&raw.op==='none')return{status:'not_plan'};
+  if(it.op==='goal'?!it.goals.length:(it.op!=='preference'&&!it.items.length))return{status:'not_plan'};
+  if(['create','arrange','goal','preference'].indexOf(it.op)<0)return{status:'not_plan',reason:'op_'+it.op};   // move/find/prune: not handled by the planner yet → normal chat
   const st=_planStateWithoutOwnEvents(state,o.excludeRootId);
-  const snap=buildContextSnapshot(st,{engine:false});const today=snap.today;
+  let snap=buildContextSnapshot(st,{engine:false});const today=snap.today;
+  if(o.now&&/^\d{4}-\d{2}-\d{2}$/.test(String(o.now.today))&&Number.isInteger(o.now.nowMin))snap={...snap,notBefore:{date:o.now.today,min:Math.ceil(o.now.nowMin/15)*15}};   // nothing is planned in time that already passed
   const gaps=planningGaps(it,getUserRules(st));
   const askRes=(a,msg)=>({status:'ask',ask:a,text:msg||a.question,raw});
   if(gaps.ask.length)return askRes(gaps.ask[0]);
+  if(it.op==='preference')return _mayaPreferenceProposal(it,gaps,getUserRules(st),raw);
+  if(it.op==='goal')return _mayaGoalProposal(it,snap,gaps,o,raw);
   const chain=it.items.some(x=>x.anchor||x.afterItem);
   let sched,items,assumptions=gaps.assumptions.slice(),unplaced=[];
   if(chain){
@@ -10117,6 +10247,54 @@ function mayaPlanFromIntent(state,raw,o){
   const plan=makePlan(snap,items,{intentRef:(raw&&raw.op)||'create'});
   const res={status:'proposal',plan,items,snap,repair,warnings,assumptions,unplaced,anchor:chain?sched.anchor:null,chain,today};
   res.text=mayaPlanText(res);return res;
+}
+
+const _MAYA_MODE_TEXT={light:'יום קל (חצי עומס)',rest:'יום מנוחה',work:'יום עבודה',study:'יום לימודים',flexible:'יום רגיל',errands:'יום סידורים',field:'יום בשטח',spirit:'יום רוחני'};
+const _MAYA_KIND_NOUN={study:'לימודים',work:'עבודה',deep_work:'עבודה ממוקדת',fitness:'כושר',creative:'עבודה יצירתית',errand:'סידורים',shopping:'קניות',religious:'לימוד תורה'};
+const _MAYA_DOW=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+function _mayaPreferenceProposal(it,gaps,rules,raw){
+  const p=it.preference||{};const patch=gaps.rulesPatch?{...gaps.rulesPatch}:{};const L=[];
+  if(patch.dayModes){patch.dayModes={...rules.dayModes,...patch.dayModes};const dr=p.dayRule;if(dr)L.push('יום '+_MAYA_DOW[dr.dow]+' יסומן כ"'+(_MAYA_MODE_TEXT[dr.mode]||dr.mode)+'" — אשבץ בו בהתאם.');}
+  if(patch.bufferBeforeMin!=null)L.push('אשאיר '+patch.bufferBeforeMin+' דק׳ לפני כל אירוע.');
+  if(patch.lateBiasMin!=null)L.push('אצא '+patch.lateBiasMin+' דק׳ מוקדם יותר מהנדרש.');
+  const pw=p.preferredWindow;
+  if(pw&&PLAN_KINDS.indexOf(pw.kind)>=0&&_hhmm(pw.from)!=null&&_hhmm(pw.to)!=null&&_hhmm(pw.from)<_hhmm(pw.to)){
+    patch.preferredWindows={...rules.preferredWindows,[pw.kind]:[{from:pw.from,to:pw.to}]};
+    L.push('אשבץ '+(_MAYA_KIND_NOUN[pw.kind]||'את זה')+' בעיקר בין '+pw.from+' ל-'+pw.to+'.');
+  }
+  if(!L.length)return{status:'not_plan',reason:'empty_preference'};
+  return{status:'rules_proposal',patch,text:'אזכור את זה מעכשיו:\n'+L.map(x=>'• '+x).join('\n')+'\nלאשר?',raw};
+}
+function _mayaGoalProposal(it,snap,gaps,o,raw){
+  const askRes=(a)=>({status:'ask',ask:a,text:a.question,raw});
+  const start=(o.now&&o.now.today)||snap.today;let reserved={},items=[],assumptions=[],goalsOut=[];
+  for(const g of it.goals){
+    if(!g.totalMinutes)return askRes({field:'totalMinutes',question:'כמה שעות בסך הכול ל"'+g.title+'"?'});
+    if(!g.deadline)return askRes({field:'deadline',question:'עד מתי צריך לסיים את "'+g.title+'"?'});
+    if(g.deadline<start)return askRes({field:'deadline',question:'התאריך כבר עבר. עד מתי צריך לסיים את "'+g.title+'"?'});
+    const w=scheduleWorkload(snap,g,{from:start,reserved});reserved=w.reserved;
+    if(!w.sessions.length)return{status:'needs_decision',text:'לא מצאתי אף זמן פנוי ל"'+g.title+'" עד '+_mayaDayLabel(g.deadline,snap.today)+'. אפשר להרחיב את הימים או השעות, או לדחות את המועד — מה מתאים?',raw};
+    items=items.concat(workloadItems(snap,g,w));assumptions=assumptions.concat(w.assumptions);goalsOut.push({...g,placedMin:w.placedMin,shortfallMin:w.shortfallMin});
+  }
+  const v0=validatePlan(snap,items);let repair=null,warnings=v0.warnings.map(x=>x.message);
+  if(!v0.ok){repair=proposeCuts(snap,items);if(repair.best){items=repair.best.plan;warnings=repair.best.remaining.warnings.map(x=>x.message);}else return{status:'needs_decision',text:repairSummaryText(repair),repair,snap,items};}
+  const plan=makePlan(snap,items,{intentRef:'goal'});
+  const res={status:'proposal',plan,items,snap,repair,warnings,assumptions,unplaced:[],anchor:null,chain:false,today:start,goals:goalsOut};
+  res.text=mayaGoalText(res);return res;
+}
+// PURE: Maya's words for a workload plan.
+function mayaGoalText(r){
+  const L=[];const g=r.goals[0];
+  L.push('ככה אפשר לפזר '+_mayaDur(g.totalMinutes)+' של "'+g.title+'" עד '+_mayaDayLabel(g.deadline,r.today)+':');
+  r.items.slice().sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin)).forEach(x=>L.push('• '+_mayaDayLabel(x.date,r.today)+', '+_fmtMin(x.startMin)+'–'+_fmtMin(x.endMin)+' — '+x.title+' ('+_mayaDur(x.endMin-x.startMin)+')'));
+  const days=new Set(r.items.map(x=>x.date)).size;
+  L.push('סה״כ '+_mayaDur(r.items.reduce((t,x)=>t+(x.endMin-x.startMin),0))+' ב-'+days+' ימים.');
+  r.goals.forEach(x=>{if(x.shortfallMin>0)L.push('⚠️ נשארו '+_mayaDur(x.shortfallMin)+' בלי מקום עד המועד. אפשר להרחיב את הימים או השעות, לדחות את המועד, או לפנות משהו מהיומן.');});
+  const as=(r.assumptions||[]).filter(a=>a.text).map(a=>a.text);
+  if(as.length)L.push(as.join('; ')+'.');
+  if(r.repair&&r.repair.best)L.push('כדי שזה יסתדר: '+r.repair.best.steps.map(s=>s.text).join('; ')+'.');
+  (r.warnings||[]).forEach(w=>L.push('⚠️ '+w));
+  L.push('לאשר?');return L.join('\n');
 }
 // PURE: what Maya says about a proposal — plain Hebrew, written by code from the validated plan only.
 function mayaPlanText(r){
