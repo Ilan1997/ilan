@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
   if (uerr || !u?.user) return json({ error: "login", message: "צריך להתחבר לחשבון כדי לדבר עם מאיה." }, 401, origin);
 
   // 2. validate input
-  let body: { system?: unknown; messages?: unknown };
+  let body: { system?: unknown; messages?: unknown; mode?: unknown; schema?: unknown; temperature?: unknown };
   try { body = await req.json(); } catch { return json({ error: "bad_request" }, 400, origin); }
   const system = typeof body.system === "string" ? body.system : "";
   const msgs = Array.isArray(body.messages) ? body.messages : [];
@@ -51,6 +51,13 @@ Deno.serve(async (req) => {
   }
   if (total > MAX_TOTAL) return json({ error: "too_long", message: "השיחה ארוכה מדי — התחל שיחה חדשה." }, 413, origin);
 
+  // structured output: the page asks for JSON that Gemini itself enforces against a schema (mode "intent"), at a low temperature
+  const schemaOk = body.mode === "intent" && !!body.schema && typeof body.schema === "object" && !Array.isArray(body.schema) && JSON.stringify(body.schema).length <= 8000;
+  const temperature = typeof body.temperature === "number" && body.temperature >= 0 && body.temperature <= 1 ? body.temperature : undefined;
+  const generationConfig = (schemaOk || temperature !== undefined)
+    ? { ...(schemaOk ? { responseMimeType: "application/json", responseSchema: body.schema } : {}), ...(temperature !== undefined ? { temperature } : {}) }
+    : undefined;
+
   // 3. per-user daily cap (shared free quota must not be drained by one account)
   const { data: n, error: rerr } = await admin.rpc("bump_ai_usage", { p_user: u.user.id });
   if (rerr) return json({ error: "server" }, 500, origin);
@@ -60,6 +67,7 @@ Deno.serve(async (req) => {
   const payload = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
     contents: msgs.map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+    ...(generationConfig ? { generationConfig } : {}),
   });
   let r: Response | null = null, data: any = {}, lastDetail = "", timedOut = false;
   const deadline = Date.now() + TOTAL_BUDGET_MS; // the browser gives up at 75s, so stay well under it

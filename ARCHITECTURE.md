@@ -646,3 +646,17 @@ Pure functions, no UI, no clock: `makePlan`, `lockPlanItems`, `planDisruptionCos
 - Tests: `tests/replan.scenarios.js` (44 checks, run by `tests/run.js`), demo `node tests/demo-replan.js`, staged walk-through of step D `node tests/demo-stages.js`.
 - Known limits: repair does not ripple neighbours to make room (a displaced item can land in the evening); `user_request` is a narrow regex; no link to the chat/UI yet (step F).
 - Fix found by the step-D demo: a chain anchored to a calendar event can no longer be offered "move to another day".
+
+## 58. Step F — the chat talks to the planning layers (and how Gemini is made to behave)
+**Division of labour.** The model only *interprets*: it returns an Intent (JSON). Code does everything else — context, times, validation, repair, replan, approval, **and every word Maya writes about a plan**. So the model cannot produce a wrong hour or a technical sentence about a plan; the worst it can do is mis-read the request, which the user sees in the proposal before approving.
+
+**Making Gemini follow the contract (layers, strongest first):**
+1. *Structured output*: `AI_INTENT_SCHEMA` is sent to the edge function (`mode:"intent"`), which forwards it as `responseSchema` + `responseMimeType: application/json`, `temperature: 0`. Gemini itself rejects anything outside the schema (op/kind enums, integer minutes…). Test: all 29 recorded golden outputs conform; the schema enums equal the engine's `PLAN_KINDS`.
+2. *Single-purpose prompt*: `AI_INTENT_PROMPT` ("JSON only, never compute hours, copy what was said, `op=none` if not a planning request").
+3. *Validate → one repair retry → fall back*: `parseIntentText` (tolerant of fences/chatter), `intentProblems`; on a bad reply the exact problems are sent back once; still bad → the normal chat path answers (never a made-up plan).
+4. *Router* (`looksLikePlanRequest`) so only time-structure requests spend an extra call; hours-until-deadline requests stay on the older engine path. Replan phrases ("איחרתי ב-20 דקות", "ביטלו את X", "סיימתי את X", "את X אל תזיז") are parsed in code — no model call.
+5. *Voice in code*: plan/replan texts are built by `mayaPlanText` / `replanSummaryText` and pass `mayaVoiceLint`; free chat still goes through `mayaPolish`.
+6. *Measure, don't hope*: `tests/intent-eval` live runs (`--function` now sends the same schema/temperature as production) + recorded golden for regressions when the model/version changes.
+
+**Flow.** `sendAIMessage` → `_mayaHandleStructured(text)`: (0) answer to a pending question (travel minutes are remembered as a user rule), (1) replan phrase on `AI_CURRENT_PLAN`, (2) router → `_mayaCallIntent` → `mayaPlanFromIntent` (pure: Intent → Context → Plan → Validate → Repair → text) → approval card. Approve = ONE commit: calendar entries `mplan:<rootId>:<itemId>` (minute precision, `source:'maya'`) + `AI_CURRENT_PLAN` persisted in `ai:plan`; stale calendar → refuse. Replan excludes the plan's own entries from the snapshot, then replaces them in one commit. Status-only changes (done/cancelled/locked) apply immediately; anything Maya moves needs approval.
+**Limits.** Only `create`/`arrange` ops are handled by the planner (move/find/prune/preference fall back to chat); ask → answer is "number ⇒ travel minutes, otherwise re-send both texts"; one active plan; cancelling the last destination also cancels its drive. Not verified against real Gemini/Supabase from this sandbox: redeploy `maya-ai` and run `intent-eval --function`.

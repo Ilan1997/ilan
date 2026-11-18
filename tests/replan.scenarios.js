@@ -60,6 +60,12 @@
   {const ch=[PI('i1','נסיעה','travel',HM(10),HM(10,40),{chain:'c1',chainIdx:0,chainAnchor:{rel:'after',min:HM(10)}}),PI('i2','בית מדרש','religious',HM(10,40),HM(11,40),{chain:'c1',chainIdx:1,chainAnchor:{rel:'after',min:HM(10)}})];
    const r=replan(makePlan(sn0,ch),{type:'item_cancelled',itemId:'i1'},sn0,ctx(HM(9)));const i2=r.plan.items.find(x=>x.itemId==='i2');
    o.h1_chainDetached=i2.chain===null&&i2.startMin===HM(10,40)&&r.changes.length===0;}
+  // 4c) a drive whose destinations are all cancelled goes away too; a drive that still has a destination stays
+  {const mk=(sm)=>[PI('i1','נסיעה','travel',sm,sm+40,{chain:'c1',chainIdx:0,chainAnchor:{rel:'after',min:sm}}),PI('i2','בית מדרש','religious',sm+40,sm+100,{chain:'c1',chainIdx:1,chainAnchor:{rel:'after',min:sm}}),PI('i3','קניות','shopping',sm+100,sm+130,{chain:'c1',chainIdx:2,chainAnchor:{rel:'after',min:sm}})];
+   const r1=replan(makePlan(sn0,mk(HM(10))),{type:'item_cancelled',itemId:'i2'},sn0,ctx(HM(9)));
+   o.h2_driveStaysWhileDestinationLeft=r1.plan.items.find(x=>x.itemId==='i1').status==='planned';
+   const r2=replan(makePlan(sn0,mk(HM(10)).slice(0,2)),{type:'item_cancelled',itemId:'i2'},sn0,ctx(HM(9)));
+   o.h3_orphanDriveCancelled=r2.plan.items.find(x=>x.itemId==='i1').status==='cancelled'&&r2.changes.length===0&&r2.disruptionCost===0&&r2.notes.some(n=>/אין יותר לאן/.test(n));}
   // 5) "don't move the studies" → lockedByUser; a conflict with a locked item needs a decision, an unlocked one just moves
   {const r1=replan(plan0,{type:'user_request',text:'את הלימודים אל תזיז'},sn0,ctx(HM(9)));
    o.i1_locked=r1.plan.items.find(x=>x.itemId==='a').lockedByUser===true&&r1.plan.items.filter(x=>x.lockedByUser).length===1&&r1.changes.length===0;

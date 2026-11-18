@@ -14,21 +14,23 @@ const only=val('--only')?new Set(val('--only').split(',')):null;
 const html=fs.readFileSync(path.join(__dirname,'..','..','index.html'),'utf8');
 function loadApp(){return new Promise(res=>{const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/',virtualConsole:new VirtualConsole(),beforeParse(w){const m={};w.storage={get:async k=>{if(!(k in m))throw new Error('nf');return{value:m[k]}},set:async(k,v)=>{m[k]=v;return{}},delete:async k=>{delete m[k];return{}}};if(!w.structuredClone)w.structuredClone=o=>JSON.parse(JSON.stringify(o));w.requestAnimationFrame=f=>setTimeout(f,0);w.HTMLElement.prototype.scrollIntoView=()=>{};w.scrollTo=()=>{};}});setTimeout(()=>res(dom.window),1500);});}
 const parseJSON=t=>{t=String(t||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();const a=t.indexOf('{'),b=t.lastIndexOf('}');return JSON.parse(a>=0?t.slice(a,b+1):t);};
+let SCHEMA=null;   // AI_INTENT_SCHEMA from the app — the live runs use the SAME structured-output contract as production
 async function callGemini(sys,text){
   const key=process.env.GEMINI_API_KEY;if(!key)throw new Error('GEMINI_API_KEY is not set');
   const model=val('--model')||process.env.GEMINI_MODEL||'gemini-2.5-flash';
-  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text}]}],generationConfig:{temperature:0,responseMimeType:'application/json'}})});
+  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:sys}]},contents:[{role:'user',parts:[{text}]}],generationConfig:{temperature:0,responseMimeType:'application/json',...(SCHEMA?{responseSchema:SCHEMA}:{})}})});
   const d=await r.json();if(!r.ok)throw new Error('gemini '+r.status+' '+JSON.stringify(d).slice(0,200));
   return d.candidates&&d.candidates[0]&&d.candidates[0].content.parts.map(p=>p.text||'').join('');
 }
 async function callFunction(w,sys,text){
   const jwt=val('--jwt');if(!jwt)throw new Error('--jwt <token> required');
   const cfg=w.eval('CLOUD_CONFIG');
-  const r=await fetch(cfg.url+'/functions/v1/'+(cfg.aiFunction||'maya-ai'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt,apikey:cfg.anonKey},body:JSON.stringify({system:sys,messages:[{role:'user',content:text}]})});
+  const r=await fetch(cfg.url+'/functions/v1/'+(cfg.aiFunction||'maya-ai'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt,apikey:cfg.anonKey},body:JSON.stringify({system:sys,messages:[{role:'user',content:text}],mode:'intent',schema:SCHEMA,temperature:0})});
   const d=await r.json();if(!r.ok)throw new Error('function '+r.status+' '+JSON.stringify(d).slice(0,200));return d.text;
 }
 (async()=>{
   const w=await loadApp();
+  SCHEMA=JSON.parse(w.eval('JSON.stringify(AI_INTENT_SCHEMA)'));
   const list=cases.filter(c=>!only||only.has(c.id));
   if(has('--dry')){console.log(w.buildIntentSystem(list[0].today)+'\n\n'+list.length+' cases OK');process.exit(0);}
   const mock=has('--mock')?JSON.parse(fs.readFileSync(val('--mock'),'utf8')):null;

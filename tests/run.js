@@ -724,6 +724,17 @@ const w=dom.window;
     const okr=Object.values(r).every(v=>v===true);
     rows.push(['replan (E)',String(okr)+' ('+Object.keys(r).length+')'+(okr?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okr)failed=true;
   }catch(e){rows.push(['replan (E)','THROW '+e.message]);failed=true;}
+  // ---- Step F: chat ⇄ planning layers (stubbed model) ----
+  try{
+    const body=require('fs').readFileSync(require('path').join(__dirname,'stepf.scenarios.js'),'utf8');
+    w.__GOLDEN__=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'intent-eval','mock_golden.json'),'utf8'));
+    const r=await w.eval(body.trim()+'()');
+    const okf=Object.keys(r).every(k=>k.endsWith('_detail')||r[k]===true);
+    rows.push(['chat ⇄ planning (F)',String(okf)+' ('+Object.keys(r).length+')'+(okf?'':' '+JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k,v])=>v!==true))))]);if(!okf)failed=true;
+    const edge=require('fs').readFileSync(require('path').join(__dirname,'..','cloud','functions','maya-ai','index.ts'),'utf8');
+    const oke=/responseSchema/.test(edge)&&/responseMimeType/.test(edge)&&/body\.mode === "intent"/.test(edge)&&/schema.*8000|8000/.test(edge);
+    rows.push(['edge function: structured output',String(oke)]);if(!oke)failed=true;
+  }catch(e){rows.push(['chat ⇄ planning (F)','THROW '+e.message]);failed=true;}
   // ---- Maya's voice: enforced in code (polish + lint over real samples and every UI string) ----
   try{
     const samples=JSON.parse(require('fs').readFileSync(require('path').join(__dirname,'fixtures','voice_samples.json'),'utf8')).samples;

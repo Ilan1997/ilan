@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-17.5';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -5069,6 +5069,9 @@ let AI_PREFS='';             // accumulated learned-preferences text, fed back i
 let AI_RULES=[];             // explicit short rules Maya learned from conversation (persisted: ai:rules); re-read in full on EVERY message
 let AI_PROFILE=null;         // structured personal profile Maya fills from free conversation (persisted: ai:profile)
 let AI_BUSY=false;
+let AI_CURRENT_PLAN=null;   // the plan Maya last put in the calendar (persisted: ai:plan) — what Replan works on
+let AI_PENDING_MAYA=null;   // a plan/replan proposal waiting for approval
+let AI_PENDING_ASK=null;    // the one question Maya is waiting an answer to
 let _aiLoadPromise=null;     // tracks the boot-time _aiLoadState() call — sendAIMessage() awaits this first
 
 async function _aiLoadState(){
@@ -5085,6 +5088,7 @@ async function _aiLoadState(){
       await window.storage.set('ai:rules_seeded','1');await _aiSaveRules();
     }
   }catch(_e){}
+  try{ const pl=await window.storage.get('ai:plan'); const o=JSON.parse(pl.value); AI_CURRENT_PLAN=o&&Array.isArray(o.items)&&o.planId?o:null; }catch(_e){ AI_CURRENT_PLAN=null; }
   try{ const pr=await window.storage.get('ai:profile'); AI_PROFILE=normalizeAIProfile(JSON.parse(pr.value)); }catch(_e){ AI_PROFILE=emptyAIProfile(); }
   try{ const sf=await window.storage.get('ai:soft'); AI_SOFT=normalizeSoft(JSON.parse(sf.value)); }catch(_e){ AI_SOFT=[]; }
   try{ const ids=await window.storage.get('ai:addedTaskIds'); AI_ADDED_TASK_IDS=JSON.parse(ids.value)||[]; }catch(_e){ AI_ADDED_TASK_IDS=[]; }
@@ -5876,7 +5880,7 @@ function _aiWithTimeout(p,ms){
   const t=new Promise((_,rej)=>{tm=setTimeout(()=>{const e=new Error('ai-timeout');e.userMessage='מאיה לא ענתה בזמן. נסה שוב, ואם זה חוזר, ייתכן עומס אצל גוגל.';rej(e);},ms);});
   return Promise.race([p,t]).finally(()=>clearTimeout(tm));
 }
-async function _aiCallModel(sys,msgs){
+async function _aiCallModel(sys,msgs,opts){
   try{
     if(typeof window!=='undefined'&&window.claude&&typeof window.claude.use==='function'){
       const sample=await window.claude.use('sample');
@@ -5888,7 +5892,7 @@ async function _aiCallModel(sys,msgs){
     }
   }catch(e){ console.warn('sample capability failed, falling back to fetch',e&&e.code||e); }
   // Outside claude.ai: only the shared server proxy (Gemini key stays server-side). No personal keys, no direct Anthropic.
-  if(cloudConfigured()&&cloudSignedIn())return _aiCallProxy(sys,msgs);
+  if(cloudConfigured()&&cloudSignedIn())return _aiCallProxy(sys,msgs,opts);
   const e=new Error('login-required');e.noKey=true;e.userMessage='כדי לדבר עם מאיה צריך להתחבר לחשבון (👤 בכותרת).';throw e;
 }
 // One-time legal consent: messages go to Google's free Gemini tier, which may use content to improve Google products.
@@ -5900,10 +5904,10 @@ async function _aiEnsureConsent(){
   return !!ok;
 }
 // Shared free AI through the Supabase Edge Function "maya-ai" (cloud/functions/maya-ai). Needs a signed-in user.
-async function _aiCallProxy(sys,msgs){
+async function _aiCallProxy(sys,msgs,opts){
   if(!(await _aiEnsureConsent())){const e=new Error('no-consent');e.userMessage='בלי אישור לא אשלח את ההודעות ל-AI. אפשר לאשר בפעם הבאה שתשלח הודעה.';throw e;}
   if(!(await _cloudEnsureFresh())){const e=new Error('login');e.userMessage=cloudSignedIn()?'לא הצלחתי לרענן את ההתחברות כרגע (בעיית רשת או שרת). נסה שוב בעוד רגע.':'ההתחברות פגה — התחבר שוב דרך 👤 החשבון שלי.';throw e;}
-  const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',timeoutMs:75000,body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))}});
+  const r=await _cloudFetch('/functions/v1/'+(CLOUD_CONFIG.aiFunction||'maya-ai'),{method:'POST',timeoutMs:75000,body:{system:sys,messages:msgs.map(m=>({role:m.role,content:m.content})),...(opts&&opts.mode?{mode:opts.mode}:{}),...(opts&&opts.schema?{schema:opts.schema}:{}),...(opts&&typeof opts.temperature==='number'?{temperature:opts.temperature}:{})}});
   if(r.timeout){const e=new Error('ai-timeout');e.userMessage='מאיה לא ענתה בזמן. נסה שוב, ואם זה חוזר, ייתכן עומס אצל גוגל.';throw e;}
   if(r.network){const e=new Error('network');e.userMessage='אין חיבור לשרת — בדוק אינטרנט ונסה שוב.';throw e;}
   if(r.status===404){const e=new Error('proxy-not-deployed');e.noKey=true;throw e;} // service not set up yet → offer a personal key
@@ -5929,6 +5933,102 @@ async function testAIConnection(){
 }
 // Old personal keys are no longer used anywhere — drop any that an earlier version stored in this browser.
 async function _aiPurgeLegacyKeys(){for(const k of ['ai:apikey','ai:geminikey','ai:provider','ai:geminiModel']){try{await window.storage.delete(k);}catch(_e){}}}
+
+// ── Step F: UI glue (no planning logic here — only I/O, the clock, and the approval card) ──
+function _uiNow(){const w=(typeof window!=='undefined'&&window.__MAYA_NOW__)?window.__MAYA_NOW__:null;if(w)return{today:w.iso,nowMin:w.minutes};const d=new Date();return{today:getTodayISO(),nowMin:d.getHours()*60+d.getMinutes()};}
+async function _mayaSavePlan(){try{if(AI_CURRENT_PLAN)await window.storage.set('ai:plan',JSON.stringify(AI_CURRENT_PLAN));else await window.storage.delete('ai:plan');}catch(_e){}}
+// One structured call: schema-enforced JSON at temperature 0, ONE repair retry with the exact problems, else null (caller falls back to normal chat).
+async function _mayaCallIntent(userText){
+  const sys=buildIntentSystem(STATE_ACTIVE?.meta?.today||getTodayISO());
+  const msgs=[{role:'user',content:userText}];
+  for(let attempt=0;attempt<2;attempt++){
+    const txt=await _aiWithTimeout(_aiCallModel(sys,msgs,{mode:'intent',schema:AI_INTENT_SCHEMA,temperature:0}),60000);
+    const p=parseIntentText(txt);const probs=p.ok?intentProblems(p.raw):['התשובה לא הייתה JSON תקין'];
+    if(!probs.length)return p.raw;
+    msgs.push({role:'assistant',content:String(txt||'').slice(0,2000)},{role:'user',content:'התשובה לא תקינה: '+probs.join('; ')+'. החזירי JSON בלבד, לפי הפורמט.'});
+  }
+  return null;
+}
+function _mayaSay(text,buttons){
+  const t=mayaPolish(text);
+  AI_CHAT_HISTORY.push({role:'assistant',content:t,displayText:t});
+  if(buttons&&buttons.length)_aiAppendActionBubble(t,buttons);else _aiAppendBubble(t,'bot');
+}
+function _mayaFreshSig(rootId,today){
+  const st=_planStateWithoutOwnEvents(STATE_ACTIVE,rootId);
+  return buildContextSnapshot({...st,meta:{...st.meta,today}},{engine:false}).sig;
+}
+// Writes a plan into the calendar (replacing the previous version of the same plan) in ONE commit.
+function _mayaCommitPlan(plan,oldPlan){
+  let w=STATE_ACTIVE;const root=plan.rootId||plan.planId,pre=_mayaOwnPrefix(root);
+  ((w.constraintsGlobal||{}).events||[]).filter(e=>String(e.id).indexOf(pre)===0).map(e=>e.id).forEach(id=>{w=applyEvent(w,'personal',{type:'REMOVE_GLOBAL_EVENT',eventId:id});});
+  const evs=mayaPlanEvents(plan);if(evs.length)w=applyEvent(w,'personal',{type:'ADD_GLOBAL_EVENTS_BATCH',events:evs});
+  STATE_ACTIVE=commitState(w,'maya-plan:'+plan.planId);
+  AI_CURRENT_PLAN=plan;_mayaSavePlan();
+}
+function _mayaApprove(bubbleEl){
+  const p=AI_PENDING_MAYA;if(!p){showToast('אין הצעה ממתינה');return;}
+  if(bubbleEl){const row=bubbleEl.querySelector('div:last-child');if(row&&row.querySelector('button'))row.remove();}
+  const plan=p.plan,root=plan.rootId||plan.planId,today=p.today;
+  if(_mayaFreshSig(root,today)!==plan.snapshotSig){AI_PENDING_MAYA=null;_mayaSay('היומן השתנה מאז שהכנתי את ההצעה — אפשר לבקש שוב ואחשב מחדש.');return;}
+  _mayaCommitPlan(plan,p.oldPlan);AI_PENDING_MAYA=null;
+  try{_aiNoteSignal('אישר/ה סידור: '+plan.items.filter(x=>x.status!=='cancelled').map(x=>'"'+x.title+'"').join(', '));}catch(_s){}
+  showToast('✅ נוסף ליומן');
+  _aiAppendActionBubble('סידרתי ביומן ✓ אפשר לגרור כל דבר אם משהו לא מתאים.',[{label:'📅 הצג בלוח',onclick:()=>switchTab('study')}]);
+}
+function _mayaReject(bubbleEl){
+  if(bubbleEl){const row=bubbleEl.querySelector('div:last-child');if(row&&row.querySelector('button'))row.remove();}
+  AI_PENDING_MAYA=null;_mayaSay('בסדר, לא שיניתי כלום.');
+}
+function _mayaOfferPlan(res,oldPlan){
+  AI_PENDING_MAYA={plan:res.plan,today:res.today||res.plan.items[0].date,oldPlan:oldPlan||null};
+  _mayaSay(res.text,[{label:'✅ אשר',style:'background:var(--green);color:#fff;border-color:var(--green);',onclick:div=>_mayaApprove(div)},{label:'ביטול',onclick:div=>_mayaReject(div)}]);
+}
+function _mayaShowPlanResult(res,originalText){
+  if(res.status==='not_plan')return false;
+  if(res.status==='ask'){AI_PENDING_ASK={originalText,field:res.ask.field||null,from:res.ask.from||null,to:res.ask.to||null,raw:res.raw||null};_mayaSay(res.text);return true;}
+  if(res.status==='needs_decision'){_mayaSay(res.text);return true;}
+  if(res.status==='proposal'){_mayaOfferPlan(res,null);return true;}
+  return false;
+}
+function _mayaShowReplan(r,now){
+  if(r.status==='error'||r.status==='needs_interpretation'||r.status==='needs_decision'){_mayaSay(replanSummaryText(r));return;}
+  const text=replanSummaryText(r);
+  if(r.changes.length>0){   // Maya is moving things → ask first
+    AI_PENDING_MAYA={plan:r.plan,today:now.today,oldPlan:AI_CURRENT_PLAN};
+    _mayaSay(text+'\nלעדכן ביומן?',[{label:'✅ עדכן',style:'background:var(--green);color:#fff;border-color:var(--green);',onclick:div=>_mayaApprove(div)},{label:'ביטול',onclick:div=>_mayaReject(div)}]);
+  }else{   // status-only change (done / cancelled / locked / nothing): apply right away
+    _mayaCommitPlan(r.plan,AI_CURRENT_PLAN);_mayaSay(text);
+  }
+}
+// Returns true when the planner path fully handled the message (so the normal chat call is skipped).
+async function _mayaHandleStructured(text){
+  if(!STATE_ACTIVE)return false;
+  const now=_uiNow();let said=text;
+  // 0) a pending question from the previous turn
+  const ask=AI_PENDING_ASK;AI_PENDING_ASK=null;
+  if(ask){
+    if(ask.field==='travel'&&ask.from&&ask.to&&ask.raw){
+      const m=parseMinutesAnswer(text);
+      if(m>0){dispatchEvent('personal',{type:'SET_USER_RULES',patch:travelAnswerPatch(getUserRules(STATE_ACTIVE),ask.from,ask.to,m)});return _mayaShowPlanResult(mayaPlanFromIntent(STATE_ACTIVE,ask.raw,{excludeRootId:null}),ask.originalText);}
+    }
+    said=ask.originalText+' ('+text+')';
+  }
+  // 1) a change to the existing plan ("I'm 20 minutes late", "the meeting was cancelled", …)
+  if(!ask&&AI_CURRENT_PLAN){
+    const pr=parseReplanText(text,AI_CURRENT_PLAN,now);
+    if(pr){
+      if(pr.kind==='ask'){_mayaSay(pr.text);return true;}
+      _mayaShowReplan(mayaReplanFromState(STATE_ACTIVE,AI_CURRENT_PLAN,pr.trigger,now),now);return true;
+    }
+  }
+  // 2) a new structured request
+  if(!ask&&!looksLikePlanRequest(text))return false;
+  if((await _aiRoute())==='none')return false;
+  const raw=await _mayaCallIntent(said);
+  if(!raw)return false;
+  return _mayaShowPlanResult(mayaPlanFromIntent(STATE_ACTIVE,raw,{excludeRootId:null}),said);
+}
 
 async function sendAIMessage(){
   if(AI_BUSY)return;
@@ -5966,6 +6066,9 @@ async function sendAIMessage(){
     (AI_PREFS?`\nהעדפות שנלמדו על המשתמש/ת מתיקונים קודמים (קח/י בחשבון בעדינות, אל תזכיר/י את זה במפורש): ${AI_PREFS}`:'');
 
   try{
+    // Structured planning requests and changes to an existing plan are handled in code (the model only interprets) — everything else is normal chat.
+    {let handled=false;try{handled=await _mayaHandleStructured(text);}catch(_pe){console.warn('planner path failed — falling back to chat',_pe);handled=false;}
+     if(handled){typingEl?.remove();_aiSaveHistory();return;}}
     const fullText=await _aiWithTimeout(_aiCallModel(sys,AI_CHAT_HISTORY.map(m=>({role:m.role,content:m.content}))),90000);
     typingEl?.remove();
 
@@ -9273,7 +9376,7 @@ const AI_INTENT_PROMPT=`את מפענחת בקשות תכנון בעברית ו�
 חוק ברזל: לעולם אל תחשבי שעות התחלה/סיום ואל תמציאי אירועים. רק תעתיקי מה שנאמר. אם לא נאמר משך — אל תנחשי (השאירי durationMin חסר; אם נאמר "לא יודע כמה זמן" שימי durationUnknown:true).
 הפורמט:
 {"op":"create|move|find|prune|arrange|preference","items":[{"ref":"i1","title":"...","kind":"travel|meeting|work|deep_work|errand|shopping|phone_call|admin|study|creative|religious|fitness|personal|waiting_for_response","durationMin":מספר (רק אם נאמר),"durationUnknown":true (רק אם נאמר שלא יודע),"place":"מקום","date":"YYYY-MM-DD","window":{"from":"HH:MM","to":"HH:MM"},"anchor":{"rel":"after|before|at|while_in","target":{"text":"הביטוי כפי שנאמר","date":"YYYY-MM-DD"}},"afterItem":"i1","rigidity":"hard|flexible|optional" (רק אם נאמר),"confidence":{"kind":0..1,"duration":0..1,"place":0..1,"rigidity":0..1,"anchor":0..1}}],"filter":{"kind":"..."},"targetDays":["YYYY-MM-DD"],"scope":"event|global","preference":{"bufferBeforeMin":מספר,"lateBiasMin":מספר,"dayRule":{"dow":0-6,"mode":"work|study|flexible|errands|field|rest|spirit|light"}},"context":{"currentPlace":"..."}}
-כללים: (1) op=create כשמבקשים להוסיף; move להעביר קיים; find כששואלים "מתי/איפה מתאים"; prune כשאין זמן ומבקשים מה להוריד; arrange כשזורקים כמה דברים ליום ומבקשים לסדר; preference כשמעדכנים כלל קבוע (מרווח, איחור, יום עמוס). (2) anchor: "אחרי/לפני X" → rel + target.text בדיוק כפי שנאמר ("הפגישה בפתח תקווה"); "כשאני כבר ב-X" → rel=while_in; את target.date מלאי רק אם נאמר יום (מחר/ביום שלישי…) לפי התאריך של היום. (3) רצף "אחרי X: א, ב, ג" → הפריט הראשון עם anchor, השאר עם afterItem לקודם. (4) confidence נמוך (<0.6) כשאת לא בטוחה בסוג/מקום — אל תנחשי בביטחון. (5) "קניות" = shopping, "בנק/סידור" = errand, "זום/פגישה" = meeting, "בית מדרש/תורה/תפילה" = religious, "נסיעה" = travel (place=היעד), "להתקשר" = phone_call, "ללמוד" = study, "עבודה/דוח" = work/deep_work, "אימון/ריצה/כושר" = fitness. (6) "תמיד/לכל דבר" → scope=global; אם לא ברור — השמיטי scope.`;
+כללים: (1) op=create כשמבקשים להוסיף; move להעביר קיים; find כששואלים "מתי/איפה מתאים"; prune כשאין זמן ומבקשים מה להוריד; arrange כשזורקים כמה דברים ליום ומבקשים לסדר; preference כשמעדכנים כלל קבוע (מרווח, איחור, יום עמוס). (2) anchor: "אחרי/לפני X" → rel + target.text בדיוק כפי שנאמר ("הפגישה בפתח תקווה"); "כשאני כבר ב-X" → rel=while_in; את target.date מלאי רק אם נאמר יום (מחר/ביום שלישי…) לפי התאריך של היום. (3) רצף "אחרי X: א, ב, ג" → הפריט הראשון עם anchor, השאר עם afterItem לקודם. (4) confidence נמוך (<0.6) כשאת לא בטוחה בסוג/מקום — אל תנחשי בביטחון. (5) "קניות" = shopping, "בנק/סידור" = errand, "זום/פגישה" = meeting, "בית מדרש/תורה/תפילה" = religious, "נסיעה" = travel (place=היעד), "להתקשר" = phone_call, "ללמוד" = study, "עבודה/דוח" = work/deep_work, "אימון/ריצה/כושר" = fitness. (6) "תמיד/לכל דבר" → scope=global; אם לא ברור — השמיטי scope. (7) אם ההודעה אינה בקשה לסדר/לקבוע דברים בזמן (שיחה, שאלה, ברכה, או בקשה לחלק מספר שעות עד תאריך) — op=none ו-items ריק.`;
 function buildIntentSystem(todayISO){
   const dn=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
   const d=new Date(todayISO+'T12:00:00Z');
@@ -9770,7 +9873,7 @@ function _rpHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCode
 function makePlan(snap,items,opts){
   opts=opts||{};
   const planId=opts.planId||('p_'+_rpHash(JSON.stringify([snap.sig,items.map(x=>[x.ref,x.date,x.startMin,x.endMin])])));
-  return{planId,supersedes:opts.supersedes||null,snapshotSig:snap.sig,
+  return{planId,rootId:opts.rootId||planId,supersedes:opts.supersedes||null,snapshotSig:snap.sig,
     items:items.map(x=>({...x,planId,itemId:x.itemId||x.ref,sourceIntentRef:x.sourceIntentRef||opts.intentRef||x.ref,status:x.status||'planned',lockedByUser:!!x.lockedByUser}))};
 }
 function lockPlanItems(plan,ids){return{...plan,items:plan.items.map(x=>ids.indexOf(x.itemId)>=0?{...x,lockedByUser:true}:{...x})};}
@@ -9814,7 +9917,12 @@ function replan(plan,trigger,snapNew,ctx){
   }else if(t==='item_cancelled'){
     const it=find(trigger.itemId);if(!it)return{status:'error',message:'לא מצאתי את הפריט שבוטל.'};
     it.status='cancelled';freed={date:it.date,from:it.startMin,to:it.endMin};notes.push('"'+it.title+'" בוטל — לא נוגעת בשאר היום.');
-    if(it.chain)cur.forEach(x=>{if(x.chain===it.chain&&x.itemId!==it.itemId){x.chain=null;x.chainIdx=null;x.chainAnchor=null;}});
+    if(it.chain){
+      // a drive that only existed to reach cancelled things is cancelled with them
+      const rest=cur.filter(x=>x.chain===it.chain&&x.itemId!==it.itemId&&x.status==='planned');
+      if(it.kind!=='travel'&&rest.length&&rest.every(x=>x.kind==='travel'))rest.forEach(x=>{x.status='cancelled';notes.push('ביטלתי גם את "'+x.title+'" — אין יותר לאן להגיע.');});
+      cur.forEach(x=>{if(x.chain===it.chain&&x.itemId!==it.itemId){x.chain=null;x.chainIdx=null;x.chainAnchor=null;}});
+    }
   }else if(t==='new_event'){
     const ev=(snapNew.events||[]).find(e=>e.id===trigger.eventId);
     notes.push(ev?'נוסף ליומן "'+ev.title+'" ('+_fmtMin(ev.startMin)+'–'+_fmtMin(ev.endMin)+').':'האירוע החדש לא נמצא ביומן.');
@@ -9901,7 +10009,7 @@ function replan(plan,trigger,snapNew,ctx){
     if(!opportunities.length)opportunities.push({type:'free_time',date:freed.date,from:freed.from,to:freed.to});
   }
   const newId='p_'+_rpHash(plan.planId+'|'+t+'|'+JSON.stringify(out.map(x=>[x.itemId,x.status,x.date,x.startMin,x.endMin,!!x.lockedByUser])));
-  const nextPlan={planId:newId,supersedes:plan.planId,snapshotSig:snapNew.sig,items:out.map(x=>({...x,planId:newId}))};
+  const nextPlan={planId:newId,rootId:plan.rootId||plan.planId,supersedes:plan.planId,snapshotSig:snapNew.sig,items:out.map(x=>({...x,planId:newId}))};
   if(status==='needs_decision')return{status,plan,decisions,notes,changes:[],opportunities,disruptionCost:0,validation:v0,repair};
   if(!changes.length&&status==='ok'&&!opportunities.length&&['delay','new_event','calendar_changed'].indexOf(t)>=0)status='unchanged';
   return{status,plan:nextPlan,changes,notes,opportunities,decisions:[],disruptionCost:disruption.total,disruptionDetail:disruption.per,repairCost:repair&&repair.best?repair.best.totalCost:0,validation:validatePlan(work,out.filter(x=>cls(x)==='move'&&x.status!=='cancelled').map(x=>({...x,ref:x.itemId}))),repair};
@@ -9921,6 +10029,150 @@ function replanSummaryText(r){
   });
   (r.opportunities||[]).forEach(o=>{if(o.type==='pull_forward')L.push('התפנו '+o.gainMin+' דק׳ — רוצה שאקדים את "'+o.title+'" ל-'+_fmtMin(o.to.startMin)+'?');else if(o.type==='free_time')L.push('התפנה זמן ('+_fmtMin(o.from)+'–'+_fmtMin(o.to)+').');});
   return L.join('\n');
+}
+// ═══ Step F: chat ⇄ planning layers ═══
+// The model ONLY interprets (structured JSON, enforced by the schema below). Everything the user reads about a plan is written HERE, in code.
+const AI_INTENT_SCHEMA=(()=>{
+  const S={type:'STRING'},N={type:'NUMBER'},I={type:'INTEGER'},B={type:'BOOLEAN'};
+  const en=a=>({type:'STRING',enum:a});
+  return{type:'OBJECT',properties:{
+    op:en(['create','move','find','prune','arrange','preference','none']),
+    items:{type:'ARRAY',items:{type:'OBJECT',properties:{
+      ref:S,title:S,kind:en(PLAN_KINDS),durationMin:I,durationUnknown:B,place:S,date:S,
+      window:{type:'OBJECT',properties:{from:S,to:S}},
+      anchor:{type:'OBJECT',properties:{rel:en(['after','before','at','while_in']),target:{type:'OBJECT',properties:{text:S,date:S}}}},
+      afterItem:S,rigidity:en(['hard','flexible','optional']),
+      confidence:{type:'OBJECT',properties:{kind:N,duration:N,place:N,rigidity:N,anchor:N}}},required:['ref','title']}},
+    filter:{type:'OBJECT',properties:{kind:en(PLAN_KINDS)}},
+    targetDays:{type:'ARRAY',items:S},scope:en(['event','global']),
+    preference:{type:'OBJECT',properties:{bufferBeforeMin:I,lateBiasMin:I,dayRule:{type:'OBJECT',properties:{dow:I,mode:en(PLAN_DAY_MODES)}}}},
+    context:{type:'OBJECT',properties:{currentPlace:S}}},required:['op']};
+})();
+// PURE: lenient parse of the model's reply (fences / chatter around the JSON are tolerated; anything else is an error, never a guess).
+function parseIntentText(text){
+  let s=String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,'');
+  const a=s.indexOf('{'),b=s.lastIndexOf('}');if(a<0||b<=a)return{ok:false,error:'no_json'};
+  try{const o=JSON.parse(s.slice(a,b+1));return o&&typeof o==='object'&&!Array.isArray(o)?{ok:true,raw:o}:{ok:false,error:'not_object'};}catch(_e){return{ok:false,error:'bad_json'};}
+}
+// PURE: what is wrong with a parsed reply (empty list = usable). Used to decide on the single repair retry.
+function intentProblems(raw){
+  const p=[];if(!raw||typeof raw!=='object')return['not_object'];
+  if(['create','move','find','prune','arrange','preference','none'].indexOf(raw.op)<0)p.push('op לא חוקי — חייב להיות אחד מ: create,move,find,prune,arrange,preference,none');
+  if(raw.op!=='none'&&raw.op!=='preference'&&!(Array.isArray(raw.items)&&raw.items.length))p.push('items ריק');
+  (Array.isArray(raw.items)?raw.items:[]).forEach((it,i)=>{if(!it||typeof it.title!=='string'||!it.title.trim())p.push('לפריט '+(i+1)+' אין title');});
+  return p;
+}
+// PURE: cheap router. True only for requests whose meaning is "arrange things in time around real events/places".
+// (Hours-before-a-deadline requests stay on the older engine path; anything not matched here is plain chat.)
+function looksLikePlanRequest(text){
+  const t=String(text||'');if(t.length<6||t.length>600)return false;
+  if(/^(שלום|היי|הי|תודה|מה שלומך|בוקר טוב|ערב טוב)\b/.test(t.trim())&&t.length<40)return false;
+  return /(אחרי|לפני)\s+ה?(פגישה|ישיבה|טיפול|שיעור|אירוע|בחינה|מבחן|ארוחה|תפילה|עבודה)|ואז\s|\sואחר\s?כך\s|נסיעה\s+(ל|מ)|בדרך\s+ל|כשאני\s+(כבר\s+)?(ב|בדרך)|(סדר|תסדר|סדרי|תסדרי|לסדר)\s+לי|(תקבע|קבע|תכנן|תכנני|תתכנן)\s+לי\s.*(מחר|היום|ביום|בבוקר|בצהריים|בערב)/.test(t);
+}
+// PURE: the state as the planner should see it — without the calendar entries that belong to the plan being (re)planned.
+function _mayaOwnPrefix(rootId){return 'mplan:'+rootId+':';}
+function _planStateWithoutOwnEvents(state,rootId){
+  if(!rootId)return state;const pre=_mayaOwnPrefix(rootId);
+  return{...state,constraintsGlobal:{...state.constraintsGlobal,events:((state.constraintsGlobal||{}).events||[]).filter(e=>String(e.id).indexOf(pre)!==0)}};
+}
+const _MAYA_DN=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+function _mayaDayLabel(date,today){
+  if(date===today)return'היום';if(date===_isoAdd(today,1))return'מחר';
+  return'יום '+_MAYA_DN[new Date(date+'T12:00:00Z').getUTCDay()]+' '+date.slice(8,10)+'/'+date.slice(5,7);
+}
+function _mayaLine(x,today){
+  const trv=x.kind==='travel'?' ('+(x.endMin-x.startMin)+' דק׳ נסיעה)':'';
+  return'• '+_mayaDayLabel(x.date,today)+', '+_fmtMin(x.startMin)+'–'+_fmtMin(x.endMin)+' — '+x.title+trv;
+}
+// PURE: intent → plan proposal, all in code. Returns {status:'not_plan'|'ask'|'proposal'|'needs_decision', text, ...}.
+function mayaPlanFromIntent(state,raw,o){
+  o=o||{};const it=normalizeIntent(raw);
+  if((raw&&raw.op==='none')||!it.items.length)return{status:'not_plan'};
+  if(it.op!=='create'&&it.op!=='arrange')return{status:'not_plan',reason:'op_'+it.op};   // move/find/prune/preference stay on the older path for now
+  const st=_planStateWithoutOwnEvents(state,o.excludeRootId);
+  const snap=buildContextSnapshot(st,{engine:false});const today=snap.today;
+  const gaps=planningGaps(it,getUserRules(st));
+  const askRes=(a,msg)=>({status:'ask',ask:a,text:msg||a.question,raw});
+  if(gaps.ask.length)return askRes(gaps.ask[0]);
+  const chain=it.items.some(x=>x.anchor||x.afterItem);
+  let sched,items,assumptions=gaps.assumptions.slice(),unplaced=[];
+  if(chain){
+    sched=planChain(snap,it,gaps);
+    if(sched.status==='ask')return askRes(sched.ask);
+    if(sched.status!=='ok')return askRes({field:'anchor',question:sched.message||'לא הצלחתי למצוא את האירוע.'},(sched.message||'לא הצלחתי למצוא את האירוע.')+' אפשר לכתוב אותו כמו שהוא מופיע ביומן?');
+    items=planItemsFrom(snap,gaps,sched,{chain:true});assumptions=sched.assumptions.slice();
+  }else{
+    sched=scheduleSet(snap,it,gaps);
+    if(sched.questions&&sched.questions.length)return askRes(sched.questions[0]);
+    unplaced=sched.unplaced||[];assumptions=(sched.assumptions||assumptions).slice();
+    if(!sched.placed.length)return{status:'needs_decision',text:'לא מצאתי איפה לסדר את זה בימים הקרובים: '+unplaced.map(u=>'"'+u.title+'"').join(', ')+'. רוצה שאחפש בימים אחרים, או שנקצר משהו?',unplaced};
+    items=planItemsFrom(snap,gaps,sched);
+  }
+  const v0=validatePlan(snap,items);let repair=null,warnings=v0.warnings.map(w=>w.message);
+  if(!v0.ok){
+    repair=proposeCuts(snap,items);
+    if(repair.best){items=repair.best.plan;warnings=repair.best.remaining.warnings.map(w=>w.message);}
+    else return{status:'needs_decision',text:repairSummaryText(repair),repair,snap,items};
+  }
+  const plan=makePlan(snap,items,{intentRef:(raw&&raw.op)||'create'});
+  const res={status:'proposal',plan,items,snap,repair,warnings,assumptions,unplaced,anchor:chain?sched.anchor:null,chain,today};
+  res.text=mayaPlanText(res);return res;
+}
+// PURE: what Maya says about a proposal — plain Hebrew, written by code from the validated plan only.
+function mayaPlanText(r){
+  const L=[];
+  if(r.anchor)L.push('אחרי "'+r.anchor.title+'" (נגמר ב-'+_fmtMin(r.anchor.endMin)+') ככה זה נראה:');else L.push('ככה אני מציעה לסדר את זה:');
+  r.items.slice().sort((a,b)=>(a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin)).forEach(x=>L.push(_mayaLine(x,r.today)));
+  const as=(r.assumptions||[]).filter(a=>a.field!=='rigidity'&&a.text).map(a=>a.text);
+  if(as.length)L.push('הנחתי: '+as.join('; ')+'.');
+  if(r.repair&&r.repair.best){L.push('בהתחלה זה התנגש ('+r.repair.validation.blocks.map(b=>b.message.replace(/\.$/,'')).join('; ')+'), אז סידרתי כך: '+r.repair.best.steps.map(s=>s.text).join('; ')+'.');}
+  (r.unplaced||[]).forEach(u=>L.push('לא מצאתי מקום ל"'+u.title+'" — נשאר בחוץ.'));
+  (r.warnings||[]).forEach(w=>L.push('⚠️ '+w));
+  L.push('לאשר?');return L.join('\n');
+}
+// PURE: calendar entries for a plan (minute precision). Done/started items are history and stay; cancelled/dropped ones leave the calendar.
+function mayaPlanEvents(plan){
+  const root=plan.rootId||plan.planId;
+  return plan.items.filter(x=>x.status!=='cancelled').map(x=>({id:_mayaOwnPrefix(root)+x.itemId,title:x.title,date:x.date,startH:Math.floor(x.startMin/60),endH:Math.ceil(x.endMin/60),startMin:x.startMin,endMin:x.endMin,place:x.place||'',source:'maya',planId:plan.planId,itemId:x.itemId,rigidity:'flexible',rigiditySource:'maya'}));
+}
+// PURE: minutes from a short answer ("40", "40 דקות", "שעה", "חצי שעה", "שעה וחצי", "שעתיים"). null if none.
+function parseMinutesAnswer(text){
+  const t=String(text||'').trim();
+  if(/שעה\s+וחצי/.test(t))return 90;if(/חצי\s+שעה/.test(t))return 30;if(/שעתיים/.test(t))return 120;
+  let m=/(\d{1,3})\s*(?:דק|דקות)/.exec(t);if(m)return+m[1];
+  m=/(\d{1,2})\s*שעות/.exec(t);if(m)return+m[1]*60;
+  if(/^\s*שעה\s*[.!]?\s*$/.test(t))return 60;
+  m=/^\s*(\d{1,3})\s*[.!]?\s*$/.exec(t);return m?+m[1]:null;
+}
+function _matchPlanItem(plan,q){
+  const n=_hnorm(q);if(!n)return[];
+  return plan.items.filter(x=>x.status==='planned'||x.status==='started').filter(x=>{const t=_hnorm(x.title);return t.indexOf(n)>=0||n.indexOf(t)>=0;});
+}
+// PURE: spoken change to an existing plan → a ReplanTrigger. Deterministic on purpose (no model needed for "I'm 20 minutes late").
+//  → {kind:'trigger',trigger,itemId?} | {kind:'ask',text} | null (not a replan phrase)
+function parseReplanText(text,plan,now){
+  if(!plan||!Array.isArray(plan.items)||!plan.items.length)return null;
+  const t=String(text||'').trim().replace(/[.!?]+$/,'');
+  if(/(איחרתי|אני מאחר|אני מאחרת|מתאחר|מתאחרת|נתקעתי|אני בפיגור)/.test(t)){
+    const mins=parseMinutesAnswer(t.replace(/^.*?(איחרתי|מאחר|מאחרת|מתאחר|מתאחרת|נתקעתי|בפיגור)\S*\s*(ב|ב-)?/,''));
+    return mins>0&&mins<=600?{kind:'trigger',trigger:{type:'delay',minutes:mins}}:{kind:'ask',text:'בכמה זמן התאחרת?'};
+  }
+  if(/(אל|לא)\s+ת(זיז|זיזי|זיזו)|לא\s+להזיז/.test(t))return{kind:'trigger',trigger:{type:'user_request',text:t}};
+  let m=/^(?:ביטלו|בוטל|ביטלתי|נדחה|התבטל|מבטל|מבטלת)\s+(?:לי\s+)?(?:את\s+)?(?:ה)?(.+)$/.exec(t)||/^(?:ה)?(.+?)\s+(?:בוטל|בוטלה|התבטל|התבטלה|נדחה)$/.exec(t);
+  if(m){const hits=_matchPlanItem(plan,m[1]);
+    if(hits.length===1)return{kind:'trigger',trigger:{type:'item_cancelled',itemId:hits[0].itemId}};
+    return{kind:'ask',text:hits.length?'איזה מהם בוטל — '+hits.map(h=>'"'+h.title+'"').join(' או ')+'?':'לא מצאתי בתכנית "'+m[1]+'". למה התכוונת?'};}
+  m=/^(?:סיימתי|גמרתי|נגמר|הסתיים|סיימנו)\s+(?:את\s+)?(?:ה)?(.+?)(?:\s+(?:מוקדם|כבר|עכשיו))?$/.exec(t);
+  if(m){const hits=_matchPlanItem(plan,m[1]);
+    if(hits.length===1&&now)return{kind:'trigger',trigger:{type:'item_done',itemId:hits[0].itemId,actualEnd:now.today+'T'+_fmtMin(now.nowMin)}};
+    return{kind:'ask',text:hits.length?'איזה מהם סיימת — '+hits.map(h=>'"'+h.title+'"').join(' או ')+'?':'לא מצאתי בתכנית "'+m[1]+'". למה התכוונת?'};}
+  return null;
+}
+// PURE: run a replan against the live state (the plan's own calendar entries are removed from the picture first).
+function mayaReplanFromState(state,plan,trigger,now){
+  const st=_planStateWithoutOwnEvents(state,plan.rootId||plan.planId);
+  const snap=buildContextSnapshot({...st,meta:{...st.meta,today:now.today}},{engine:false});
+  return replan(plan,trigger,snap,{today:now.today,nowMin:now.nowMin});
 }
 // ── Interpretation layer for small tasks: kind (metadata), place, and "what can be done together" ──
 const TASK_KINDS=['deep_work','phone_call','admin','errand','travel_compatible','creative','meeting','study','personal','waiting_for_response'];

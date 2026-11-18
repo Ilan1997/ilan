@@ -41,3 +41,9 @@ A ✅ מודל נתונים · B ✅ הקשר+resolveAnchor+שרשרת בסיס�
 
 ## ה-AI ("ההתחברות פגה")
 תוקן הרענון (single-flight, ניסיון חוזר, אימוץ סשן מטאב אחר, טוקן תקף נשאר בשימוש). לא אומת מול Supabase אמיתי. אם עדיין נכשל: לשלוח את הטקסט המדויק של השגיאה או את תוצאת "בדוק את ה-AI" בחשבון; לוודא ש-`maya-ai` פרוסה עם `PER_MODEL_MS=28000`, ש-`GEMINI_API_KEY` קיים, ושם המודל תקף (`GEMINI_MODEL=gemini-2.5-flash`).
+
+## Step F — what the user must do once (cannot be done from the sandbox)
+1. Redeploy the edge function `maya-ai` (file: `cloud/functions/maya-ai/index.ts`) — it now accepts `mode:"intent"`, `schema`, `temperature` (structured output).
+2. Hard-refresh the app (build label `2026-11-18.1` in the header).
+3. Live accuracy run: `node tests/intent-eval/run.js --function --jwt <JWT> --out report.json` (or `--gemini` with GEMINI_API_KEY). Send the report; failing cases drive prompt/schema tweaks.
+4. Try in the chat: "אחרי הפגישה בפתח תקווה תכנן לי נסיעה לאריאל ואז שעה בית מדרש", then "איחרתי ב-20 דקות".
