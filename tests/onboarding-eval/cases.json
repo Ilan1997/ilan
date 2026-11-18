@@ -1213,6 +1213,44 @@
    "calendar": null,
    "today": "2026-11-18",
    "question": null
+  },
+  {
+   "cat": "followup",
+   "q": "f",
+   "followup": false,
+   "covers": [],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": "ובדרך כלל באילו שעות אתה עובד? גם טווח בערך מספיק.",
+   "field": "workHours",
+   "id": "F05",
+   "answer": "משתנה, אין לי שעות קבועות. לא יודע.",
+   "expect": {
+    "dontKnow": [
+     "workHours"
+    ],
+    "officeHours": null
+   }
+  },
+  {
+   "cat": "followup",
+   "q": "f",
+   "followup": false,
+   "covers": [],
+   "ctx": {},
+   "calendar": null,
+   "today": "2026-11-18",
+   "question": "ובדרך כלל באילו שעות אתה עובד? גם טווח בערך מספיק.",
+   "field": "workHours",
+   "id": "F06",
+   "answer": "בערך 10 עד 18, בימים א׳ עד ה׳",
+   "expect": {
+    "officeHours": {
+     "from": "10:00",
+     "to": "18:00"
+    }
+   }
   }
  ]
 }

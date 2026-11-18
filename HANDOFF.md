@@ -62,3 +62,6 @@ Pure core in `index.html` (`onb*`), spec `ONBOARDING_SPEC_V2.md`, tests `tests/o
 2. `node tests/onboarding-eval/run.js --function --jwt <JWT> --out r.json --md report.md` and send `report.md` (any critical blocks UI).
 3. `node tests/onboarding-eval/e2e.js yuval --function --jwt <JWT>` (and noam/dani) — real conversation to the post-approval state.
 4. Then: replace the fallback placement with `scheduleSet`; then UI.
+
+### Update 2026-11-18.8
+Deterministic onboarding core fixed before Gemini eval: materialization of accepted review, MaintenanceNeed vs RoutineProposal, blocking workHours + `partially_placed`, dayStart as proposal (ARCHITECTURE §63). Steps 1–4 above unchanged; eval is now 40 cases.

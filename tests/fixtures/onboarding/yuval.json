@@ -97,20 +97,10 @@
   },
   {
    "expect": "f2",
-   "answer": "בערך שעה. מתחיל ב-18:15.",
+   "answer": "משתנה, אין לי שעות קבועות. לא יודע.",
    "extraction": {
-    "fixed": [
-     {
-      "key": "course",
-      "start": {
-       "hhmm": "18:15",
-       "precision": "exact"
-      },
-      "travelMin": {
-       "min": 60,
-       "precision": "approx"
-      }
-     }
+    "dontKnow": [
+     "workHours"
     ]
    }
   },
@@ -127,24 +117,21 @@
       "title": "חשבוניות וגבייה",
       "kind": "payments",
       "domain": "work",
-      "maintenance": "work",
-      "perWeek": 1
+      "maintenance": "work"
      },
      {
       "key": "emails",
       "title": "מיילים ללקוחות",
       "kind": "email",
       "domain": "work",
-      "maintenance": "work",
-      "perDay": true
+      "maintenance": "work"
      },
      {
       "key": "errands",
       "title": "סידורים וקניות",
       "kind": "shopping",
       "domain": "life",
-      "maintenance": "life",
-      "perWeek": 1
+      "maintenance": "life"
      }
     ]
    }

@@ -121,3 +121,9 @@ TemplateItem { origin:"calendar"|"proposal"|"hold", status:"existing"|"proposed"
 4. calendar event לא דורש אישור.
 5. עומס שבועי לא נספר פעמיים כשיעד ממלא routine.
 6. "לא יודע" לא ממציא שעות עבודה.
+
+
+## Update 2026-11-18.8
+- MaintenanceNeed (user_said) vs RoutineProposal (maya_proposal); Routine only after approval.
+- workHours unknown = blocking; one short follow-up; if unknown, `templateStatus:'partially_placed'` with unscheduled time budgets, no invented availability.
+- dayStart ("קם מאוחר") is a Proposal; becomes preference only on approval.

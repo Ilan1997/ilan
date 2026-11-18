@@ -20,7 +20,7 @@
     o.n06_therapyIsApproxEstimateNotFact=(()=>{const f=NP.fixedConstraints.find(x=>x.key==='therapy');const it=NT.items.find(i=>i.ref==='therapy'&&i.kind==='fixed');
       return f.start.value===930&&f.start.precision==='approx'&&f.start.source==='user_estimate'&&f.end.precision==='exact'&&it&&it.approxStart&&it.status==='proposed'&&it.needsApproval===true&&it.startMin===930&&it.endMin===1020;})();
     o.n07_minimumViableWeekKept=Array.isArray(NP.minimumViableWeek)&&NP.minimumViableWeek.length===2&&NP.routines.filter(r=>r.inMinimumViableWeek).length===2;
-    o.n08_maintenanceSplit=NP.workMaintenance.length===3&&NP.lifeMaintenance.length===2&&NP.routines.filter(r=>r.maintenanceClass==='workMaintenance').length===3;
+    o.n08_maintenanceIsNeedNotRoutine=NP.maintenanceNeeds.length===5&&NP.workMaintenance.length===3&&NP.lifeMaintenance.length===2&&NP.maintenanceNeeds.every(n=>n.source==='user_said')&&!NP.routines.some(r=>r.maintenanceClass)&&NP.proposals.filter(p=>p.needId).length===5&&NP.proposals.filter(p=>p.needId).every(p=>p.source==='maya_proposal'&&p.status==='pending'&&p.value.frequency&&p.value.minutes>0);
     o.n09_allAssumptionsLowRisk=NP.assumptions.length>0&&NP.assumptions.every(a=>a.risk==='low'&&a.assumed===true);
     o.n10_provenanceOnEveryRule=NP.availability.length>=3&&NP.availability.every(r=>['user_setting','user_said','calendar'].includes(r.source));
     o.n11_fridayAfternoonAndSaturdayOnlyBecauseUserSaid=(()=>{
@@ -35,17 +35,15 @@
     // ───────── Yuval (messy, no calendar) ─────────
     o.y01_flow=JSON.stringify(ids(Y))===JSON.stringify(['q1','q2','f1','f2','q3','q5','q6','q7'])&&mains(Y)===6&&fus(Y)===2&&Y.st.done;
     o.y02_q4SkippedBecauseAnswered=!ids(Y).includes('q4')&&Y.st.answered.includes('q4');
-    o.y03_twoFollowupsBothBlocking=/המנחה/.test(Y.asked[2].text)&&/להגיע/.test(Y.asked[3].text);
+    o.y03_twoFollowupsAdvisorDayAndWorkHours=/המנחה/.test(Y.asked[2].text)&&/באילו שעות אתה עובד/.test(Y.asked[3].text)&&Y.asked[3].intent.data.kind==='workhours';
     const YP=Y.fin.profile,YT=Y.fin.template;
     o.y04_holdDerivedFromDeclaredWindow=YP.holds.length===1&&YP.holds[0].derivedFrom==='semantic_window'&&YP.holds[0].from===780&&YP.holds[0].to===1080&&YP.holds[0].dow===4;
     o.y05_holdItemShownNoApproval=(()=>{const h=YT.items.filter(i=>i.origin==='hold');return h.length===1&&h[0].needsApproval===false&&h[0].status==='tentative'&&!YT.items.some(i=>i!==h[0]&&i.date===h[0].date&&i.startMin<h[0].endMin&&h[0].startMin<i.endMin);})();
-    o.y06_courseAndTravelFromWhatHeSaid=(()=>{const c=YT.items.find(i=>i.ref==='course'&&i.kind==='fixed'),t=YT.items.find(i=>i.ref==='course'&&i.kind==='travel');
-      return c&&t&&c.startMin===1095&&c.endMin===1260&&t.startMin===1035&&t.endMin===1095&&t.timeFacts.travel.precision==='approx'&&t.timeFacts.travel.source==='user_estimate';})();
+    o.y06_courseTravelUnknownMeansPartialDayNotGuess=(()=>{const c=YT.items.find(i=>i.ref==='course'&&i.kind==='fixed');return c&&c.startMin===1080&&c.endMin===1260&&c.approxStart&&!YT.items.some(i=>i.kind==='travel')&&YT.partialDays.some(p=>p.date==='2026-11-24')&&YP.unknowns.some(u=>u.field==='fixed.course.travel'&&u.planningImpact==='blocking')&&!YT.items.some(i=>i.date==='2026-11-24'&&i.origin==='proposal'&&i.kind!=='fixed');})();
     o.y07_workHoursNotInvented=!YP.availability.some(r=>r.rule.kind==='work_hours')&&YP.unknowns.some(u=>u.field==='workHours')&&!YP.assumptions.some(a=>a.field==='workHours');
-    o.y08_thesisRecurringRequirement=(()=>{const g=YP.workloadGoals.find(x=>x.key==='thesis');const its=YT.items.filter(i=>i.goalId===g.id);return g.requiredPerWeekMinutes===360&&its.reduce((t,i)=>t+i.endMin-i.startMin,0)===360&&its.every(i=>i.status==='proposed');})();
-    o.y09_statsTrialIsNotARequirement=(()=>{const g=YP.workloadGoals.find(x=>x.key==='stats');const its=YT.items.filter(i=>i.goalId===g.id);
-      return g.requiredTotalMinutes===null&&g.trialAllocationMinutes===150&&its.length===1&&its[0].endMin-its[0].startMin===150&&its[0].status==='tentative'&&YP.unknowns.some(u=>u.field==='goal.stats.total')&&YP.proposals.find(p=>p.id==='pr_goal_stats').status==='pending';})();
-    o.y10_lateRiserIsAssumptionNotRule=YP.assumptions.some(a=>a.field==='dayStart'&&a.risk==='low')&&newItems(YT).every(i=>i.startMin>=600||i.kind==='travel')&&/זו הצעה שלי, לא כלל/.test(Y.fin.text);
+    o.y08_thesisRecurringRequirementBecomesBudgetNotHours=(()=>{const g=YP.workloadGoals.find(x=>x.key==='thesis');const u=YT.unscheduled.filter(i=>i.goalId===g.id);return g.requiredPerWeekMinutes===360&&u.reduce((t,i)=>t+i.minutesPerWeek,0)===360&&u.every(i=>i.status==='proposed'&&i.reason==='work_hours_unknown')&&!YT.items.some(i=>i.goalId===g.id);})();
+    o.y09_statsTrialIsNotARequirement=(()=>{const g=YP.workloadGoals.find(x=>x.key==='stats');const u=YT.unscheduled.filter(i=>i.goalId===g.id);return g.requiredTotalMinutes===null&&g.trialAllocationMinutes===150&&u.length===1&&u[0].minutesPerWeek===150&&u[0].status==='tentative'&&YP.unknowns.some(x=>x.field==='goal.stats.total')&&YP.proposals.find(p=>p.id==='pr_goal_stats').status==='pending';})();
+    o.y10_lateRiserIsAProposalNotAnAssumption=(()=>{const pr=YP.proposals.find(p=>p.id==='pr_daystart');return pr&&pr.status==='pending'&&pr.kind==='preference'&&pr.source==='maya_proposal'&&!YP.assumptions.some(a=>a.field==='dayStart')&&!YP.preferences.dayStart&&YT.settings.length===1&&YT.settings[0].needsApproval&&/הצעה שלי, לא כלל/.test(Y.fin.text);})();
     o.y11_fridayClosedAndNoWorkAfter21=newItems(YT).every(i=>dowOf(i.date)!==5&&!(i.domain==='work'&&i.endMin>1260))&&YP.availability.find(r=>r.rule.kind==='closed'&&r.rule.dow===5).source==='user_said';
     o.y12_noOverlaps=overlap(YT.items)===null;
     o.y13_textLint=lintOk(Y.fin.text)&&Y.asked.every(a=>lintOk(a.text));
@@ -54,10 +52,10 @@
     const DP=D.fin.profile,DT=D.fin.template;
     o.d02_unknownStaysUnknown=DP.minimumViableWeek==='unknown'&&DP.workMaintenance==='unknown'&&DP.lifeMaintenance==='unknown'&&['workHours','evening','minimumViableWeek','maintenance.work','maintenance.life'].every(f=>DP.unknowns.some(u=>u.field===f));
     o.d03_eveningUndefinedAndGuardAnnounced=DP.boundaries[0].definition==='undefined'&&DP.guards[0].min===1020&&DP.guards[0].source==='maya_caution'&&/זהירות שלי, לא כלל שלך/.test(D.fin.text)&&!DP.availability.some(r=>r.rule.kind==='no_work_after');
-    o.d04_nothingAfterGuard=newItems(DT).length>=3&&newItems(DT).every(i=>i.endMin<=1020);
+    o.d04_nothingAfterGuard=newItems(DT).length>=2&&newItems(DT).every(i=>i.endMin<=1020)&&DT.unscheduled.some(u=>u.proposalId==='pr_pile')&&DT.unscheduled.some(u=>u.proposalId==='pr_review');
     o.d05_everythingMayaAddedIsTrial=newItems(DT).every(i=>i.status==='tentative')&&DT.items.filter(i=>i.origin==='calendar').length===2;
     o.d06_noGoalsNoHolds=DP.workloadGoals.length===0&&DP.holds.length===0;
-    o.d07_sportIsProposalNotRoutine=DP.proposals.some(p=>p.id==='pr_sport'&&p.status==='pending'&&p.value.perWeek===2)&&!DP.routines.some(r=>/sport/.test(r.key))&&newItems(DT).filter(i=>i.proposalId==='pr_sport').length===2;
+    o.d07_sportIsProposalNotRoutine=DP.proposals.some(p=>p.id==='pr_sport'&&p.status==='pending'&&p.value.frequency.perWeek===2)&&!DP.routines.some(r=>/sport/.test(r.key))&&newItems(DT).filter(i=>i.proposalId==='pr_sport').length===2;
     o.d08_protectedWithoutFrequencyIsNotScheduled=DP.protectedLife.some(p=>/משפחה/.test(p.title))&&!newItems(DT).some(i=>/משפחה/.test(i.title))&&/שמרתי כמוגן/.test(D.fin.text);
     o.d09_textLint=lintOk(D.fin.text)&&D.asked.every(a=>lintOk(a.text));
     o.d10_dontKnowNeverRepeated=D.st.log.length===7&&new Set(D.st.log.map(l=>l.q)).size===7;
@@ -159,9 +157,9 @@
       o.e5_followupCapTwoNeverRepeated=fq.length===2&&new Set(fq).size===2&&s.current&&s.current.id==='q3';
       // 7 main questions at most, even if nothing is ever answered
       let s2=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);let n2=0;while(s2.current&&n2<20){n2++;s2=onbAdvance(s2,{});}
-      o.e6_neverMoreThanSevenMain=n2===7&&s2.done&&s2.mainCount===7;
+      o.e6_neverMoreThanSevenMain=n2<=9&&s2.done&&s2.mainCount===7&&s2.followups<=1;
       // a single blocking gap → exactly one follow-up even if the answer stays vague
-      let s3=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);s3=onbAdvance(s3,{});s3=onbAdvance(s3,{fixed:[{key:'t',title:'טיפול',days:[1],end:{hhmm:'17:00'}}]});
+      let s3=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);s3=onbAdvance(s3,{});s3=onbAdvance(s3,{officeHours:{from:'09:00',to:'17:00'},fixed:[{key:'t',title:'טיפול',days:[1],end:{hhmm:'17:00'}}]});
       const f1=s3.current;s3=onbAdvance(s3,{});
       o.e7_oneFollowupWhenOneGap=f1.kind==='followup'&&s3.current.kind==='main'&&s3.followups===1;}
     // ───────── Coverage areas (the 7 are areas, not stations) ─────────
@@ -171,7 +169,7 @@
       o.c1_brainDumpCoversEverythingAsksNothingElse=c0.done&&c0.current===null&&c0.mainCount===1&&JSON.stringify(onbCovered(c0.facts))===JSON.stringify(['q1','q2','q3','q4','q5','q6','q7']);
       const part={successCriteria:['שבוע רגוע'],routines:[{key:'r',title:'ריצה',kind:'fitness',perWeek:2,protected:true}],boundaries:[{rule:'שבת סגורה',kind:'closed_day',dow:6}]};
       let c1=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);c1=onbAdvance(c1,part);const seq=[];while(c1.current){seq.push(c1.current.id);c1=onbAdvance(c1,{});}
-      o.c2_onlyTheMissingAreasAreAsked=JSON.stringify(seq)===JSON.stringify(['q2','q3','q5','q6'])&&c1.mainCount===5;
+      o.c2_onlyTheMissingAreasAreAsked=JSON.stringify(seq)===JSON.stringify(['q2','f1','q3','q5','q6'])&&c1.mainCount===5;
       let c3=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);c3=onbAdvance(c3,{dontKnow:['maintenance']});
       o.c3_dontKnowAlsoCoversTheArea=onbCovered(c3.facts).includes('q3')&&c3.current.id==='q2';
       o.c4_coverageIsDerivedNotOnlyTrustedFromModel=(()=>{let x=onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null);x=onbAdvance(x,{answeredTopics:[],routines:[{key:'a',title:'א',kind:'payments',domain:'work',maintenance:'work',perWeek:1}]});return x.current.id==='q2'&&onbCovered(x.facts).includes('q3');})();}
@@ -180,10 +178,41 @@
       o.mi1_everyMessageIsTypedData=M.every(m=>typeof m.type==='string'&&m.data&&typeof m.data==='object')&&['present_template','show_existing','propose_items','ask_approval'].every(t=>M.some(m=>m.type===t));
       o.mi2_textIsOnlyARenderingOfIntents=N.fin.text===M.map(m=>onbRender(m,{today:NP.today})).join('\n\n')&&N.asked.every(a=>a.text===onbRender(a.intent,{today:NP.today})||a.intent===undefined||a.text===onbRender(a.intent));
       o.mi3_questionsCarryIntents=N.st.current===null&&N.asked.length>0;
-      const x=onbAdvance(onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null),{fixed:[{key:'t',title:'טיפול',days:[1],end:{hhmm:'17:00'}}]});
+      const x=onbAdvance(onbAdvance(onbNew({today:'2026-11-18',calendar:null}),null),{officeHours:{from:'09:00',to:'17:00'},fixed:[{key:'t',title:'טיפול',days:[1],end:{hhmm:'17:00'}}]});
       o.mi4_followupIsAnIntent=x.current.intent.type==='ask_missing_constraint'&&x.current.intent.data.kind==='start'&&x.current.text===onbRender(x.current.intent);
       o.mi5_renderCannotAddFactsUnknownTypeIsEmpty=onbRender({type:'invent_fact',data:{}})==='';}
     o.t1_templateMarksTemporaryPlacement=NT.placement==='fallback_greedy';
+    // ───────── Review feedback 19:18: materialization regression, MaintenanceNeed vs RoutineProposal, work hours, day start ─────────
+    {const yAll=onbApprove(YP,YT,'all');const rv=yAll.profile.routines.find(r=>r.key==='review');
+      o.r1_acceptedReviewBecomesRealRoutine_yuval=!!rv&&rv.source==='maya_proposal'&&rv.kind==='review'&&rv.targetFrequency.perWeek===1&&rv.fromProposal==='pr_review'&&yAll.profile.decisions.some(x=>x.proposalId==='pr_review'&&x.status==='accepted'&&x.materializedAs.type==='Routine')&&!yAll.profile.proposals.some(p=>p.id==='pr_review');
+      const emails=YP.maintenanceNeeds.find(n=>n.key==='emails');
+      o.r2_userSaidNeedNotCadence=!!emails&&emails.source==='user_said'&&emails.domain==='work'&&!('targetFrequency' in emails)&&!YP.routines.some(r=>r.key==='emails'||r.key==='invoices'||r.key==='errands')&&YP.proposals.find(p=>p.id==='pr_need_emails').value.frequency.perDay===1&&YP.proposals.find(p=>p.id==='pr_need_emails').value.minutes===30&&YP.proposals.find(p=>p.id==='pr_need_emails').source==='maya_proposal';
+      const e2=yAll.profile.routines.find(r=>r.key==='emails');
+      o.r3_acceptedCadenceBecomesRoutineLinkedToNeed=!!e2&&e2.source==='maya_proposal'&&e2.needId==='mn_emails'&&e2.maintenanceClass==='workMaintenance'&&yAll.profile.maintenanceNeeds.some(n=>n.id==='mn_emails'&&n.source==='user_said');
+      const none=onbApprove(YP,YT,{accept:[],reject:[]}).profile;
+      o.r4_noApprovalNoRoutineForNeeds=!none.routines.some(r=>r.source==='maya_proposal')&&none.maintenanceNeeds.length===YP.maintenanceNeeds.length;
+      const rejE=onbApprove(YP,YT,{accept:[],reject:YT.unscheduled.filter(u=>u.proposalId==='pr_need_emails').map(u=>u.id)}).profile;
+      o.r5_rejectedCadenceKeepsTheNeed=rejE.maintenanceNeeds.some(n=>n.key==='emails')&&!rejE.routines.some(r=>r.key==='emails')&&!rejE.proposals.some(p=>p.id==='pr_need_emails')&&rejE.decisions.some(d=>d.proposalId==='pr_need_emails'&&d.status==='rejected');
+      const fx=J(FX.noam);fx.script[3].extraction.routines.find(r=>r.key==='payments').perWeek=2;const NN=await onbPlay(fx);
+      o.r6_frequencyTheUserStatedIsAUserFact=NN.fin.profile.routines.some(r=>r.key==='payments'&&r.source==='user_said'&&r.targetFrequency.perWeek===2&&r.needId==='mn_payments')&&!NN.fin.profile.proposals.some(p=>p.id==='pr_need_payments')&&NN.fin.profile.proposals.some(p=>p.id==='pr_need_leads');
+      o.r7_noamNeedsPlacedAsProposalsNotFacts=newItems(NT).filter(i=>/לידים|משוב|תשלומים|חשבונות|קניות/.test(i.title)).every(i=>i.proposalId&&!i.routineId&&i.status==='proposed')&&newItems(NT).some(i=>/לידים/.test(i.title));}
+    {o.w1_workHoursAskedOnceInShortForm=Y.asked[3].text==='ובדרך כלל באילו שעות אתה עובד? גם טווח בערך מספיק.'&&ids(Y).filter(x=>x==='f2').length===1;
+      o.w2_unknownWorkHoursIsBlockingAndHeldAsAsked=YP.unknowns.some(u=>u.field==='workHours'&&u.planningImpact==='blocking'&&u.handling==='asked');
+      o.w3_templatePartiallyPlacedNotAFullDay=YT.templateStatus==='partially_placed'&&!YT.items.some(i=>i.origin==='proposal'&&i.domain==='work')&&YT.unscheduled.length>=4&&YT.unscheduled.every(u=>u.needsApproval&&u.minutesPerWeek>0)&&!newItems(YT).some(i=>i.kind==='deep_work');
+      o.w4_lifeAndUserFixedStillPlaced=newItems(YT).filter(i=>i.domain==='life'&&i.kind!=='fixed').length>=3&&YT.items.some(i=>i.ref==='course')&&YT.items.some(i=>i.origin==='hold');
+      o.w5_textSaysItAndStaysLint=/אין לי עדיין שעות עבודה/.test(Y.fin.text)&&/לא נועלת אותם לשעות/.test(Y.fin.text)&&lintOk(Y.fin.text);
+      o.w6_knownHoursMeansFullyPlacedAndNoQuestion=NT.templateStatus==='fully_placed'&&NT.unscheduled.length===0&&!ids(N).some(x=>x==='f2')&&!NP.unknowns.some(u=>u.field==='workHours');
+      const fy=J(FX.yuval);const si=fy.script.findIndex(s=>s.expect==='f2');fy.script[si]={expect:'f2',answer:'בערך 10 עד 18',extraction:{officeHours:{days:[0,1,2,3,4],from:'10:00',to:'18:00'}}};
+      const YH=await onbPlay(fy),th=YH.fin.template;
+      o.w7_givenHoursPlaceWorkInsideThem=th.unscheduled.length===0&&YH.fin.profile.availability.some(r=>r.rule.kind==='work_hours'&&r.source==='user_said')&&!YH.fin.profile.unknowns.some(u=>u.field==='workHours')&&newItems(th).filter(i=>i.domain==='work').every(i=>i.startMin>=600&&i.endMin<=1080)&&newItems(th).some(i=>i.domain==='work');
+      o.w8_stillPartialBecauseTravelUnknown=th.templateStatus==='partially_placed'&&th.partialDays.length===1;
+      o.w9_dontKnowFromTheStartIsNotAskedAgain=fus(D)===0&&D.fin.template.templateStatus==='partially_placed'&&D.fin.template.unscheduled.length>=2;
+      const ap=onbApprove(YP,YT,'all');
+      o.w10_unscheduledBudgetsAreApprovableAndWriteNothing=ap.accepted.some(i=>i.reason==='work_hours_unknown')&&ap.calendarWrites.every(w=>w.date&&w.startMin!=null)&&ap.profile.routines.some(r=>r.key==='thesis')===false&&ap.profile.routines.some(r=>r.key==='emails');}
+    {const pd=onbApprove(YP,YT,'all').profile,pn=onbApprove(YP,YT,{accept:YT.items.filter(i=>i.needsApproval).map(i=>i.id),reject:[]}).profile,pj=onbApprove(YP,YT,{accept:[],reject:['set_daystart']}).profile;
+      o.ds1_acceptingMakesItAPreference=pd.preferences.dayStart&&pd.preferences.dayStart.min===600&&pd.preferences.dayStart.source==='maya_proposal'&&pd.decisions.some(x=>x.proposalId==='pr_daystart'&&x.materializedAs.type==='Preference.dayStart');
+      o.ds2_notApprovedStaysAProposal=!pn.preferences.dayStart&&pn.proposals.some(p=>p.id==='pr_daystart'&&p.status==='pending');
+      o.ds3_rejectedRestoresDefaultAndLeaves=pj.dayStart===480&&!pj.proposals.some(p=>p.id==='pr_daystart')&&!pj.preferences.dayStart;}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

@@ -159,40 +159,35 @@
       "title": "תשלומים לספקים",
       "kind": "payments",
       "domain": "work",
-      "maintenance": "work",
-      "perWeek": 1
+      "maintenance": "work"
      },
      {
       "key": "leads",
       "title": "מעקב לידים",
       "kind": "leads",
       "domain": "work",
-      "maintenance": "work",
-      "perWeek": 1
+      "maintenance": "work"
      },
      {
       "key": "feedback",
       "title": "משוב לעובדים",
       "kind": "feedback",
       "domain": "work",
-      "maintenance": "work",
-      "perTwoWeeks": true
+      "maintenance": "work"
      },
      {
       "key": "bills",
       "title": "חשבונות הבית",
       "kind": "bills",
       "domain": "life",
-      "maintenance": "life",
-      "perWeek": 1
+      "maintenance": "life"
      },
      {
       "key": "shopping",
       "title": "קניות",
       "kind": "shopping",
       "domain": "life",
-      "maintenance": "life",
-      "perWeek": 1
+      "maintenance": "life"
      }
     ]
    }

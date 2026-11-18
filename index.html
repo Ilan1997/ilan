@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.7';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.8';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10160,7 +10160,9 @@ function _mayaDur(min){
 const ONB_SEMANTIC_WINDOWS={'בוקר':[360,720],'צהריים':[720,900],'אחה״צ':[780,1080]};   // declared windows. "ערב" is intentionally NOT here (undefined until the user defines it)
 const ONB_KINDS=['payments','leads','feedback','bills','shopping','errands','email','fitness','family','social','lesson','deep_work','study','work','review','other'];
 const ONB_TRIAL_DEFAULTS={payments:60,leads:45,feedback:30,bills:30,shopping:60,errands:45,email:30,fitness:45,family:60,social:120,lesson:60,deep_work:120,study:90,work:60,review:30,other:45};
-const ONB_PROPOSAL_FREQ={fitness:2};          // Maya's own suggestion ("sport twice a week"): a Proposal, never an Assumption
+const ONB_PROPOSAL_FREQ={fitness:2};
+// What Maya PROPOSES for a maintenance need the user only named ("emails pile up"). Frequency and duration are hers, never user facts.
+const ONB_MAINT_DEFAULTS={payments:{f:{perWeek:1},min:60},leads:{f:{perWeek:1},min:45},feedback:{f:{perTwoWeeks:1},min:30},bills:{f:{perWeek:1},min:30},shopping:{f:{perWeek:1},min:60},errands:{f:{perWeek:1},min:45},email:{f:{perDay:1},min:30},other:{f:{perWeek:1},min:45}};          // Maya's own suggestion ("sport twice a week"): a Proposal, never an Assumption
 const ONB_GUARD_NO_EVENING_MIN=1020;          // Maya's own caution while "evening" is undefined: nothing new after 17:00 (announced, not a user rule)
 const ONB_TRIAL_GOAL_WEEK_MIN=150;            // Maya's experiment for a goal with unknown total — never a requirement
 const ONB_REVIEW_MIN=30,ONB_MAX_MAIN=7,ONB_DAY_LIMIT=1260;
@@ -10263,7 +10265,7 @@ function onbCalendarLine(cal){
   return'קראתי ביומן: '+cal.slice(0,8).map(e=>e.title+' '+(e.dow!=null?'ב'+dn[e.dow]:'ב-'+String(e.date).slice(8,10)+'/'+String(e.date).slice(5,7))+' '+_fmtMin(e.startMin)+(e.oneTime||e.date?' (חד־פעמי)':'')).join(', ')+'.';
 }
 // PURE: blocking gaps — things that decide how a day can be built and were neither said nor already asked / declared unknown.
-function onbGaps(facts,askedFields){
+function onbGaps(facts,askedFields,ready){
   const out=[],skip=f=>askedFields.indexOf(f)>=0||facts.dontKnow.indexOf(f)>=0;
   const G=(field,ref,kind,why,title,f)=>{const intent={type:'ask_missing_constraint',data:{kind,title,startMin:f&&f.start?f.start.min:null,startApprox:!!(f&&f.start&&f.start.precision==='approx'),startKnown:!!(f&&f.start)}};
     out.push({field,ref,kind,why,intent,question:onbRender(intent)});};
@@ -10275,7 +10277,9 @@ function onbGaps(facts,askedFields){
     if((!f.start||!f.end)&&!hasWin&&!skip(fs)&&hasDays)G(fs,f.key,'start','חסר '+(f.start?'סיום':'התחלה')+' לפגישה קשיחה',title,f);
     if(f.travelNeeded&&!f.travelMin&&!skip(ft))G(ft,f.key,'travel','זמן נסיעה לא ידוע',title,f);
   });
-  const pri={day:0,start:1,travel:2};return out.sort((a,b)=>pri[a.kind]-pri[b.kind]);
+  // the whole week hangs on it: ask once, in a short form, after the fixed-commitments area was touched
+  if(ready&&!facts.officeHours&&!skip('workHours'))G('workHours',null,'workhours','שעות עבודה לא ידועות — משנות חלק גדול מהשבוע','',null);
+  const pri={day:0,workhours:1,start:2,travel:3};return out.sort((a,b)=>pri[a.kind]-pri[b.kind]);
 }
 // PURE: which of the 7 coverage areas the facts ALREADY cover (derived in code, not only trusted from the model). The 7 are areas, not stations.
 function onbCovered(F){
@@ -10301,7 +10305,7 @@ function onbAdvance(st,extraction){
     ex.answeredTopics.forEach(t=>{if(s.answered.indexOf(t)<0)s.answered.push(t);});
     s.log.push({q:s.current.id,kind:s.current.kind,field:s.current.field||null});
   }
-  const gaps=onbGaps(s.facts,s.askedFields);
+  const gaps=onbGaps(s.facts,s.askedFields,s.answered.indexOf('q2')>=0||onbCovered(s.facts).indexOf('q2')>=0);
   if(gaps.length>=2&&s.fuBudget<2)s.fuBudget=2;                       // two follow-ups only when two blocking gaps exist at once
   if(gaps.length&&s.followups<s.fuBudget){
     const g=gaps[0];s.followups++;s.askedFields.push(g.field);
@@ -10363,7 +10367,7 @@ function _onbTimeFact(t,src){
 function onbBuildProfile(st){
   const F=st.facts,dk=k=>F.dontKnow.indexOf(k)>=0;
   const p={v:1,today:st.today,successCriteria:F.successCriteria.slice(),minimumViableWeek:F.minimumViableWeek.length&&!dk('minimumViableWeek')?F.minimumViableWeek.slice():'unknown',
-    fixedConstraints:[],calendarEvents:[],workMaintenance:[],lifeMaintenance:[],protectedLife:[],routines:[],workloadGoals:[],chaosTriggers:F.chaosTriggers.slice(),boundaries:[],
+    fixedConstraints:[],calendarEvents:[],maintenanceNeeds:[],workMaintenance:[],lifeMaintenance:[],protectedLife:[],routines:[],workloadGoals:[],chaosTriggers:F.chaosTriggers.slice(),boundaries:[],
     availability:[],proposals:[],assumptions:[],unknowns:[],holds:[],guards:[],partialDays:[],dayStart:480,calendarConnected:st.calendarConnected};
   const unk=(field,ref,why,impact,handling)=>p.unknowns.push({field,ref:ref||null,why,planningImpact:impact||'nonblocking',handling:handling||'held',recheckAt:'weekly_review'});
   // calendar → FixedConstraint(origin calendar, needsApproval false)
@@ -10386,7 +10390,8 @@ function onbBuildProfile(st){
   });
   // availability (provenance on every rule)
   if(F.officeHours)p.availability.push({rule:{kind:'work_hours',days:F.officeHours.days,fromMin:F.officeHours.from,toMin:F.officeHours.to},source:'user_said'});
-  else unk('workHours',null,'לא נאמרו שעות עבודה — לא ממציאה','nonblocking','tentative_proposal');
+  else unk('workHours',null,'לא נאמרו שעות עבודה — לא ממציאה ולא מנעילה פעילויות לשעות','blocking',st.askedFields.indexOf('workHours')>=0?'asked':'held');
+  p.workHoursKnown=!!F.officeHours;
   F.boundaries.forEach(b=>{
     const bd={rule:b.rule,source:'user_said',definition:b.defined===false?'undefined':'known'};p.boundaries.push(bd);
     if(b.kind==='no_work_after'&&b.time!=null)p.availability.push({rule:{kind:'no_work_after',fromMin:b.time},source:'user_said'});
@@ -10398,7 +10403,8 @@ function onbBuildProfile(st){
       p.guards.push({kind:'no_new_items_after',min:ONB_GUARD_NO_EVENING_MIN,reason:'עד שנגדיר מאיזו שעה זה ערב',source:'maya_caution'});
     }
   });
-  if(F.lateRiser)onbAddAssumption(p,{field:'dayStart',ref:null,value:_fmtMin(F.lateRiser.earliest),source:'learned',risk:'low'}),p.dayStart=F.lateRiser.earliest;
+  p.preferences={};
+  if(F.lateRiser){p.dayStart=F.lateRiser.earliest;p.proposals.push({id:'pr_daystart',ref:'daystart',title:'לא לשבץ כלום לפני '+_fmtMin(F.lateRiser.earliest),kind:'preference',domain:'life',value:{preference:'dayStart',min:F.lateRiser.earliest},reason:'אמרת שאתה קם מאוחר',status:'pending',trial:false,source:'maya_proposal'});}
   // routines: user facts become Routines; "maybe" becomes a Maya Proposal (never a Routine before approval)
   const dur=r=>{if(r.durationMin)return{minutes:r.durationMin};const m=ONB_TRIAL_DEFAULTS[r.kind]||ONB_TRIAL_DEFAULTS.other;const a=onbAddAssumption(p,{field:'duration',ref:r.key,value:m,source:'system_trial_default',risk:'low'});return{minutes:m,assumption:a.id};};
   F.routines.forEach(r=>{
@@ -10406,16 +10412,23 @@ function onbBuildProfile(st){
       p.protectedLife.push({title:r.title,confidence:r.confidence!=null?r.confidence:0.4});
       const mins=r.durationMin||ONB_TRIAL_DEFAULTS[r.kind]||45;const per=ONB_PROPOSAL_FREQ[r.kind]||1;
       if(!r.durationMin)onbAddAssumption(p,{field:'duration',ref:r.key,value:mins,source:'system_trial_default',risk:'low'});
-      p.proposals.push({id:'pr_'+r.key,ref:r.key,title:r.title,kind:r.kind,domain:r.domain,value:{perWeek:per,minutes:mins},reason:'אמרת "אולי" — אני מציעה לנסות '+per+' בשבוע',status:'pending',trial:true});
+      p.proposals.push({id:'pr_'+r.key,ref:r.key,title:r.title,kind:r.kind,domain:r.domain,value:{frequency:{perWeek:per},minutes:mins},source:'maya_proposal',reason:'אמרת "אולי" — אני מציעה לנסות '+per+' בשבוע',status:'pending',trial:true});
       return;
     }
-    const hasFreq=!!(r.perDay||r.perTwoWeeks||r.perWeek||r.maintenance);
+    const userFreq=!!(r.perDay||r.perTwoWeeks||r.perWeek);
+    if(r.maintenance){                                              // "X piles up" is the user's fact; the cadence is Maya's proposal until approved
+      const need={id:'mn_'+r.key,key:r.key,title:r.title,domain:r.domain,kind:r.kind,maintenanceClass:r.maintenance==='work'?'workMaintenance':'lifeMaintenance',source:'user_said'};
+      p.maintenanceNeeds.push(need);(r.maintenance==='work'?p.workMaintenance:p.lifeMaintenance).push(need.id);
+      if(!userFreq){const D=ONB_MAINT_DEFAULTS[r.kind]||ONB_MAINT_DEFAULTS.other,mins=r.durationMin||D.min;
+        p.proposals.push({id:'pr_need_'+r.key,ref:r.key,needId:need.id,title:r.title,kind:r.kind,domain:r.domain,maintenanceClass:need.maintenanceClass,value:{frequency:D.f,minutes:mins},source:'maya_proposal',reason:'אמרת שזה מצטבר — זו הצעה שלי לקצב ולמשך',status:'pending',trial:false});
+        return;}
+    }
+    const hasFreq=userFreq||!!r.maintenance;
     const d=hasFreq?dur(r):{minutes:r.durationMin||null};
     const rt={id:'rt_'+r.key,key:r.key,title:r.title,domain:r.domain,kind:r.kind,maintenanceClass:r.maintenance==='work'?'workMaintenance':r.maintenance==='life'?'lifeMaintenance':null,
-      targetFrequency:r.perDay?{perDay:1}:r.perTwoWeeks?{perTwoWeeks:1}:r.perWeek?{perWeek:r.perWeek}:r.maintenance?{perWeek:1}:null,targetDuration:d,days:r.days||null,window:r.window||null,
+      targetFrequency:r.perDay?{perDay:1}:r.perTwoWeeks?{perTwoWeeks:1}:r.perWeek?{perWeek:r.perWeek}:null,needId:r.maintenance?'mn_'+r.key:null,targetDuration:d,days:r.days||null,window:r.window||null,
       rigidity:r.window?'hard':'flexible',inMinimumViableWeek:r.inMvw===true,protected:r.protected===true,confidence:r.confidence!=null?r.confidence:0.9,source:'user_said'};
     p.routines.push(rt);
-    if(r.maintenance==='work')p.workMaintenance.push(rt.id);else if(r.maintenance==='life')p.lifeMaintenance.push(rt.id);
     if(r.protected)p.protectedLife.push({title:r.title,routineId:rt.id,confidence:rt.confidence});
   });
   // maintenance the user could not name → "unknown" + one Maya proposal (what piled up is NOT invented)
@@ -10423,7 +10436,7 @@ function onbBuildProfile(st){
   if(dk('maintenance')||(dk('maintenance.work')&&!p.workMaintenance.length)){if(!p.workMaintenance.length)p.workMaintenance='unknown';unk('maintenance.work',null,'לא ידוע מה מצטבר בעבודה');}
   if(dk('maintenance')||(dk('maintenance.life')&&!p.lifeMaintenance.length)){if(!p.lifeMaintenance.length)p.lifeMaintenance='unknown';unk('maintenance.life',null,'לא ידוע מה מצטבר בחיים');}
   if(mUnknown){onbAddAssumption(p,{field:'duration',ref:'pr_pile',value:45,source:'system_trial_default',risk:'low'});
-    p.proposals.push({id:'pr_pile',ref:'pile',title:'מה שהצטבר',kind:'work',domain:'work',value:{perWeek:1,minutes:45},reason:'לא ידוע מה מצטבר — אני מציעה זמן קבוע קטן בלי להגדיר מה נכנס אליו',status:'pending',trial:true});}
+    p.proposals.push({id:'pr_pile',ref:'pile',title:'מה שהצטבר',kind:'work',domain:'work',value:{frequency:{perWeek:1},minutes:45},source:'maya_proposal',reason:'לא ידוע מה מצטבר — אני מציעה זמן קבוע קטן בלי להגדיר מה נכנס אליו',status:'pending',trial:true});}
   if(p.minimumViableWeek==='unknown')unk('minimumViableWeek',null,'לא ידוע מה חשוב במיוחד שלא יאבד','nonblocking','tentative_proposal');
   if(dk('chaos'))unk('chaosTriggers',null,'לא ידוע מה מפרק לך שבוע');
   // goals
@@ -10433,12 +10446,11 @@ function onbBuildProfile(st){
       deadline:g.deadline||null,trialAllocationMinutes:null,fillsRoutineId:fills?fills.id:null,minSession:45,rigidity:g.deadline?'hard':'flexible',source:'user_said'};
     if(w.requiredTotalMinutes==null&&w.requiredPerWeekMinutes==null){
       w.trialAllocationMinutes=ONB_TRIAL_GOAL_WEEK_MIN;unk('goal.'+g.key+'.total',g.key,'לא נאמר כמה שעות דרושות — הניסוי שלי הוא לא דרישה','nonblocking','tentative_proposal');
-      p.proposals.push({id:'pr_goal_'+g.key,ref:g.key,title:g.title,kind:g.kind,domain:'work',value:{perWeek:1,minutes:ONB_TRIAL_GOAL_WEEK_MIN},reason:'לא ידוע כמה שעות צריך — אני מציעה להתחיל משעתיים וחצי בשבוע ולבדוק',status:'pending',trial:true,goalId:w.id});
+      p.proposals.push({id:'pr_goal_'+g.key,ref:g.key,title:g.title,kind:g.kind,domain:'work',value:{frequency:{perWeek:1},minutes:ONB_TRIAL_GOAL_WEEK_MIN},source:'maya_proposal',reason:'לא ידוע כמה שעות צריך — אני מציעה להתחיל משעתיים וחצי בשבוע ולבדוק',status:'pending',trial:true,goalId:w.id});
     }
     p.workloadGoals.push(w);
   });
-  p.proposals.push({id:'pr_review',ref:'review',title:'סגירת שבוע',kind:'review',domain:'work',value:{perWeek:1,minutes:ONB_REVIEW_MIN},reason:'סגירת שבוע קצרה לבדוק מה עבד',status:'pending',trial:p.minimumViableWeek==='unknown'});
-  onbAddAssumption(p,{field:'duration',ref:'pr_review',value:ONB_REVIEW_MIN,source:'system_trial_default',risk:'low'});
+  p.proposals.push({id:'pr_review',ref:'review',title:'סגירת שבוע',kind:'review',domain:'work',value:{frequency:{perWeek:1},minutes:ONB_REVIEW_MIN},source:'maya_proposal',reason:'סגירת שבוע קצרה לבדוק מה עבד',status:'pending',trial:p.minimumViableWeek==='unknown'});
   if(p.calendarEvents.length||p.fixedConstraints.some(f=>f.origin==='user_said'))onbAddAssumption(p,{field:'bufferAfterEvents',ref:null,value:15,source:'system_trial_default',risk:'low'});
   return p;
 }
@@ -10510,11 +10522,15 @@ function onbBuildTemplate(profile,o){
     R({title:g.title,kind:g.kind,domain:'work',minutes:each,count:n,goalId:g.id,status:stat(trial),proposalId:trial?'pr_goal_'+g.key:null,prio:4,deadline:g.deadline});
   });
   profile.proposals.forEach(pr=>{
-    if(pr.id==='pr_review'||pr.goalId)return;
-    R({title:pr.title,kind:pr.kind,domain:pr.domain,minutes:pr.value.minutes,count:pr.value.perWeek,proposalId:pr.id,status:stat(true),prio:5});
+    if(pr.id==='pr_review'||pr.goalId||pr.kind==='preference'||pr.kind==='boundary')return;
+    const fr=pr.value.frequency||{perWeek:1};
+    R({title:pr.title,kind:pr.kind,domain:pr.domain,minutes:pr.value.minutes,proposalId:pr.id,status:stat(!!pr.trial),prio:pr.needId?3:5,
+      ...(fr.perDay?{each:true,allowed:office?office.rule.days:dayDefault}:{count:fr.perTwoWeeks?1:(fr.perWeek||1),cadence:fr.perTwoWeeks?'every_two_weeks':'weekly'})});
   });
   const review=profile.proposals.find(p=>p.id==='pr_review');
   if(review)R({title:review.title,kind:'review',domain:'work',minutes:review.value.minutes,count:1,proposalId:review.id,status:stat(review.trial),prio:6,reverse:true});
+  // Work hours unknown: work-domain needs get a TIME BUDGET but are NOT locked to hours (we do not pretend the day is free).
+  const workUnknown=!office,unscheduled=[];
   reqs.sort((a,b)=>a.prio-b.prio||a.id.localeCompare(b.id,'en',{numeric:true}));
   // slot search
   const load=d=>items.filter(i=>i.date===d).reduce((t,i)=>t+(i.endMin-i.startMin),0);
@@ -10530,6 +10546,10 @@ function onbBuildTemplate(profile,o){
   const placeOne=(r,d,s)=>{const it=add({title:r.title,origin:'proposal',status:r.status,date:d,startMin:s,endMin:s+r.minutes,kind:r.kind,domain:r.domain,routineId:r.routineId||null,proposalId:r.proposalId||null,goalId:r.goalId||null,cadence:r.cadence||null,assumption:r.assumption||null});
     busy[d].push([s,s+r.minutes+GAP]);return it;};
   reqs.forEach(r=>{
+    if(workUnknown&&(r.domain==='work'||r.kind==='review')){
+      const nd=dates.filter(d=>okDay(d,r)&&dowOf(d)<=4).length,n=r.each?(nd||5):(r.count||1);
+      unscheduled.push({id:nid('un'),title:r.title,kind:r.kind,domain:r.domain,origin:'proposal',status:r.status,needsApproval:true,perSessionMin:r.minutes,count:n,minutesPerWeek:r.minutes*n,cadence:r.cadence||null,reason:'work_hours_unknown',proposalId:r.proposalId||null,routineId:r.routineId||null,goalId:r.goalId||null,assumption:r.assumption||null});
+      return;}
     let cands=dates.filter(d=>okDay(d,r)).sort((a,b)=>order.indexOf(dowOf(a))-order.indexOf(dowOf(b)));
     if(r.reverse)cands=cands.filter(d=>dowOf(d)<=4).reverse();
     if(r.each){cands.filter(d=>dowOf(d)<=4||(r.allowed&&r.allowed.indexOf(dowOf(d))>=0)).forEach(d=>{const s=slot(d,r);if(s==null)unplaced.push({title:r.title,date:d,reason:'אין זמן פנוי מתאים'});else placeOne(r,d,s);});return;}
@@ -10541,7 +10561,7 @@ function onbBuildTemplate(profile,o){
     }
   });
   // goals that FILL a routine: count the routine's blocks first; only the shortfall becomes new blocks (no double counting)
-  profile.workloadGoals.filter(g=>g.fillsRoutineId).forEach(g=>{
+  if(!workUnknown)profile.workloadGoals.filter(g=>g.fillsRoutineId).forEach(g=>{
     const acc=accounting.goals.find(a=>a.goalId===g.id);const need=g.requiredTotalMinutes!=null?g.requiredTotalMinutes:g.requiredPerWeekMinutes||0;
     const blocks=items.filter(i=>i.routineId===g.fillsRoutineId&&(!g.deadline||i.date<=g.deadline)).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
     let cov=0;for(const b of blocks){if(cov>=need)break;b.goalId=g.id;b.serves=g.title;cov+=b.endMin-b.startMin;}
@@ -10553,7 +10573,8 @@ function onbBuildTemplate(profile,o){
       totalMinutes:items.filter(i=>i.routineId===g.fillsRoutineId||(i.goalId===g.id&&i.routineId!==g.fillsRoutineId&&i.origin==='proposal')).reduce((t,i)=>t+i.endMin-i.startMin,0)};
   });
   items.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.startMin-b.startMin);
-  return{v:1,placement:'fallback_greedy',weekStart,dates,items,unplaced,partialDays:Object.keys(partial).map(d=>({date:d,reasons:partial[d]})),guards:(profile.guards||[]).slice(),accounting,
+  const settings=(profile.proposals||[]).filter(p=>p.kind==='preference').map(p=>({id:'set_'+p.ref,title:p.title,origin:'proposal',status:'proposed',needsApproval:true,kind:'setting',proposalId:p.id,preference:p.value}));
+  return{v:1,placement:'fallback_greedy',templateStatus:(unscheduled.length||Object.keys(partial).length)?'partially_placed':'fully_placed',unscheduled,settings,weekStart,dates,items,unplaced,partialDays:Object.keys(partial).map(d=>({date:d,reasons:partial[d]})),guards:(profile.guards||[]).slice(),accounting,
     assumptions:[{field:'bufferAfterEvents',value:AFTER_EVENT,risk:'low'},{field:'gapBetweenItems',value:GAP,risk:'low'}]};
 }
 
@@ -10563,16 +10584,17 @@ function onbBuildTemplate(profile,o){
 // A rejected Proposal leaves the active profile (kept only in `decisions`). Un-decided ones stay pending.
 function onbMaterialize(pr,p){
   if(p.goalId){const g=pr.workloadGoals.find(x=>x.id===p.goalId);if(g){g.trialAccepted=true;return{type:'WorkloadGoal.trialAllocation',id:g.id};}return null;}
+  if(p.kind==='preference'&&p.value&&p.value.preference==='dayStart'){pr.preferences=pr.preferences||{};pr.preferences.dayStart={min:p.value.min,source:'maya_proposal'};pr.dayStart=p.value.min;return{type:'Preference.dayStart',id:p.id};}
   if(p.kind==='boundary'&&p.value&&p.value.rule){pr.boundaries.push({rule:p.value.rule,source:'maya_proposal',definition:'known'});
     if(p.value.availability)pr.availability.push({rule:p.value.availability,source:'maya_proposal'});return{type:'Boundary',id:p.id};}
   const id='rt_'+p.ref;if(pr.routines.some(r=>r.id===id))return{type:'Routine',id};
-  pr.routines.push({id,key:p.ref,title:p.title,domain:p.domain,kind:p.kind,maintenanceClass:null,targetFrequency:{perWeek:p.value.perWeek},targetDuration:{minutes:p.value.minutes},rigidity:'flexible',
+  pr.routines.push({id,key:p.ref,title:p.title,domain:p.domain,kind:p.kind,maintenanceClass:p.maintenanceClass||null,needId:p.needId||null,targetFrequency:p.value.frequency,targetDuration:{minutes:p.value.minutes},rigidity:'flexible',
     inMinimumViableWeek:false,protected:false,confidence:0.7,source:'maya_proposal',fromProposal:p.id});
   return{type:'Routine',id};
 }
 function onbApprove(profile,tpl,sel){
   const pr=JSON.parse(JSON.stringify(profile));const s=sel==='all'?{accept:'all',reject:[]}:(sel||{accept:[],reject:[]});
-  const approvable=tpl.items.filter(i=>i.needsApproval&&i.status!=='existing'&&i.origin!=='hold'&&i.origin!=='calendar');
+  const approvable=tpl.items.concat(tpl.unscheduled||[],tpl.settings||[]).filter(i=>i.needsApproval&&i.status!=='existing'&&i.origin!=='hold'&&i.origin!=='calendar');
   const accIds=s.accept==='all'?approvable.map(i=>i.id):(s.accept||[]).filter(id=>approvable.some(i=>i.id===id));
   const rejIds=(s.reject||[]).filter(id=>approvable.some(i=>i.id===id)&&accIds.indexOf(id)<0);
   const accepted=approvable.filter(i=>accIds.indexOf(i.id)>=0),rejected=approvable.filter(i=>rejIds.indexOf(i.id)>=0);
@@ -10581,11 +10603,11 @@ function onbApprove(profile,tpl,sel){
   pr.proposals.forEach(p=>{
     const mine=approvable.filter(i=>i.proposalId===p.id);
     if(mine.some(i=>accIds.indexOf(i.id)>=0)){p.status='accepted';pr.decisions.push({proposalId:p.id,status:'accepted',materializedAs:onbMaterialize(pr,p)});}
-    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0)){p.status='rejected';pr.decisions.push({proposalId:p.id,status:'rejected',materializedAs:null});}
+    else if(mine.length&&mine.every(i=>rejIds.indexOf(i.id)>=0)){p.status='rejected';if(p.kind==='preference')pr.dayStart=PLAN_DAY_START;pr.decisions.push({proposalId:p.id,status:'rejected',materializedAs:null});}
     else keep.push(p);
   });
   pr.proposals=keep;                                                   // active profile: only still-pending proposals
-  return{profile:pr,accepted,rejected,pending:approvable.filter(i=>accIds.indexOf(i.id)<0&&rejIds.indexOf(i.id)<0),calendarWrites:accepted.map(i=>({title:i.title,date:i.date,startMin:i.startMin,endMin:i.endMin,origin:'maya_onboarding',itemId:i.id}))};
+  return{profile:pr,accepted,rejected,pending:approvable.filter(i=>accIds.indexOf(i.id)<0&&rejIds.indexOf(i.id)<0),calendarWrites:accepted.filter(i=>i.date).map(i=>({title:i.title,date:i.date,startMin:i.startMin,endMin:i.endMin,origin:'maya_onboarding',itemId:i.id}))};
 }
 
 // ── confirmation: semantic MessageIntents (facts + decisions) are separate from wording. V1 renderer is deterministic.
@@ -10599,9 +10621,10 @@ function onbMessages(profile,tpl){
   if(tr.length)M.push({type:'propose_trial_items',data:{items:tr.map(pick)}});
   if(ho.length)M.push({type:'state_holds',data:{items:ho.map(pick)}});
   (tpl.partialDays||[]).forEach(p=>M.push({type:'state_partial_day',data:{date:p.date,reasons:p.reasons}}));
+  if((tpl.unscheduled||[]).length)M.push({type:'state_partially_placed',data:{reason:'work_hours_unknown',items:tpl.unscheduled.map(u=>({title:u.title,minutesPerWeek:u.minutesPerWeek,count:u.count,perSessionMin:u.perSessionMin,cadence:u.cadence,trial:u.status==='tentative'}))}});
+  (tpl.settings||[]).forEach(x=>M.push({type:'propose_setting',data:{kind:'day_start',min:x.preference.min}}));
   const unpl=profile.routines.filter(r=>!r.targetFrequency&&r.protected).map(r=>r.title);
   if(unpl.length)M.push({type:'state_protected_unscheduled',data:{titles:unpl}});
-  if(profile.assumptions.some(x=>x.field==='dayStart'))M.push({type:'state_day_start',data:{min:profile.dayStart}});
   if(tpl.guards.length)M.push({type:'state_guard',data:{min:tpl.guards[0].min,reason:tpl.guards[0].reason}});
   if(tpl.unplaced.length)M.push({type:'state_unplaced',data:{titles:tpl.unplaced.map(u=>u.title)}});
   const asm=profile.assumptions.filter(a=>a.field==='duration'&&a.ref&&a.source==='system_trial_default').map(a=>{const it=profile.routines.find(r=>r.key===a.ref)||profile.proposals.find(p=>p.id===a.ref||p.ref===a.ref);return it?{title:it.title,minutes:a.value}:null;}).filter(Boolean);
@@ -10624,6 +10647,7 @@ function onbRender(m,ctx){
     case 'ask_missing_constraint':
       if(d.kind==='day')return'באיזה יום ובערך באיזו שעה '+d.title+'? גם "אחה״צ" מספיק.';
       if(d.kind==='start')return'מתי '+(d.startKnown?'מסתיים ':'מתחיל ')+d.title+'? גם "בערך" מספיק.';
+      if(d.kind==='workhours')return'ובדרך כלל באילו שעות אתה עובד? גם טווח בערך מספיק.';
       return'כמה זמן לוקח להגיע ל'+d.title+(d.startApprox?', והאם '+_fmtMin(d.startMin)+' מדויק?':'?');
     case 'present_template':return'לפי מה שסיפרת, אני מציעה להתחיל כך (השבוע של '+dl(d.weekStart)+'):';
     case 'show_existing':return'כבר ביומן, השארתי כמו שהוא ואין צורך באישור:\n'+d.items.map(line).join('\n');
@@ -10632,7 +10656,8 @@ function onbRender(m,ctx){
     case 'state_holds':return'מחזיקה פנוי, בלי לבקש אישור:\n'+d.items.map(i=>'• '+dl(i.date)+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.holdReason+', עד שתדע את השעה').join('\n');
     case 'state_partial_day':return'ב'+dl(d.date)+' לא הוספתי כלום: '+d.reasons.join(', ')+'.';
     case 'state_protected_unscheduled':return'שמרתי כמוגן ולא שיבצתי בזה כלום: '+d.titles.join(', ')+'.';
-    case 'state_day_start':return'לא שיבצתי כלום לפני '+_fmtMin(d.min)+', כי אמרת שאתה קם מאוחר. זו הצעה שלי, לא כלל.';
+    case 'propose_setting':return'הצעה שלי, לא כלל: לא לשבץ כלום לפני '+_fmtMin(d.min)+', כי אמרת שאתה קם מאוחר. אם תאשר, זו תהיה העדפה.';
+    case 'state_partially_placed':return'אין לי עדיין שעות עבודה, אז אני מציעה את השגרות והיקפי הזמן אבל לא נועלת אותם לשעות עד שנדע איפה העבודה יושבת:\n'+d.items.map(u=>'• '+u.title+' — '+_mayaDur(u.minutesPerWeek)+' בשבוע'+(u.trial?' (לניסוי)':'')).join('\n');
     case 'state_guard':return'זהירות שלי, לא כלל שלך: לא משבצת כלום אחרי '+_fmtMin(d.min)+' '+d.reason+'.';
     case 'state_unplaced':return'לא הצלחתי למצוא מקום ל: '+d.titles.join(', ')+'.';
     case 'state_assumptions':return'הנחות שעשיתי (נבדוק אחרי שבוע–שבועיים): '+d.items.map(a=>a.title+' '+_mayaDur(a.minutes)).join(', ')+'.';
