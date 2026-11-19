@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.9';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.10';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10209,6 +10209,11 @@ function onbExtractPrompt(st,answer){
     'זמן עמום ("בערב", "רוב השבוע", "אחרי הצהריים") אינו שעה: אל תמלא start/end/officeHours ממנו; "אחה״צ", "בוקר" ו"צהריים" → semanticWindow בלבד. אם המשתמש חזר בו — קח את הגרסה האחרונה. '+
     'routines: kind חייב להיות הערך הקרוב ביותר מהרשימה — ריצה/ספורט/אימון=fitness; ארוחה או זמן עם הילדים/המשפחה=family; חברים=social; עבודה עמוקה/ריכוז=deep_work; למידה/קורס/מבחן=study; מיילים=email; חשבוניות/תשלומים=payments; קניות=shopping; סידורים=errands; עבודה כללית=work. other רק כשבאמת שום ערך לא מתאים. domain: work לכל דבר מקצועי/לקוחות/עבודה עמוקה; life לבית, משפחה, בריאות, חברים. '+
     'protected=true ו-inMvw=true רק כשהמשתמש אמר במפורש שזה קדוש/חייב/לא מוותר/לא מפסיד, או נתן רצפה לשבוע עמוס ("לפחות שתיים אם עמוס"); אחרת השמט. כל פריט כזה גם נכנס ל-minimumViableWeek כמשפט קצר ("2 ריצות", "2 ערבים עם הילדים"); אל תוסיף ל-minimumViableWeek דבר שלא נאמר כך. '+
+    'officeHours: שעות משרד/עבודה קבועות ("משרד 9 עד 5", "אני עובד 9–17") → officeHours (days,from,to) בלבד — לעולם לא פריט fixed. fixed: רק אירוע עם יום/שעה שמתרחש בזמן קבוע (טיפול, קורס, פגישה, ישיבה, איסוף מהגן); "עד HH:MM" = end, "מ-/ב-HH:MM" = start, חלק מיום ("אחה״צ") = semanticWindow. '+
+    'boundaries: "ביום X לא עובד/כלום" → closed_day עם dow; "אחרי HH:MM לא עובד" → no_work_after עם time; חלק מיום ("שישי אחר הצהריים") → closed_day עם dow ו-semanticWindow ובלי time; "בערב" בלי שעה → no_work_evening עם defined=false ובלי time. '+
+    'תחזוקה: דברים שמצטברים (מיילים, חשבוניות, תשלומים, קניות, סידורים, מעקב לידים, משוב) → routines עם maintenance=work|life ו-domain תואם, בלי perWeek/durationMin אלא אם נאמרו ("כל שבוע"=perWeek 1, "אחת לשבועיים"=perTwoWeeks). לא goals. '+
+    'goals: רק כשצריך שעות מצטברות (תזה, מבחן, פרויקט, הצעת מחיר): requiredPerWeekMinutes או requiredTotalMinutes (שעות×60) ו-deadline כ-YYYY-MM-DD לפי היום ("עד 25 בנובמבר", "14 בדצמבר"). פעילות חוזרת (ריצה, ארוחה, ספורט, עבודה עמוקה) = routine ולא goal; "תזה שש שעות בשבוע" = goal ולא routine. '+
+    'dontKnow: "אין לי מושג" על מה שמצטבר → "maintenance"; על כמה שעות ליעד → "goal.<key>.total"; על שעת אירוע → "fixed.<key>.start"; ערב לא מוגדר → "evening". '+
     'answeredTopics = נושאים q1..q7 שהתשובה כיסתה (q1 = איך נראה שבוע טוב ומה חשוב במיוחד; q4 = מה בחיים אסור שהעבודה תדחק החוצה — גם כשהמשתמש מציין ערבים/ספורט/משפחה שהוא מגן עליהם; q7 = גבולות כמו שעות בלי עבודה). החזר JSON לפי הסכמה בלבד.';
 }
 function onbNormalizeExtraction(raw){
@@ -10232,14 +10237,19 @@ function onbNormalizeExtraction(raw){
   arr(x.fixed).slice(0,10).forEach(f=>{if(!f||typeof f!=='object')return;const key=str(f.key,40)||str(f.title,40);if(!key)return;const q={key};
     put(q,'title',str(f.title,80));put(q,'days',dows(f.days));if(typeof f.dayUnknown==='boolean')q.dayUnknown=f.dayUnknown;put(q,'start',tf(f.start));put(q,'end',tf(f.end));
     if(f.travelMin&&Number(f.travelMin.min)>=5&&Number(f.travelMin.min)<=240)q.travelMin={min:Math.round(Number(f.travelMin.min)),precision:f.travelMin.precision==='exact'?'exact':'approx'};
-    if(typeof f.travelNeeded==='boolean')q.travelNeeded=f.travelNeeded;put(q,'semanticWindow',str(f.semanticWindow,20));put(q,'window',win(f.window));o.fixed.push(q);});
+    if(typeof f.travelNeeded==='boolean')q.travelNeeded=f.travelNeeded;put(q,'semanticWindow',str(f.semanticWindow,20).replace(/["”“]/g,'״'));put(q,'window',win(f.window));o.fixed.push(q);});
   const oh=x.officeHours;if(oh&&typeof oh==='object'){const a=hm(oh.from),b=hm(oh.to);if(a!=null&&b!=null&&a<b)o.officeHours={days:dows(oh.days).length?dows(oh.days):[0,1,2,3,4],from:a,to:b};}
+  // the model sometimes records the office as a fixed event: that is work hours, never a fixed event
+  const officeLike=f=>/^(עבודה במשרד|עבודה|משרד|שעות עבודה|שעות משרד)$/.test(String(f.title||'').trim());
+  if(!o.officeHours){const f=o.fixed.find(f=>officeLike(f)&&f.start&&f.end&&f.end.min>f.start.min);if(f)o.officeHours={days:f.days&&f.days.length?f.days:[0,1,2,3,4],from:f.start.min,to:f.end.min};}
+  o.fixed=o.fixed.filter(f=>!officeLike(f));
   arr(x.goals).slice(0,5).forEach(g=>{if(!g||typeof g!=='object')return;const key=str(g.key,40)||str(g.title,40),title=str(g.title,100);if(!key||!title)return;
     const q={key,title,kind:ONB_KINDS.includes(g.kind)?g.kind:'work'};const t=Math.round(Number(g.requiredTotalMinutes)),w=Math.round(Number(g.requiredPerWeekMinutes));
     q.requiredTotalMinutes=t>=15&&t<=6000?t:null;q.requiredPerWeekMinutes=w>=15&&w<=3000?w:null;q.deadline=date(g.deadline)||null;q.fillsRoutineKey=str(g.fillsRoutineKey,40)||null;o.goals.push(q);});
   arr(x.boundaries).slice(0,8).forEach(b=>{if(!b||typeof b!=='object')return;const rule=str(b.rule,100);if(!rule)return;
     const q={rule,kind:['no_work_after','closed_day','no_work_evening'].includes(b.kind)?b.kind:'other',defined:b.defined!==false};
-    if(hm(b.time)!=null)q.time=hm(b.time);if(Number.isInteger(b.dow)&&b.dow>=0&&b.dow<=6)q.dow=b.dow;put(q,'semanticWindow',str(b.semanticWindow,20));
+    if(hm(b.time)!=null)q.time=hm(b.time);if(Number.isInteger(b.dow)&&b.dow>=0&&b.dow<=6)q.dow=b.dow;put(q,'semanticWindow',str(b.semanticWindow,20).replace(/["”“]/g,'״'));
+    if(q.kind==='closed_day'&&q.semanticWindow)delete q.time;               // part-day closure is a semantic window, never a timed rule
     if(q.kind==='no_work_after'&&q.time==null)q.defined=false;o.boundaries.push(q);});
   if(x.lateRiser&&hm(x.lateRiser.earliest)!=null)o.lateRiser={earliest:hm(x.lateRiser.earliest)};
   return o;

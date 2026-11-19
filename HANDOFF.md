@@ -65,3 +65,6 @@ Pure core in `index.html` (`onb*`), spec `ONBOARDING_SPEC_V2.md`, tests `tests/o
 
 ### Update 2026-11-18.8
 Deterministic onboarding core fixed before Gemini eval: materialization of accepted review, MaintenanceNeed vs RoutineProposal, blocking workHours + `partially_placed`, dayStart as proposal (ARCHITECTURE §63). Steps 1–4 above unchanged; eval is now 40 cases.
+
+### Update 2026-11-19 (build .10)
+First real eval ran (see ARCHITECTURE §64). Re-run the full eval after pulling .10. If `git pull` fails with schannel/TLS (antivirus HTTPS scanning), download `index.html` and `tests/onboarding-eval/cases.json` from raw.githubusercontent.com instead. Consider lowering `PER_MODEL_MS` for onboarding (p95 ≈ 32s).

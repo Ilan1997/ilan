@@ -224,6 +224,18 @@
       const only=onbApprove(YP,YT,{accept:YT.unscheduled.filter(u=>/מיילים/.test(u.title)).map(u=>u.id),reject:[]}).profile;
       o.pp5_approvingOneBudgetLeavesOthersPending=only.routines.some(r=>r.key==='emails')&&!only.routines.some(r=>r.key==='invoices')&&only.proposals.some(p=>p.id==='pr_need_invoices'&&p.status==='pending')&&only.approvedBudgets.length===1;
       o.pp6_laterPlacementIsPossibleBecauseBudgetIsStructured=pr0.approvedBudgets.every(b=>b.minutesPerWeek>0&&(b.goalId||b.routineId));}
+    {const n1=onbNormalizeExtraction({fixed:[{key:'office',title:'משרד',days:[0,1,2,3,4],start:{hhmm:'08:30'},end:{hhmm:'17:30'}},{key:'t',title:'טיפול משפחתי',days:[1],end:{hhmm:'17:00'}}]});
+      o.nx1_officeAsFixedBecomesOfficeHours=n1.officeHours&&n1.officeHours.from===510&&n1.officeHours.to===1050&&n1.fixed.length===1&&n1.fixed[0].key==='t';
+      const n2=onbNormalizeExtraction({officeHours:{from:'09:00',to:'17:00'},fixed:[{key:'o',title:'עבודה במשרד',days:[0],start:{hhmm:'10:00'},end:{hhmm:'12:00'}}]});
+      o.nx2_realOfficeHoursWinAndDuplicateDropped=n2.officeHours.from===540&&n2.fixed.length===0;
+      const n3=onbNormalizeExtraction({boundaries:[{rule:'שישי אחה"צ כלום',kind:'closed_day',dow:5,time:'13:00',semanticWindow:'אחה"צ'}]});
+      o.nx3_partDayClosureHasNoTimeAndCanonicalWindow=n3.boundaries[0].time===undefined&&n3.boundaries[0].semanticWindow==='אחה״צ'&&n3.boundaries[0].dow===5;
+      const n4=onbNormalizeExtraction({fixed:[{key:'a',title:'פגישה עם המנחה',days:[4],semanticWindow:'אחה"צ'}]});
+      o.nx4_fixedWindowCanonical=n4.fixed[0].semanticWindow==='אחה״צ';
+      const n5=onbNormalizeExtraction({fixed:[{key:'w',title:'עבודה',days:[0,1],start:{hhmm:'10:00'}}]});
+      o.nx5_officeLikeWithoutEndIsNotInvented=n5.officeHours===null&&n5.fixed.length===0;
+      const pr=onbExtractPrompt(onbNew({today:'2026-11-18',calendar:null}),'x');
+      o.nx6_promptStatesOfficeHoursNotFixed=/officeHours[^.]*לעולם לא פריט fixed/.test(pr)&&/maintenance=work\|life/.test(pr)&&/dontKnow:/.test(pr);}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

@@ -792,14 +792,16 @@
        "חשבונות"
       ],
       "domain": "life",
-      "maintenance": "life"
+      "maintenance": "life",
+      "perWeek": 1
      },
      {
       "m": [
        "קניות"
       ],
       "domain": "life",
-      "maintenance": "life"
+      "maintenance": "life",
+      "perWeek": 1
      }
     ]
    },
