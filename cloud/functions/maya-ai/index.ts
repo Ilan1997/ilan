@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     contents: msgs.map((m: { role: string; content: string }) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
     ...(generationConfig ? { generationConfig } : {}),
   });
-  let r: Response | null = null, data: any = {}, lastDetail = "", timedOut = false;
+  let r: Response | null = null, data: any = {}, lastDetail = "", timedOut = false, usedModel = "";
   const allDetails: string[] = []; // every model tried, so a failed chain shows WHY the first ones failed, not only the last
   const deadline = Date.now() + TOTAL_BUDGET_MS; // the browser gives up at 75s, so stay well under it
   for (const model of [MODEL, ...FALLBACKS.filter((x) => x !== MODEL)]) {
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       if (to) timedOut = true;
       lastDetail = `${model}: ${to ? "timeout" : "network " + String(e).slice(0, 120)}`; allDetails.push(lastDetail); console.error("gemini fetch failed", lastDetail); r = null; continue;
     }
-    if (r.ok && !data?.error) break;
+    if (r.ok && !data?.error) { usedModel = model; break; }
     lastDetail = `${model}: ${r.status} ${String(data?.error?.message ?? "").slice(0, 200)}`;
     allDetails.push(lastDetail);
     console.error("gemini error", lastDetail); // visible in Supabase → Edge Functions → Logs
@@ -100,5 +100,5 @@ Deno.serve(async (req) => {
   const text = (data.candidates?.[0]?.content?.parts ?? [])
     .filter((p: { thought?: boolean; text?: unknown }) => !p.thought && typeof p.text === "string")
     .map((p: { text: string }) => p.text).join("");
-  return json({ text }, 200, origin);
+  return json({ text, model: usedModel, tried: allDetails.length ? allDetails.join(" | ").slice(0, 400) : undefined }, 200, origin);
 });

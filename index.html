@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-19.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-19.3';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10183,14 +10183,14 @@ const ONB_EXTRACT_SCHEMA=(()=>{
   const S={type:'STRING'},N={type:'NUMBER'},I={type:'INTEGER'},B={type:'BOOLEAN'};const A=t=>({type:'ARRAY',items:t});
   const TF={type:'OBJECT',properties:{hhmm:S,precision:{type:'STRING',enum:['exact','approx']}}};
   return{type:'OBJECT',properties:{
-    answeredTopics:A(S),successCriteria:A(S),minimumViableWeek:A(S),
+    answeredTopics:A(S),successCriteria:{type:'ARRAY',items:S,description:'רק מטרות כלליות של שבוע טוב (למשל "פחות לחץ"). כל דבר עם יום, שעה, תדירות או שעות מצטברות לא נכנס לכאן אלא ל-routines/fixed/goals.'},minimumViableWeek:{type:'ARRAY',items:S,description:'מה חייב לא ללכת לאיבוד בשבוע עמוס, משפטים קצרים כמו "2 ריצות".'},
     routines:A({type:'OBJECT',properties:{key:S,title:S,kind:{type:'STRING',enum:ONB_KINDS},domain:{type:'STRING',enum:['work','life']},maintenance:{type:'STRING',enum:['work','life']},
       stated:{type:'STRING',enum:['fact','maybe']},perWeek:I,perDay:B,perTwoWeeks:B,durationMin:I,days:A(I),window:{type:'OBJECT',properties:{from:S,to:S}},protected:B,inMvw:B,confidence:N},required:['key','title']}),
-    fixed:A({type:'OBJECT',properties:{key:S,title:S,days:A(I),dayUnknown:B,start:TF,end:TF,travelMin:{type:'OBJECT',properties:{min:I,precision:{type:'STRING',enum:['exact','approx']}}},travelNeeded:B,
-      semanticWindow:S,window:{type:'OBJECT',properties:{from:S,to:S}}},required:['key','title']}),
+    fixed:{type:'ARRAY',description:'אירועים עם יום ו/או שעה קבועים: ישיבה, טיפול, שיעור, קורס, איסוף מהגן, פגישה. לא פעילות שהמשתמש רוצה לעשות X פעמים בשבוע.',items:{type:'OBJECT',properties:{key:S,title:S,days:A(I),dayUnknown:B,start:TF,end:TF,travelMin:{type:'OBJECT',properties:{min:I,precision:{type:'STRING',enum:['exact','approx']}}},travelNeeded:B,
+      semanticWindow:S,window:{type:'OBJECT',properties:{from:S,to:S}}},required:['key','title']}},
     officeHours:{type:'OBJECT',properties:{days:A(I),from:S,to:S}},
     goals:A({type:'OBJECT',properties:{key:S,title:S,kind:{type:'STRING',enum:ONB_KINDS},requiredTotalMinutes:I,requiredPerWeekMinutes:I,sessionMinutes:I,days:A(I),deadline:S,fillsRoutineKey:S},required:['key','title']}),
-    goalsNone:B,chaosTriggers:A(S),
+    goalsNone:B,chaosTriggers:{type:'ARRAY',items:S,description:'דברים שמפרקים את השבוע (ילד חולה, לקוח בלחץ, ישיבות שמתארכות).'},
     boundaries:A({type:'OBJECT',properties:{rule:S,kind:{type:'STRING',enum:['no_work_after','closed_day','no_work_evening','other']},time:S,dow:I,semanticWindow:S,defined:B},required:['rule','kind']}),
     lateRiser:{type:'OBJECT',properties:{earliest:S}},
     dontKnow:A(S)},required:[]};
@@ -10241,7 +10241,7 @@ function onbNormalizeExtraction(raw,ctx){
     dontKnow:arr(x.dontKnow).map(s=>str(s,80)).filter(Boolean).slice(0,12),goalsNone:x.goalsNone===true,routines:[],fixed:[],goals:[],boundaries:[],officeHours:null,lateRiser:null};
   arr(x.routines).slice(0,16).forEach(r=>{if(!r||typeof r!=='object')return;const key=str(r.key,40)||str(r.title,40),title=str(r.title,80);if(!key||!title)return;
     let d=Math.round(Number(r.durationMin));const pw0=Math.round(Number(r.perWeek)),pd=r.perDay===true||pw0===7,pw=pd?NaN:pw0;
-    if(!(d>=10&&d<=480)){const dt=durText(title);if(dt)d=dt;}
+    if(!(d>=10&&d<=480)){const esc=title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const m=ans.match(new RegExp('(שעתיים|חצי שעה|שעה|\\d+\\s*(?:שעות|דקות))\\s+(?:של\\s+)?'+esc));const dt=durText(title)||(m?durText(m[1]):undefined);if(dt)d=dt;}
     let kind=ONB_KINDS.includes(r.kind)?r.kind:'other';
     if(kind==='other'){const T=title+' '+key;kind=/ריצ|ספורט|אימון|כושר|הליכה/.test(T)?'fitness':/ארוחת ערב|ארוחת שישי|ילדים|משפחת/.test(T)?'family':/עבודה עמוקה|deep work|deep/i.test(T)?'deep_work':/מייל|דוא״ל|אימייל/.test(T)?'email':/קניות/.test(T)?'shopping':'other';}   // keyword fallback on the user's own words, only when the model gave nothing
     const WORK_KINDS=['email','payments','leads','feedback','deep_work','work','review'],LIFE_KINDS=['bills','shopping','errands','fitness','family','social'];
@@ -10251,7 +10251,10 @@ function onbNormalizeExtraction(raw,ctx){
     const q={key,title,kind,domain,stated:r.stated==='maybe'?'maybe':'fact',protected:r.protected===true||topic==='q4',inMvw:r.inMvw===true};
     put(q,'maintenance',mnt);put(q,'perWeek',pw>=1&&pw<=14?pw:undefined);if(pd)q.perDay=true;if(r.perTwoWeeks===true)q.perTwoWeeks=true;
     put(q,'durationMin',d>=10&&d<=480?d:undefined);put(q,'days',dows(r.days));put(q,'window',win(r.window));
-    const c=Number(r.confidence);if(c>=0&&c<=1)q.confidence=c;o.routines.push(q);});
+    const c=Number(r.confidence);if(c>=0&&c<=1)q.confidence=c;
+    if(/^(טיפול|פגישה|ישיבה|שיעור|קורס|הרצאה|תור)/.test(title)&&!pd&&!(pw>=1)&&!r.perTwoWeeks&&!mnt&&dows(r.days).length){   // an appointment with a day and no frequency is an event, not a routine
+      const fx={key,title,days:dows(r.days)};const fw=win(r.window);if(fw){fx.start={min:fw.from,precision:'exact'};fx.end={min:fw.to,precision:'exact'};}o.fixed.push(fx);return;}
+    o.routines.push(q);});
   arr(x.fixed).slice(0,10).forEach(f=>{if(!f||typeof f!=='object')return;const key=str(f.key,40)||str(f.title,40);if(!key)return;const q={key};
     put(q,'title',str(f.title,80));put(q,'days',dows(f.days));if(typeof f.dayUnknown==='boolean')q.dayUnknown=f.dayUnknown;put(q,'start',tf(f.start));put(q,'end',tf(f.end));
     if(q.start&&!q.end&&f.window){const wa=hm(f.window.from),wb=hm(f.window.to);if(wa===q.start.min&&wb!=null&&wb>wa)q.end={min:wb,precision:'exact'};}   // the model put the end inside window

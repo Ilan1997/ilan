@@ -262,6 +262,13 @@
       o.nx18_endOfMonthOnlyWhenSaidAndOnlyForASingleGoal=g1.deadline==='2026-11-30'&&g2.deadline===null;
       const d1=A({goals:[{key:'s',title:'סטטיסטיקה',deadline:'2026-12-14'}]},{answer:'אין לי מושג כמה שעות צריך'}),d2=A({goals:[{key:'s',title:'סטטיסטיקה',requiredPerWeekMinutes:360}]},{answer:'אין לי מושג'}),d3=A({goals:[{key:'s',title:'סטטיסטיקה'}]},{answer:'מבחן ב-14 בדצמבר'});
       o.nx19_dontKnowTotalOnlyWhenUserSaidSoAndNoAmountGiven=d1.dontKnow.indexOf('goal.s.total')>=0&&d2.dontKnow.indexOf('goal.s.total')<0&&d3.dontKnow.length===0;}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      const d1=A({routines:[{key:'d',title:'עבודה עמוקה',kind:'deep_work',perDay:true}]},{answer:'שעתיים עבודה עמוקה בכל יום'}).routines[0],d2=A({routines:[{key:'d',title:'עבודה עמוקה',kind:'deep_work',perDay:true}]},{answer:'עבודה עמוקה בכל יום'}).routines[0];
+      o.nx20_durationRecoveredFromTheWordsNextToTheTitleOnly=d1.durationMin===120&&d2.durationMin===undefined;
+      const ap=A({routines:[{key:'t',title:'טיפול משפחתי',days:[1],kind:'family'},{key:'r',title:'ריצה',days:[0,2],kind:'fitness'},{key:'p',title:'פגישה שבועית',days:[3],perWeek:1}]});
+      o.nx21_appointmentWithDayAndNoFrequencyIsAFixedEventNotARoutine=ap.fixed.length===1&&ap.fixed[0].title==='טיפול משפחתי'&&ap.fixed[0].days[0]===1&&ap.routines.length===2&&ap.routines.some(r=>r.key==='r')&&ap.routines.some(r=>r.key==='p');
+      const sc=JSON.stringify(ONB_EXTRACT_SCHEMA);
+      o.nx22_schemaDescriptionsDiscourageTheSuccessCriteriaEscapeHatch=/successCriteria.{0,80}description/.test(sc)&&/chaosTriggers.{0,80}description/.test(sc)&&/"fixed":\{"type":"ARRAY","description"/.test(sc);}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;
