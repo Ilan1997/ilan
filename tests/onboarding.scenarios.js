@@ -249,6 +249,19 @@
       const pm=onbExtractPrompt(onbNew({today:'2026-11-18',calendar:null}),'x');
       o.nx12_promptCarriesMonthEndAndNoArithmeticRule=/סוף החודש = 2026-11-30/.test(pm)&&/אל תחשב סכומים/.test(pm)&&/sessionMinutes=120/.test(pm);
       const sch=JSON.stringify(ONB_EXTRACT_SCHEMA);o.nx13_schemaHasSessionFields=/sessionMinutes/.test(sch);}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      const r1=A({routines:[{key:'d',title:'שעתיים עבודה עמוקה בכל יום',kind:'deep_work',perWeek:7,window:{from:'00:00',to:'24:00'}},{key:'x',title:'ריצות',kind:'fitness',window:{from:'00:00',to:'23:59'}}]}).routines;
+      o.nx14_everyDayBecomesPerDayDurationFromWordsNoAllDayWindow=r1[0].perDay===true&&r1[0].perWeek===undefined&&r1[0].durationMin===120&&r1[0].window===undefined&&r1[1].window===undefined;
+      const r2=A({routines:[{key:'l',title:'מעקב לידים',kind:'leads',window:{from:'work'}},{key:'b',title:'חשבונות',kind:'bills'}]},{topic:'q3'}).routines;
+      o.nx15_q3NamedThingsAreMaintenanceWithDomainFromKind=r2[0].maintenance==='work'&&r2[1].maintenance==='life'&&r2[1].domain==='life'&&r2[0].window===undefined;
+      const f1=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'},window:{from:'17:00',to:'18:00'}}]}).fixed[0];
+      o.nx16_endTheModelPutInsideWindowIsRecovered=f1.start.min===1020&&f1.end.min===1080&&f1.window===undefined;
+      const e1=A({fixed:[{key:'l',title:'שיעור',days:[2],semanticWindow:'אחה״צ'}]},{answer:'יש לי שיעור ביום ג׳ בערב.'}).fixed[0],e2=A({fixed:[{key:'l',title:'שיעור',days:[2],semanticWindow:'אחה״צ'}]},{answer:'שיעור ביום ג׳ אחר הצהריים'}).fixed[0],e3=A({fixed:[{key:'l',title:'שיעור',days:[2],semanticWindow:'ערב'}]},{answer:'בערב'}).fixed[0];
+      o.nx17_windowMustBeGroundedInTheAnswerAndEveningIsNeverAWindow=e1.semanticWindow===undefined&&e2.semanticWindow==='אחה״צ'&&e3.semanticWindow===undefined;
+      const g1=A({goals:[{key:'e',title:'בחינה',requiredTotalMinutes:720}]},{answer:'ללמוד לבחינה 12 שעות עד סוף החודש',today:'2026-11-18'}).goals[0],g2=A({goals:[{key:'e',title:'בחינה',requiredTotalMinutes:720}]},{answer:'12 שעות',today:'2026-11-18'}).goals[0];
+      o.nx18_endOfMonthOnlyWhenSaidAndOnlyForASingleGoal=g1.deadline==='2026-11-30'&&g2.deadline===null;
+      const d1=A({goals:[{key:'s',title:'סטטיסטיקה',deadline:'2026-12-14'}]},{answer:'אין לי מושג כמה שעות צריך'}),d2=A({goals:[{key:'s',title:'סטטיסטיקה',requiredPerWeekMinutes:360}]},{answer:'אין לי מושג'}),d3=A({goals:[{key:'s',title:'סטטיסטיקה'}]},{answer:'מבחן ב-14 בדצמבר'});
+      o.nx19_dontKnowTotalOnlyWhenUserSaidSoAndNoAmountGiven=d1.dontKnow.indexOf('goal.s.total')>=0&&d2.dontKnow.indexOf('goal.s.total')<0&&d3.dontKnow.length===0;}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

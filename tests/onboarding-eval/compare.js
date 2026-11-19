@@ -69,7 +69,7 @@ function toRaw(c){const E=c.expect||{};const tf=(v,p)=>v?{hhmm:v,precision:p||'e
   if(E.chaos)raw.chaosTriggers=Array.from({length:E.chaos},(_,i)=>'גורם '+(i+1));
   return raw;}
 function summarize(results){const by={};ERROR_TYPES.forEach(t=>by[t]=0);results.forEach(r=>r.errors.forEach(e=>by[e.type]++));
-  const sev={pass:0,minor:0,major:0,critical:0};results.forEach(r=>sev[r.severity]++);
+  const sev={pass:0,minor:0,major:0,critical:0,infra:0};results.forEach(r=>sev[r.severity]++);
   return{cases:results.length,bySeverity:sev,byError:by,criticalCases:results.filter(r=>r.severity==='critical').map(r=>r.id),
     metrics:{inventedConsequential:by.invented_consequential_fact,wrongConsequential:by.wrong_consequential_value,missedFacts:by.missed_fact,inventedFacts:by.invented_fact,wrongDomain:by.wrong_domain,wrongRigidity:by.wrong_rigidity,missedMvw:by.missed_minimum_viable_week,
       unnecessaryFollowups:by.unnecessary_followup,missedFollowups:by.missed_followup,dontKnowMissed:by.dontknow_missed}};}

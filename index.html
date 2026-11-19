@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-19.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-19.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10218,37 +10218,45 @@ function onbExtractPrompt(st,answer){
     'אירוע שיש לו יום ושעה (טיפול ביום שני, ישיבת צוות, איסוף מהגן, קורס בשבתות) הוא fixed גם אם חוזר כל שבוע; routine הוא פעילות שהמשתמש רוצה לעשות X פעמים בשבוע בלי יום קבוע. "יום שלישי 17:00 עד 18:00" → start 17:00 ו-end 18:00 (שניהם). '+
     'שבוע מינימלי: "אם עמוס — לפחות שתי ריצות" → minimumViableWeek:["2 ריצות"] וב-routine של הריצות inMvw=true. "שני הדברים הכי חשובים: התזה והילדים" → minimumViableWeek:["התזה","ערבים עם הילדים"]. כשהתשובה היא לשאלת q4 (מה אסור שהעבודה תדחק) — כל מה שהוזכר הוא protected=true. '+
     'ערכי semanticWindow בעברית בלבד: אחה״צ, בוקר, צהריים. כשהשאלה שנשאלה כוללת שדה (למשל fixed.advisor.day) והמשתמש אומר "לא יודע" על השעה — dontKnow עם המפתח fixed.<key>.start. '+
+    'חלץ כל פריט שהוזכר בתשובה, אחד אחד — גם בתשובה ארוכה ומבולגנת. successCriteria הוא רק תקציר ואינו מחליף חילוץ: כל פעילות חוזרת → routine, כל יעד שעות/תאריך → goal, כל אירוע עם יום/שעה → fixed. window רק כשהמשתמש אמר טווח שעות במפורש (אל תמלא window בשעות כלליות או בטקסט). "קדוש/לא מוותר/חייב" על פעילות → routine עם protected=true (ארוחה משפחתית בשישי = routine מסוג family, perWeek 1). '+
     'answeredTopics = נושאים q1..q7 שהתשובה כיסתה (q1 = איך נראה שבוע טוב ומה חשוב במיוחד; q4 = מה בחיים אסור שהעבודה תדחק החוצה — גם כשהמשתמש מציין ערבים/ספורט/משפחה שהוא מגן עליהם; q7 = גבולות כמו שעות בלי עבודה). החזר JSON לפי הסכמה בלבד.';
 }
 function onbNormalizeExtraction(raw,ctx){
-  const topic=ctx&&ctx.topic||null;
+  const topic=ctx&&ctx.topic||null,ans=String(ctx&&ctx.answer||''),today=ctx&&ctx.today||null;
   const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
   const hm=v=>/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v||''))?_hhmm(v):null;
   const arr=v=>Array.isArray(v)?v:[];const str=(v,n)=>typeof v==='string'?v.trim().slice(0,n||120):'';
   const put=(o,k,v)=>{if(v!==undefined&&v!==null&&!(typeof v==='string'&&!v)&&!(Array.isArray(v)&&!v.length))o[k]=v;};
   const dows=v=>arr(v).map(Number).filter(d=>Number.isInteger(d)&&d>=0&&d<=6);
   const tf=v=>{if(!v||typeof v!=='object')return undefined;const m=hm(v.hhmm);return m==null?undefined:{min:m,precision:v.precision==='approx'?'approx':'exact'};};
-  const win=v=>{if(!v||typeof v!=='object')return undefined;const a=hm(v.from),b=hm(v.to);return a!=null&&b!=null&&a<b?{from:a,to:b}:undefined;};
-  const SW=s=>{s=String(s||'').replace(/["”“]/g,'״').trim();const m={afternoon:'אחה״צ',morning:'בוקר',noon:'צהריים',evening:'ערב','אחהצ':'אחה״צ'};return m[s.toLowerCase?s.toLowerCase():s]||s;};
+  const win=v=>{if(!v||typeof v!=='object')return undefined;const a=hm(v.from),b=hm(v.to);return a!=null&&b!=null&&a<b&&!(a<=60&&b>=1380)?{from:a,to:b}:undefined;};   // an all-day window carries no information
+  const durText=s=>/שעתיים/.test(s)?120:/חצי שעה/.test(s)?30:/(\d+)\s*דקות/.test(s)?+RegExp.$1:/(\d+)\s*שעות/.test(s)?+RegExp.$1*60:/שעה/.test(s)?60:undefined;
+  const SW=s=>{s=String(s||'').replace(/["”“]/g,'״').trim();const m={afternoon:'אחה״צ',morning:'בוקר',noon:'צהריים','אחהצ':'אחה״צ'};s=m[s.toLowerCase()]||s;
+    if(['אחה״צ','בוקר','צהריים'].indexOf(s)<0)return'';                    // "ערב" and anything else is not a declared window
+    if(ans){const ok=s==='אחה״צ'?/אחה.?צ|אחר הצהריים|אחרי הצהריים/.test(ans):s==='בוקר'?/בוקר/.test(ans):/צהריים/.test(ans);if(!ok)return'';}   // grounded in what the user actually wrote
+    return s;};
   const date=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))?String(v):undefined;
   const o={answeredTopics:arr(x.answeredTopics).map(String).filter(t=>/^q[1-7]$/.test(t)),successCriteria:arr(x.successCriteria).map(s=>str(s,100)).filter(Boolean).slice(0,8),
     minimumViableWeek:arr(x.minimumViableWeek).map(s=>str(s,100)).filter(Boolean).slice(0,6),chaosTriggers:arr(x.chaosTriggers).map(s=>str(s,100)).filter(Boolean).slice(0,6),
     dontKnow:arr(x.dontKnow).map(s=>str(s,80)).filter(Boolean).slice(0,12),goalsNone:x.goalsNone===true,routines:[],fixed:[],goals:[],boundaries:[],officeHours:null,lateRiser:null};
   arr(x.routines).slice(0,16).forEach(r=>{if(!r||typeof r!=='object')return;const key=str(r.key,40)||str(r.title,40),title=str(r.title,80);if(!key||!title)return;
-    const d=Math.round(Number(r.durationMin)),pw=Math.round(Number(r.perWeek));
+    let d=Math.round(Number(r.durationMin));const pw0=Math.round(Number(r.perWeek)),pd=r.perDay===true||pw0===7,pw=pd?NaN:pw0;
+    if(!(d>=10&&d<=480)){const dt=durText(title);if(dt)d=dt;}
     let kind=ONB_KINDS.includes(r.kind)?r.kind:'other';
     if(kind==='other'){const T=title+' '+key;kind=/ריצ|ספורט|אימון|כושר|הליכה/.test(T)?'fitness':/ארוחת ערב|ארוחת שישי|ילדים|משפחת/.test(T)?'family':/עבודה עמוקה|deep work|deep/i.test(T)?'deep_work':/מייל|דוא״ל|אימייל/.test(T)?'email':/קניות/.test(T)?'shopping':'other';}   // keyword fallback on the user's own words, only when the model gave nothing
     const WORK_KINDS=['email','payments','leads','feedback','deep_work','work','review'],LIFE_KINDS=['bills','shopping','errands','fitness','family','social'];
-    const mnt=r.maintenance==='work'||r.maintenance==='life'?r.maintenance:undefined;
-    const domain=mnt||(WORK_KINDS.includes(kind)?'work':LIFE_KINDS.includes(kind)?'life':(r.domain==='work'?'work':'life'));
+    const domain0=WORK_KINDS.includes(kind)?'work':LIFE_KINDS.includes(kind)?'life':(r.domain==='work'?'work':'life');
+    const mnt=r.maintenance==='work'||r.maintenance==='life'?r.maintenance:(topic==='q3'?domain0:undefined);   // anything named as "piles up" (q3) is maintenance
+    const domain=mnt||domain0;
     const q={key,title,kind,domain,stated:r.stated==='maybe'?'maybe':'fact',protected:r.protected===true||topic==='q4',inMvw:r.inMvw===true};
-    put(q,'maintenance',r.maintenance==='work'||r.maintenance==='life'?r.maintenance:undefined);put(q,'perWeek',pw>=1&&pw<=14?pw:undefined);if(r.perDay===true)q.perDay=true;if(r.perTwoWeeks===true)q.perTwoWeeks=true;
+    put(q,'maintenance',mnt);put(q,'perWeek',pw>=1&&pw<=14?pw:undefined);if(pd)q.perDay=true;if(r.perTwoWeeks===true)q.perTwoWeeks=true;
     put(q,'durationMin',d>=10&&d<=480?d:undefined);put(q,'days',dows(r.days));put(q,'window',win(r.window));
     const c=Number(r.confidence);if(c>=0&&c<=1)q.confidence=c;o.routines.push(q);});
   arr(x.fixed).slice(0,10).forEach(f=>{if(!f||typeof f!=='object')return;const key=str(f.key,40)||str(f.title,40);if(!key)return;const q={key};
     put(q,'title',str(f.title,80));put(q,'days',dows(f.days));if(typeof f.dayUnknown==='boolean')q.dayUnknown=f.dayUnknown;put(q,'start',tf(f.start));put(q,'end',tf(f.end));
+    if(q.start&&!q.end&&f.window){const wa=hm(f.window.from),wb=hm(f.window.to);if(wa===q.start.min&&wb!=null&&wb>wa)q.end={min:wb,precision:'exact'};}   // the model put the end inside window
     if(f.travelMin&&Number(f.travelMin.min)>=5&&Number(f.travelMin.min)<=240)q.travelMin={min:Math.round(Number(f.travelMin.min)),precision:f.travelMin.precision==='exact'?'exact':'approx'};
-    if(typeof f.travelNeeded==='boolean')q.travelNeeded=f.travelNeeded;put(q,'semanticWindow',SW(str(f.semanticWindow,20)));put(q,'window',win(f.window));o.fixed.push(q);});
+    if(typeof f.travelNeeded==='boolean')q.travelNeeded=f.travelNeeded;put(q,'semanticWindow',SW(str(f.semanticWindow,20)));put(q,'window',win(f.window));if(q.start&&q.end)delete q.window;o.fixed.push(q);});
   const oh=x.officeHours;if(oh&&typeof oh==='object'){const a=hm(oh.from),b=hm(oh.to);if(a!=null&&b!=null&&a<b)o.officeHours={days:dows(oh.days).length?dows(oh.days):[0,1,2,3,4],from:a,to:b};}
   // the model sometimes records the office as a fixed event: that is work hours, never a fixed event
   const officeLike=f=>/^(ה?עבודה( ב?משרד| מהמשרד)?|ב?משרד|שעות (עבודה|משרד))$/.test(String(f.title||'').trim());
@@ -10258,6 +10266,9 @@ function onbNormalizeExtraction(raw,ctx){
     const q={key,title,kind:ONB_KINDS.includes(g.kind)?g.kind:'work'};const t=Math.round(Number(g.requiredTotalMinutes)),w=Math.round(Number(g.requiredPerWeekMinutes));
     q.requiredTotalMinutes=t>=15&&t<=6000?t:null;q.requiredPerWeekMinutes=w>=15&&w<=3000?w:null;
     const sm=Math.round(Number(g.sessionMinutes)),gd=dows(g.days);if(sm>=10&&sm<=600&&gd.length)q.requiredPerWeekMinutes=sm*gd.length;q.deadline=date(g.deadline)||null;q.fillsRoutineKey=str(g.fillsRoutineKey,40)||null;o.goals.push(q);});
+  // grounded completions from the user's own words (never from the model's arithmetic or silence)
+  if(today&&/עד סוף החודש/.test(ans)){const g1=o.goals.filter(g=>!g.deadline);if(g1.length===1&&o.goals.length===1){const [yy,mm]=today.split('-').map(Number);g1[0].deadline=new Date(Date.UTC(yy,mm,0)).toISOString().slice(0,10);}}
+  if(/אין לי מושג|לא יודע|לא ברור לי/.test(ans))o.goals.forEach(g=>{if(g.requiredTotalMinutes==null&&g.requiredPerWeekMinutes==null){const k='goal.'+g.key+'.total';if(o.dontKnow.indexOf(k)<0)o.dontKnow.push(k);}});
   arr(x.boundaries).slice(0,8).forEach(b=>{if(!b||typeof b!=='object')return;const rule=str(b.rule,100);if(!rule)return;
     const q={rule,kind:['no_work_after','closed_day','no_work_evening'].includes(b.kind)?b.kind:'other',defined:b.defined!==false};
     if(hm(b.time)!=null)q.time=hm(b.time);if(Number.isInteger(b.dow)&&b.dow>=0&&b.dow<=6)q.dow=b.dow;put(q,'semanticWindow',SW(str(b.semanticWindow,20)));
@@ -10320,10 +10331,10 @@ function onbCovered(F){
 function onbMainIntent(s,id){return{type:'ask_topic',data:{topic:id,calendar:!!s.calendarConnected}};}
 // PURE: advance the conversation. `extraction` = normalized extraction of the answer to s.current (null at the start).
 // Returns a NEW state; state.current = the next question {id,kind:'main'|'followup',text,field?} or null when done.
-function onbAdvance(st,extraction){
+function onbAdvance(st,extraction,meta){
   const s=JSON.parse(JSON.stringify(st));
   if(s.current){
-    const ex=onbNormalizeExtraction(extraction,{topic:s.current.id});
+    const ex=onbNormalizeExtraction(extraction,{topic:s.current.id,answer:meta&&meta.answer,today:s.today});
     s.facts=onbMerge(s.facts,ex);
     if(s.current.kind==='main'&&s.answered.indexOf(s.current.id)<0)s.answered.push(s.current.id);
     ex.answeredTopics.forEach(t=>{if(s.answered.indexOf(t)<0)s.answered.push(t);});
@@ -10348,7 +10359,7 @@ async function onbExtractWith(callModel,st,answer){
     if(r&&typeof r==='object')return{ok:true,raw:r};const p=parseIntentText(r);return p.ok?{ok:true,raw:p.raw}:{ok:false};}catch(_e){return{ok:false};}};
   let r=await tryOnce('');let repaired=false;
   if(!r.ok){repaired=true;r=await tryOnce('\nהתשובה הקודמת לא הייתה JSON תקין. החזר JSON בלבד.');}
-  return{raw:r.ok?r.raw:{},extraction:onbNormalizeExtraction(r.ok?r.raw:{},{topic:st&&st.current&&st.current.id}),ok:r.ok,repaired};
+  return{raw:r.ok?r.raw:{},extraction:onbNormalizeExtraction(r.ok?r.raw:{},{topic:st&&st.current&&st.current.id,answer:answer,today:st&&st.today}),ok:r.ok,repaired};
 }
 
 // ── Hold / availability / assumptions ──
