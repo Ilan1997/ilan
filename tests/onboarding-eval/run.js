@@ -36,7 +36,7 @@ async function extract(w,schema,prompt){const t0=Date.now();let txt=null,raw=nul
   const mock=has('--mock')?JSON.parse(fs.readFileSync(val('--mock'),'utf8')):null;const record={};const results=[];
   for(const c of list){
     let raw=null,err=null,meta={latencyMs:0,repaired:false};
-    try{ if(has('--mock-expected'))raw=toRaw(c);else if(mock)raw=mock[c.id];else{const st=stateOf(c);const e=await extract(w,schema,w.onbExtractPrompt(st,c.answer));raw=e.raw;meta=e;if(!raw)err='JSON לא תקין גם אחרי ניסיון תיקון';} }catch(e){err=String(e.message||e)+(e.cause?' ['+(e.cause.code||e.cause.message||e.cause)+']':'');if(/fetch failed|--jwt|GEMINI_API_KEY/.test(err)&&!results.length){console.error('\nשגיאת רשת/הגדרה בקריאה הראשונה — עוצר (לא נמדד שום דבר):\n  '+err+'\n  URL: '+(has('--function')?w.eval('CLOUD_CONFIG.url'):'generativelanguage.googleapis.com'));process.exit(2);}}
+    try{ if(has('--mock-expected'))raw=toRaw(c);else if(mock)raw=mock[c.id];else{const st=stateOf(c);const e=await extract(w,schema,w.onbExtractPrompt(st,c.answer));raw=e.raw;meta=e;if(!raw)err='JSON לא תקין גם אחרי ניסיון תיקון';} }catch(e){err=String(e.message||e)+(e.cause?' ['+(e.cause.code||e.cause.message||e.cause)+']':'');if(/fetch failed|--jwt|GEMINI_API_KEY|function 40[13]|function 429/.test(err)&&!results.length){console.error('\nשגיאת רשת/הגדרה בקריאה הראשונה — עוצר (לא נמדד שום דבר):\n  '+err+'\n  URL: '+(has('--function')?w.eval('CLOUD_CONFIG.url'):'generativelanguage.googleapis.com'));process.exit(2);}}
     record[c.id]=raw;let r;
     if(err||!raw)r={errors:[{type:'missed_fact',severity:'major',detail:err||'אין פלט'}],severity:'major',pass:false};
     else{w.__raw=raw;w.__c=c;const st=stateOf(c);w.__st=st;
