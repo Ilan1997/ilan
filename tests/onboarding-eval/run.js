@@ -40,8 +40,8 @@ async function extract(w,schema,prompt){const t0=Date.now();let txt=null,raw=nul
     record[c.id]=raw;let r;
     if(err||!raw)r={errors:[{type:'missed_fact',severity:'major',detail:err||'אין פלט'}],severity:'major',pass:false};
     else{w.__raw=raw;w.__c=c;const st=stateOf(c);w.__st=st;
-      const info=JSON.parse(w.eval('(()=>{const a=onbNormalizeExtraction(__raw);const merged=onbMerge(__st.facts,a);return JSON.stringify({actual:a,gaps:onbGaps(merged,__c.field?[__c.field]:[]).length,covered:onbCovered(merged)});})()'));
-      r=compareExtraction(info.actual,c,{gaps:info.gaps,covered:info.covered});r.actual=info.actual;}
+      const info=JSON.parse(w.eval('(()=>{const a=onbNormalizeExtraction(__raw,{topic:__st.current&&__st.current.id});const merged=onbMerge(__st.facts,a);return JSON.stringify({actual:a,gaps:onbGaps(merged,__c.field?[__c.field]:[]).length,covered:onbCovered(merged)});})()'));
+      r=compareExtraction(info.actual,c,{gaps:info.gaps,covered:info.covered});r.actual=info.actual;r.raw=raw;}
     Object.assign(r,{id:c.id,cat:c.cat,answer:c.answer,expect:c.expect,latencyMs:meta.latencyMs,repairAttempted:!!meta.repaired});results.push(r);
     console.log((r.pass?'PASS ':'FAIL['+r.severity+'] ')+c.id+(has('--mock-expected')||mock?'':' ['+meta.latencyMs+'ms]')+(r.pass?'':'  — '+r.errors.map(x=>x.type+': '+x.detail).join(' | ')));
   }
@@ -52,6 +52,6 @@ async function extract(w,schema,prompt){const t0=Date.now();let txt=null,raw=nul
   if(val('--out'))fs.writeFileSync(val('--out'),JSON.stringify({summary:sum,results},null,1));
   if(val('--record'))fs.writeFileSync(val('--record'),JSON.stringify(record,null,1));
   if(val('--md')){const m=sum.metrics;const L=['# Onboarding extraction eval','','| מדד | ערך |','|---|---|',...Object.entries(m).map(([k,v])=>'| '+k+' | '+v+' |'),'','**חומרה:** '+JSON.stringify(sum.bySeverity),'','**Gate:** '+(sum.bySeverity.critical?'❌ יש critical ('+sum.criticalCases.join(', ')+') — לא מתקדמים ל־UI':'✅ אין critical'),'','## כשלים',''];
-    results.filter(r=>!r.pass).forEach(r=>{L.push('### '+r.id+' ['+r.severity+'] ('+r.cat+')','> '+r.answer,'',...r.errors.map(e=>'- **'+e.type+'** ('+e.severity+'): '+e.detail),'');});fs.writeFileSync(val('--md'),L.join('\n'));}
+    results.filter(r=>!r.pass).forEach(r=>{L.push('### '+r.id+' ['+r.severity+'] ('+r.cat+')','> '+r.answer,'',...r.errors.map(e=>'- **'+e.type+'** ('+e.severity+'): '+e.detail),'**raw (Gemini):** `'+JSON.stringify(r.raw||null).slice(0,900)+'`','');});fs.writeFileSync(val('--md'),L.join('\n'));}
   process.exit(sum.bySeverity.critical?2:0);
 })();

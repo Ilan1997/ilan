@@ -236,6 +236,19 @@
       o.nx5_officeLikeWithoutEndIsNotInvented=n5.officeHours===null&&n5.fixed.length===0;
       const pr=onbExtractPrompt(onbNew({today:'2026-11-18',calendar:null}),'x');
       o.nx6_promptStatesOfficeHoursNotFixed=/officeHours[^.]*לעולם לא פריט fixed/.test(pr)&&/maintenance=work\|life/.test(pr)&&/dontKnow:/.test(pr);}
+    {const g=onbNormalizeExtraction({goals:[{key:'b',title:'בחינה',sessionMinutes:120,days:[0,1,2,3,4],requiredPerWeekMinutes:700}]}).goals[0];
+      o.nx7_codeDoesTheWeeklyArithmeticNotTheModel=g.requiredPerWeekMinutes===600;
+      const g2=onbNormalizeExtraction({goals:[{key:'t',title:'תזה',requiredPerWeekMinutes:360}]}).goals[0];
+      o.nx8_noSessionFieldsKeepsStatedValue=g2.requiredPerWeekMinutes===360;
+      const rs=onbNormalizeExtraction({routines:[{key:'m',title:'מיילים',kind:'email',domain:'life'},{key:'r',title:'ריצות',kind:'other'},{key:'d',title:'dinner',kind:'other'},{key:'x',title:'משהו',kind:'other',domain:'work'}]}).routines;
+      o.nx9_kindFallbackAndDomainFromKind=rs[0].domain==='work'&&rs[1].kind==='fitness'&&rs[1].domain==='life'&&rs[3].kind==='other'&&rs[3].domain==='work';
+      const q4=onbNormalizeExtraction({routines:[{key:'k',title:'ערבים עם הילדים'},{key:'s',title:'ספורט',stated:'maybe'}]},{topic:'q4'}).routines,q3=onbNormalizeExtraction({routines:[{key:'k',title:'ערבים'}]},{topic:'q3'}).routines;
+      o.nx10_q4AnswersAreProtectedOtherTopicsAreNot=q4.every(r=>r.protected)&&q4[1].stated==='maybe'&&!q3[0].protected;
+      const sw=onbNormalizeExtraction({fixed:[{key:'a',title:'מנחה',days:[4],semanticWindow:'afternoon'}],boundaries:[{rule:'x',kind:'closed_day',dow:5,semanticWindow:'afternoon'}]});
+      o.nx11_englishWindowsBecomeHebrew=sw.fixed[0].semanticWindow==='אחה״צ'&&sw.boundaries[0].semanticWindow==='אחה״צ';
+      const pm=onbExtractPrompt(onbNew({today:'2026-11-18',calendar:null}),'x');
+      o.nx12_promptCarriesMonthEndAndNoArithmeticRule=/סוף החודש = 2026-11-30/.test(pm)&&/אל תחשב סכומים/.test(pm)&&/sessionMinutes=120/.test(pm);
+      const sch=JSON.stringify(ONB_EXTRACT_SCHEMA);o.nx13_schemaHasSessionFields=/sessionMinutes/.test(sch);}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;
