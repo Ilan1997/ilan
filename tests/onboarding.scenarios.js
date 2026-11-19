@@ -278,6 +278,11 @@
       o.nx25_explicitDateParsedAndPastDatesRollToNextYear=g1.deadline==='2026-11-25'&&g2.deadline==='2027-11-05';
       const k1=A({successCriteria:['פחות לחץ']},{answer:'לא יודע, בא לי שיהיה פחות לחץ',topic:'q1'}),k2=A({minimumViableWeek:['2 ריצות']},{answer:'לא יודע, אולי 2 ריצות',topic:'q1'}),k3=A({fixed:[{key:'a',title:'מנחה',days:[4],semanticWindow:'אחה״צ'}]},{answer:'חמישי אחה״צ, לא יודע מתי בדיוק'});
       o.nx26_dontKnowCompletionsAreGroundedInTheAnswer=k1.dontKnow.indexOf('minimumViableWeek')>=0&&k2.dontKnow.indexOf('minimumViableWeek')<0&&k3.dontKnow.indexOf('fixed.a.start')>=0;}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      const r1=A({routines:[{key:'o',title:'עבודה במשרד',kind:'work'},{key:'r',title:'ריצות',kind:'fitness',perWeek:2}]},{answer:'אני עובד רוב השבוע במשרד'}).routines;
+      o.nx27_officeWorkIsNeverARoutine=r1.length===1&&r1[0].key==='r';
+      const e1=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'}}]},{answer:'הטיפול ביום שלישי 17:00 עד 18:00'}).fixed[0],e2=A({fixed:[{key:'m',title:'ישיבת צוות',days:[0],start:{hhmm:'09:30',precision:'approx'}}]},{answer:'ביום ראשון בבוקר יש לי ישיבת צוות ב-9:30 שנמשכת בערך שעה'}).fixed[0],e3=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'}}]},{answer:'הטיפול ביום שלישי ב-17:00'}).fixed[0],e4=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'16:00'}}]},{answer:'טיפול 17:00 עד 18:00'}).fixed[0];
+      o.nx28_endRecoveredFromTheAnswerOnlyWhenItMatchesTheStart=e1.end.min===1080&&e2.end.min===630&&e2.end.precision==='approx'&&e3.end===undefined&&e4.end===undefined;}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-19.4';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-19.5';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10265,13 +10265,18 @@ function onbNormalizeExtraction(raw,ctx){
     if(typeof f.travelNeeded==='boolean')q.travelNeeded=f.travelNeeded;put(q,'semanticWindow',SW(str(f.semanticWindow,20)));put(q,'window',win(f.window));if(q.start&&q.end)delete q.window;o.fixed.push(q);});
   const oh=x.officeHours;if(oh&&typeof oh==='object'){const a=hm(oh.from),b=hm(oh.to);if(a!=null&&b!=null&&a<b)o.officeHours={days:dows(oh.days).length?dows(oh.days):[0,1,2,3,4],from:a,to:b};}
   // the model sometimes records the office as a fixed event: that is work hours, never a fixed event
-  const officeLike=f=>/^(ה?עבודה( ב?משרד| מהמשרד)?|ב?משרד|שעות (עבודה|משרד))$/.test(String(f.title||'').trim());
+  const OFFICE_TITLE=/^(ה?עבודה( ב?משרד| מהמשרד)?|ב?משרד|שעות (עבודה|משרד))$/;
+  const officeLike=f=>OFFICE_TITLE.test(String(f.title||'').trim());
   if(!o.officeHours){const f=o.fixed.find(f=>officeLike(f)&&f.start&&f.end&&f.end.min>f.start.min);if(f)o.officeHours={days:f.days&&f.days.length?f.days:[0,1,2,3,4],from:f.start.min,to:f.end.min};}
   o.fixed=o.fixed.filter(f=>!officeLike(f));
   arr(x.goals).slice(0,5).forEach(g=>{if(!g||typeof g!=='object')return;const key=str(g.key,40)||str(g.title,40),title=str(g.title,100);if(!key||!title)return;
     const q={key,title,kind:ONB_KINDS.includes(g.kind)?g.kind:'work'};const t=Math.round(Number(g.requiredTotalMinutes)),w=Math.round(Number(g.requiredPerWeekMinutes));
     q.requiredTotalMinutes=t>=15&&t<=6000?t:null;q.requiredPerWeekMinutes=w>=15&&w<=3000?w:null;
     const sm=Math.round(Number(g.sessionMinutes)),gd=dows(g.days);if(sm>=10&&sm<=600&&gd.length)q.requiredPerWeekMinutes=sm*gd.length;q.deadline=date(g.deadline)||null;q.fillsRoutineKey=str(g.fillsRoutineKey,40)||null;o.goals.push(q);});
+  if(o.routines.length)o.routines=o.routines.filter(r=>!(OFFICE_TITLE.test(String(r.title||'').trim())&&!r.perWeek&&!r.perDay&&!r.perTwoWeeks));   // "I work in the office" is not a routine and carries no hours
+  o.fixed.forEach(f=>{if(!f.start||f.end||!ans)return;
+    const m=ans.match(/(\d{1,2}):(\d{2})\s*(?:עד|-|–)\s*(\d{1,2}):(\d{2})/);if(m&&(+m[1])*60+(+m[2])===f.start.min){const e=(+m[3])*60+(+m[4]);if(e>f.start.min&&e<=1439){f.end={min:e,precision:'exact'};return;}}
+    const d=ans.match(/נמשכ(?:ת|ים)?\s+(?:בערך\s+)?(שעתיים|חצי שעה|שעה|\d+\s*(?:שעות|דקות))/);if(d){const dm=durText(d[1]);if(dm&&f.start.min+dm<=1439)f.end={min:f.start.min+dm,precision:/בערך/.test(d[0])?'approx':'exact'};}});
   const FREQ=/(כל|בכל|ב)\s*(שבוע|יום|חודש)|שבועיים|פעמ|\dx|\d\s*x|ימים|ערבים|שבועי|יומי|בשבוע|ביום/i;
   if(ans&&!FREQ.test(ans))o.routines.forEach(r=>{delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;});   // a frequency the user never expressed is never kept
   const MON={ינואר:1,פברואר:2,מרץ:3,אפריל:4,מאי:5,יוני:6,יולי:7,אוגוסט:8,ספטמבר:9,אוקטובר:10,נובמבר:11,דצמבר:12};
