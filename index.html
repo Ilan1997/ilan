@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-19.3';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-19.4';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10240,8 +10240,11 @@ function onbNormalizeExtraction(raw,ctx){
     minimumViableWeek:arr(x.minimumViableWeek).map(s=>str(s,100)).filter(Boolean).slice(0,6),chaosTriggers:arr(x.chaosTriggers).map(s=>str(s,100)).filter(Boolean).slice(0,6),
     dontKnow:arr(x.dontKnow).map(s=>str(s,80)).filter(Boolean).slice(0,12),goalsNone:x.goalsNone===true,routines:[],fixed:[],goals:[],boundaries:[],officeHours:null,lateRiser:null};
   arr(x.routines).slice(0,16).forEach(r=>{if(!r||typeof r!=='object')return;const key=str(r.key,40)||str(r.title,40),title=str(r.title,80);if(!key||!title)return;
-    let d=Math.round(Number(r.durationMin));const pw0=Math.round(Number(r.perWeek)),pd=r.perDay===true||pw0===7,pw=pd?NaN:pw0;
-    if(!(d>=10&&d<=480)){const esc=title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const m=ans.match(new RegExp('(שעתיים|חצי שעה|שעה|\\d+\\s*(?:שעות|דקות))\\s+(?:של\\s+)?'+esc));const dt=durText(title)||(m?durText(m[1]):undefined);if(dt)d=dt;}
+    let d=Math.round(Number(r.durationMin));const pw0=Math.round(Number(r.perWeek));let pd=r.perDay===true||pw0===7;
+    if(!(d>=10&&d<=480)){const esc=title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const m=ans.match(new RegExp('(שעתיים|חצי שעה|שעה|\\d+\\s*(?:שעות|דקות))\\s+(?:של\\s+)?'+esc))||ans.match(new RegExp(esc+'\\s+(שעתיים|חצי שעה|שעה|\\d+\\s*(?:שעות|דקות))'));const dt=durText(title)||(m?durText(m[1]):undefined);if(dt)d=dt;}
+    const EVERYDAY=/(בכל יום|כל יום|ביום)(?!\s*(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת|[א-ו]['׳]))/;
+    if(!pd&&ans&&(EVERYDAY.test(title)||new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[^.,;]{0,25}').test(ans)&&EVERYDAY.test((ans.match(new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[^.,;]{0,25}'))||[''])[0])))pd=true;
+    const pw=pd?NaN:pw0;
     let kind=ONB_KINDS.includes(r.kind)?r.kind:'other';
     if(kind==='other'){const T=title+' '+key;kind=/ריצ|ספורט|אימון|כושר|הליכה/.test(T)?'fitness':/ארוחת ערב|ארוחת שישי|ילדים|משפחת/.test(T)?'family':/עבודה עמוקה|deep work|deep/i.test(T)?'deep_work':/מייל|דוא״ל|אימייל/.test(T)?'email':/קניות/.test(T)?'shopping':'other';}   // keyword fallback on the user's own words, only when the model gave nothing
     const WORK_KINDS=['email','payments','leads','feedback','deep_work','work','review'],LIFE_KINDS=['bills','shopping','errands','fitness','family','social'];
@@ -10269,6 +10272,13 @@ function onbNormalizeExtraction(raw,ctx){
     const q={key,title,kind:ONB_KINDS.includes(g.kind)?g.kind:'work'};const t=Math.round(Number(g.requiredTotalMinutes)),w=Math.round(Number(g.requiredPerWeekMinutes));
     q.requiredTotalMinutes=t>=15&&t<=6000?t:null;q.requiredPerWeekMinutes=w>=15&&w<=3000?w:null;
     const sm=Math.round(Number(g.sessionMinutes)),gd=dows(g.days);if(sm>=10&&sm<=600&&gd.length)q.requiredPerWeekMinutes=sm*gd.length;q.deadline=date(g.deadline)||null;q.fillsRoutineKey=str(g.fillsRoutineKey,40)||null;o.goals.push(q);});
+  const FREQ=/(כל|בכל|ב)\s*(שבוע|יום|חודש)|שבועיים|פעמ|\dx|\d\s*x|ימים|ערבים|שבועי|יומי|בשבוע|ביום/i;
+  if(ans&&!FREQ.test(ans))o.routines.forEach(r=>{delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;});   // a frequency the user never expressed is never kept
+  const MON={ינואר:1,פברואר:2,מרץ:3,אפריל:4,מאי:5,יוני:6,יולי:7,אוגוסט:8,ספטמבר:9,אוקטובר:10,נובמבר:11,דצמבר:12};
+  if(today&&o.goals.length===1&&!o.goals[0].deadline){const m=ans.match(/(?:עד|ב-?)\s*(\d{1,2})\s+ב?(ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)/);
+    if(m){const [ty,tm,td]=today.split('-').map(Number);let y=ty;const mo=MON[m[2]],dd=+m[1];if(mo<tm||(mo===tm&&dd<td))y++;if(dd>=1&&dd<=31)o.goals[0].deadline=y+'-'+String(mo).padStart(2,'0')+'-'+String(dd).padStart(2,'0');}}
+  if(topic==='q1'&&/לא יודע|אין לי מושג/.test(ans)&&!o.minimumViableWeek.length&&o.dontKnow.indexOf('minimumViableWeek')<0)o.dontKnow.push('minimumViableWeek');
+  if(/לא יודע|אין לי מושג/.test(ans)&&o.fixed.length===1&&!o.fixed[0].start&&!o.fixed[0].end&&o.dontKnow.indexOf('fixed.'+o.fixed[0].key+'.start')<0)o.dontKnow.push('fixed.'+o.fixed[0].key+'.start');
   // grounded completions from the user's own words (never from the model's arithmetic or silence)
   if(today&&/עד סוף החודש/.test(ans)){const g1=o.goals.filter(g=>!g.deadline);if(g1.length===1&&o.goals.length===1){const [yy,mm]=today.split('-').map(Number);g1[0].deadline=new Date(Date.UTC(yy,mm,0)).toISOString().slice(0,10);}}
   if(/אין לי מושג|לא יודע|לא ברור לי/.test(ans))o.goals.forEach(g=>{if(g.requiredTotalMinutes==null&&g.requiredPerWeekMinutes==null){const k='goal.'+g.key+'.total';if(o.dontKnow.indexOf(k)<0)o.dontKnow.push(k);}});

@@ -1033,14 +1033,7 @@
    "q": "f",
    "answer": "לא יודע.",
    "expect": {
-    "fixed": [
-     {
-      "m": [
-       "טיפול"
-      ],
-      "noTimes": true
-     }
-    ],
+    "fixed": [],
     "dontKnow": [
      "fixed."
     ],

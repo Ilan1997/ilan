@@ -269,6 +269,15 @@
       o.nx21_appointmentWithDayAndNoFrequencyIsAFixedEventNotARoutine=ap.fixed.length===1&&ap.fixed[0].title==='טיפול משפחתי'&&ap.fixed[0].days[0]===1&&ap.routines.length===2&&ap.routines.some(r=>r.key==='r')&&ap.routines.some(r=>r.key==='p');
       const sc=JSON.stringify(ONB_EXTRACT_SCHEMA);
       o.nx22_schemaDescriptionsDiscourageTheSuccessCriteriaEscapeHatch=/successCriteria.{0,80}description/.test(sc)&&/chaosTriggers.{0,80}description/.test(sc)&&/"fixed":\{"type":"ARRAY","description"/.test(sc);}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      const f1=A({routines:[{key:'e',title:'מיילים',kind:'email',maintenance:'work',perWeek:1}]},{answer:'מצטברים לי מיילים. ומה שמפרק לי את השבוע זה לקוח בפאניקה',topic:'q3'}).routines[0],f2=A({routines:[{key:'e',title:'מיילים',kind:'email',maintenance:'work',perWeek:1}]},{answer:'מיילים כל שבוע',topic:'q3'}).routines[0];
+      o.nx23_frequencyTheUserNeverExpressedIsDropped=f1.perWeek===undefined&&f1.maintenance==='work'&&f2.perWeek===1;
+      const e1=A({routines:[{key:'d',title:'deep work',kind:'deep_work',perWeek:5}]},{answer:'deep work שעתיים ביום.'}).routines[0],e2=A({routines:[{key:'r',title:'ריצה',kind:'fitness',perWeek:2}]},{answer:'ריצה ביום שני ויום חמישי, פעמיים בשבוע'}).routines[0];
+      o.nx24_everyDayNearTheTitleBecomesPerDayButAWeekdayDoesNot=e1.perDay===true&&e1.durationMin===120&&e2.perDay===undefined&&e2.perWeek===2;
+      const g1=A({goals:[{key:'p',title:'הצעת מחיר',requiredTotalMinutes:360}]},{answer:'בערך 6 שעות, עד 25 בנובמבר',today:'2026-11-18'}).goals[0],g2=A({goals:[{key:'p',title:'הצעת מחיר',requiredTotalMinutes:360}]},{answer:'6 שעות עד 5 בנובמבר',today:'2026-11-18'}).goals[0];
+      o.nx25_explicitDateParsedAndPastDatesRollToNextYear=g1.deadline==='2026-11-25'&&g2.deadline==='2027-11-05';
+      const k1=A({successCriteria:['פחות לחץ']},{answer:'לא יודע, בא לי שיהיה פחות לחץ',topic:'q1'}),k2=A({minimumViableWeek:['2 ריצות']},{answer:'לא יודע, אולי 2 ריצות',topic:'q1'}),k3=A({fixed:[{key:'a',title:'מנחה',days:[4],semanticWindow:'אחה״צ'}]},{answer:'חמישי אחה״צ, לא יודע מתי בדיוק'});
+      o.nx26_dontKnowCompletionsAreGroundedInTheAnswer=k1.dontKnow.indexOf('minimumViableWeek')>=0&&k2.dontKnow.indexOf('minimumViableWeek')<0&&k3.dontKnow.indexOf('fixed.a.start')>=0;}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;

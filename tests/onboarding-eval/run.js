@@ -19,13 +19,13 @@ const SYS='אתה מחלץ מבנה מתשובות בעברית. החזר JSON �
 async function callGemini(schema,prompt){CALLS++;const key=process.env.GEMINI_API_KEY;if(!key)throw new Error('GEMINI_API_KEY is not set');const model=val('--model')||process.env.GEMINI_MODEL||'gemini-2.5-flash';
   const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:SYS}]},contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0,responseMimeType:'application/json',responseSchema:schema}})});
   const d=await r.json();if(!r.ok)throw new Error('gemini '+r.status+' '+JSON.stringify(d).slice(0,200));return d.candidates&&d.candidates[0]&&d.candidates[0].content.parts.map(p=>p.text||'').join('');}
-let LASTMODEL=null;const MODELS={};
+let LASTMODEL=null,TRIED=null;const MODELS={};
 async function callFunction(w,schema,prompt){CALLS++;const jwt=val('--jwt');if(!jwt)throw new Error('--jwt <token> required');const cfg=w.eval('CLOUD_CONFIG');
   let r,d;for(let a=0;a<3;a++){                       // transient upstream trouble (429/5xx) is retried with a pause; it is infrastructure, not extraction quality
     r=await fetch(cfg.url+'/functions/v1/'+(cfg.aiFunction||'maya-ai'),{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt,apikey:cfg.anonKey},body:JSON.stringify({system:SYS,messages:[{role:'user',content:prompt}],mode:'onboarding',schema,temperature:0})});
     d=await r.json().catch(()=>({}));if(r.ok||!(r.status===429||r.status>=500))break;await new Promise(f=>setTimeout(f,3000*(a+1)));}
   if(!r.ok){const e=new Error('function '+r.status+' '+JSON.stringify(d).slice(0,300));e.infra=r.status===429||r.status>=500;throw e;}
-  LASTMODEL=d.model||null;await new Promise(f=>setTimeout(f,Number(val('--delay')||800)));return d.text;}
+  LASTMODEL=d.model||null;if(d.tried&&!TRIED)TRIED=d.tried;await new Promise(f=>setTimeout(f,Number(val('--delay')||800)));return d.text;}
 // mirrors onbExtractWith: one structured call, one repair retry on unparsable output
 async function extract(w,schema,prompt){const t0=Date.now();let txt=null,raw=null,repaired=false;
   for(let a=0;a<2;a++){txt=has('--function')?await callFunction(w,schema,prompt+(a?'\nהתשובה הקודמת לא הייתה JSON תקין. החזר JSON בלבד.':'')):await callGemini(schema,prompt+(a?'\nהתשובה הקודמת לא הייתה JSON תקין. החזר JSON בלבד.':''));
@@ -52,13 +52,13 @@ async function extract(w,schema,prompt){const t0=Date.now();let txt=null,raw=nul
     Object.assign(r,{id:c.id,cat:c.cat,answer:c.answer,expect:c.expect,latencyMs:meta.latencyMs,repairAttempted:!!meta.repaired});results.push(r);
     console.log((r.pass?'PASS ':r.severity==='infra'?'INFRA ':'FAIL['+r.severity+'] ')+c.id+(has('--mock-expected')||mock?'':' ['+meta.latencyMs+'ms]')+(r.pass?'':'  — '+(r.infra?r.infra.slice(0,160):r.errors.map(x=>x.type+': '+x.detail).join(' | '))));
   }
-  const sum=summarize(results);sum.models=MODELS;if(ABORT_AT){sum.abortedAt=ABORT_AT;console.error('\n!!! ה־JWT פג באמצע (401) ב־'+ABORT_AT+'. הריצה נעצרה; רק '+results.length+' מקרים נמדדו. חדש JWT והרץ שוב עם --only לשאר: '+list.slice(results.length).map(x=>x.id).join(','));}const lat=results.map(r=>r.latencyMs).filter(x=>x>0).sort((a,b)=>a-b);
+  const sum=summarize(results);sum.models=MODELS;sum.tried=TRIED;if(ABORT_AT){sum.abortedAt=ABORT_AT;console.error('\n!!! ה־JWT פג באמצע (401) ב־'+ABORT_AT+'. הריצה נעצרה; רק '+results.length+' מקרים נמדדו. חדש JWT והרץ שוב עם --only לשאר: '+list.slice(results.length).map(x=>x.id).join(','));}const lat=results.map(r=>r.latencyMs).filter(x=>x>0).sort((a,b)=>a-b);
   sum.latency=lat.length?{p50:lat[Math.floor(lat.length*.5)],p95:lat[Math.min(lat.length-1,Math.floor(lat.length*.95))]}:null;sum.modelCalls=CALLS;sum.repairAttempts=results.filter(r=>r.repairAttempted).length;
   const byCat={};results.forEach(r=>{(byCat[r.cat]=byCat[r.cat]||{n:0,bad:0});byCat[r.cat].n++;if(!r.pass)byCat[r.cat].bad++;});sum.byCategory=byCat;
   console.log('\n'+JSON.stringify({cases:sum.cases,models:sum.models,abortedAt:sum.abortedAt||null,bySeverity:sum.bySeverity,metrics:sum.metrics,latency:sum.latency,modelCalls:sum.modelCalls},null,1));
   if(val('--out'))fs.writeFileSync(val('--out'),JSON.stringify({summary:sum,results},null,1));
   if(val('--record'))fs.writeFileSync(val('--record'),JSON.stringify(record,null,1));
-  if(val('--md')){const m=sum.metrics;const L=['# Onboarding extraction eval','','| מדד | ערך |','|---|---|',...Object.entries(m).map(([k,v])=>'| '+k+' | '+v+' |'),'','**חומרה:** '+JSON.stringify(sum.bySeverity),'**מודלים שענו:** '+JSON.stringify(sum.models||{})+(sum.abortedAt?'  ·  **נעצר ב־'+sum.abortedAt+' (401)**':''),'','**Gate:** '+(sum.bySeverity.critical?'❌ יש critical ('+sum.criticalCases.join(', ')+') — לא מתקדמים ל־UI':'✅ אין critical'),'','## כשלים',''];
+  if(val('--md')){const m=sum.metrics;const L=['# Onboarding extraction eval','','| מדד | ערך |','|---|---|',...Object.entries(m).map(([k,v])=>'| '+k+' | '+v+' |'),'','**חומרה:** '+JSON.stringify(sum.bySeverity),'**מודלים שענו:** '+JSON.stringify(sum.models||{})+(sum.tried?'  ·  **מודלים שנכשלו לפני כן (דוגמה):** '+sum.tried:'')+(sum.abortedAt?'  ·  **נעצר ב־'+sum.abortedAt+' (401)**':''),'','**Gate:** '+(sum.bySeverity.critical?'❌ יש critical ('+sum.criticalCases.join(', ')+') — לא מתקדמים ל־UI':'✅ אין critical'),'','## כשלים',''];
     results.filter(r=>!r.pass).forEach(r=>{L.push('### '+r.id+' ['+r.severity+'] ('+r.cat+')','> '+r.answer,'',...r.errors.map(e=>'- **'+e.type+'** ('+e.severity+'): '+e.detail),(r.infra?'- **infra (לא נמדד, לא כשל חילוץ):** '+r.infra.slice(0,300)+'\n':'')+'**raw (Gemini):** `'+JSON.stringify(r.raw||null).slice(0,900)+'`','');});fs.writeFileSync(val('--md'),L.join('\n'));}
   process.exit(sum.bySeverity.critical?2:0);
 })();
