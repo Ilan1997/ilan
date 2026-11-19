@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-18.8';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-18.9';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10207,7 +10207,9 @@ function onbExtractPrompt(st,answer){
     'כללים: "לא יודע"/"אין לי מושג" → dontKnow עם מפתח השדה (workHours, evening, minimumViableWeek, maintenance, maintenance.work, maintenance.life, chaos, fixed.<key>.start|day|travel, goal.<key>.total). '+
     'ימים: 0=ראשון … 6=שבת. שעות HH:MM. precision=approx כשנאמר "בערך". stated=maybe כשהמשתמש אמר "אולי". '+
     'זמן עמום ("בערב", "רוב השבוע", "אחרי הצהריים") אינו שעה: אל תמלא start/end/officeHours ממנו; "אחה״צ", "בוקר" ו"צהריים" → semanticWindow בלבד. אם המשתמש חזר בו — קח את הגרסה האחרונה. '+
-    'answeredTopics = נושאים q1..q7 שהתשובה כיסתה. החזר JSON לפי הסכמה בלבד.';
+    'routines: kind חייב להיות הערך הקרוב ביותר מהרשימה — ריצה/ספורט/אימון=fitness; ארוחה או זמן עם הילדים/המשפחה=family; חברים=social; עבודה עמוקה/ריכוז=deep_work; למידה/קורס/מבחן=study; מיילים=email; חשבוניות/תשלומים=payments; קניות=shopping; סידורים=errands; עבודה כללית=work. other רק כשבאמת שום ערך לא מתאים. domain: work לכל דבר מקצועי/לקוחות/עבודה עמוקה; life לבית, משפחה, בריאות, חברים. '+
+    'protected=true ו-inMvw=true רק כשהמשתמש אמר במפורש שזה קדוש/חייב/לא מוותר/לא מפסיד, או נתן רצפה לשבוע עמוס ("לפחות שתיים אם עמוס"); אחרת השמט. כל פריט כזה גם נכנס ל-minimumViableWeek כמשפט קצר ("2 ריצות", "2 ערבים עם הילדים"); אל תוסיף ל-minimumViableWeek דבר שלא נאמר כך. '+
+    'answeredTopics = נושאים q1..q7 שהתשובה כיסתה (q1 = איך נראה שבוע טוב ומה חשוב במיוחד; q4 = מה בחיים אסור שהעבודה תדחק החוצה — גם כשהמשתמש מציין ערבים/ספורט/משפחה שהוא מגן עליהם; q7 = גבולות כמו שעות בלי עבודה). החזר JSON לפי הסכמה בלבד.';
 }
 function onbNormalizeExtraction(raw){
   const x=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw:{};
