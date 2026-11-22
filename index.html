@@ -8186,6 +8186,7 @@ function _gcalStore(){
   try{
     const raw=JSON.parse(localStorage.getItem(GCAL_PREF_KEY)||'null')||{};
     if(raw.v===GCAL_MULTI_VERSION&&Array.isArray(raw.accounts))return raw;
+    if(raw.on===false)return{v:GCAL_MULTI_VERSION,accounts:[],writeAccountId:null};
     // Legacy single-account preferences are migrated lazily. The old token may still identify the account on the next sync.
     if(raw.on||raw.consent||raw.last)return{v:GCAL_MULTI_VERSION,accounts:[{id:'legacy',email:'',label:'יומן גוגל',hideTitles:raw.hideTitles!==false,write:raw.write===true,consent:raw.consent||null,writeConsent:raw.writeConsent||null,last:raw.last||null,count:raw.count||0}],writeAccountId:raw.write?'legacy':null,legacy:true};
     return{v:GCAL_MULTI_VERSION,accounts:[],writeAccountId:null};
@@ -8407,9 +8408,9 @@ async function gcalSync(opts){
       let a=targets[ai],tok=_gcalToken(a.id);
       try{
         if(!tok){
-          if(auto){needsReconnect.push(a.id);continue;}
+          if(auto&&targets.length>1){needsReconnect.push(a.id);continue;}
           if(targets.length>1&&!opts.interactive){needsReconnect.push(a.id);continue;}
-          const tr=await _gcalRequestTokenForAccount(a,{selectAccount:!a.email,forceConsent:false});tok={t:tr.token,e:tr.exp};
+          const tr=await _gcalRequestTokenForAccount(a,{selectAccount:!auto&&!a.email,forceConsent:false});tok={t:tr.token,e:tr.exp};
         }
         // A legacy connection learns its stable account id/email on the first successful sync.
         if(!a.email||a.id==='legacy'){
@@ -8492,7 +8493,7 @@ function _gcalAsk(msg,needCheck){ // Promise<boolean>. Tests replace it with _gc
 }
 function _gcalErrText(e){
   const m=String(e&&e.message||e);
-  if(m==='no-write')return'צריך קודם לבחור יומן גוגל לכתיבה ב-👤 החשבון';
+  if(m==='no-write')return'צריך קודם לבחור יומן גוגל ולאפשר בו כתיבה ב-👤 החשבון';
   if(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')return'לא אושרה גישה ליומן בגוגל';
   if(m==='gone')return'האירוע כבר לא קיים ביומן גוגל — סנכרן מחדש';
   if(e&&e.status)return'ההרשאה ליומן פגה או נדחתה — נסה לאפשר כתיבה מחדש';
@@ -14963,6 +14964,7 @@ async function runAccountTests(){
         window.google={accounts:{oauth2:{initTokenClient:c=>({requestAccessToken:()=>{tokenReqs++;scopes.push(c.scope);c.callback({access_token:'w-tok',expires_in:3600});}}),revoke:()=>{}}}};
         const gEvent={id:'gx1',summary:'פגישה אמיתית',start:{dateTime:'2026-10-14T09:30:00'},end:{dateTime:'2026-10-14T10:15:00'}};
         window.fetch=async(u,o)=>{u=String(u);const m=(o&&o.method)||'GET';calls.push({u,m,b:o&&o.body,h:o&&o.headers});
+          if(m==='GET'&&u.endsWith('/calendars/primary'))return{ok:true,status:200,json:async()=>({id:'writer@example.com',summary:'writer@example.com',timeZone:'Asia/Jerusalem'})};
           if(m==='GET'&&u.includes('/events/gx1'))return{ok:true,status:200,json:async()=>gEvent};
           if(m==='GET')return{ok:true,status:200,json:async()=>({items:[gEvent]})};
           if(m==='DELETE')return{ok:true,status:204,json:async()=>null};
