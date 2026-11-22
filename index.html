@@ -8624,9 +8624,10 @@ function _gcalPick(title,options){
 async function openGcalEditor(blockId){
   const evs=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal)||{}).events||[];
   const b=evs.find(e=>e.id===blockId);if(!b||!b.gid)return;
-  if(evs.filter(e=>e.gid===b.gid).length>1){showToast('אירוע שנמשך כמה ימים — אפשר לערוך אותו ישירות ביומן גוגל');return;}
-  if(!gcalWriteEnabled()){const r=await gcalEnableWrite();if(!r.ok){if(!r.cancelled)showErrorToast(r.error);return;}}
-  let g=null;try{g=await gcalGetEvent(b.gid);}catch(e){showErrorToast(_gcalErrText(e));return;}
+  const accountId=b.gAccountId||_gcalStore().writeAccountId||'legacy';
+  if(evs.filter(e=>e.gid===b.gid&&(e.gAccountId||'legacy')===accountId).length>1){showToast('אירוע שנמשך כמה ימים — אפשר לערוך אותו ישירות ביומן גוגל');return;}
+  if(!gcalWriteEnabled(accountId)){const r=await gcalEnableWrite(accountId);if(!r.ok){if(!r.cancelled)showErrorToast(r.error);return;}}
+  let g=null;try{g=await gcalGetEvent(b.gid,accountId);}catch(e){showErrorToast(_gcalErrText(e));return;}
   if(!g||!g.start||!g.start.dateTime||!g.end||!g.end.dateTime){showToast('אירוע כל-היום — אפשר לערוך אותו ישירות ביומן גוגל');return;}
   const st=new Date(g.start.dateTime),en=new Date(g.end.dateTime),pad=n=>String(n).padStart(2,'0');
   const dISO=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),tHM=d=>pad(d.getHours())+':'+pad(d.getMinutes());
@@ -8645,7 +8646,7 @@ async function openGcalEditor(blockId){
   const $=id=>box.querySelector('#'+id);
   $('gcalEdTitle').value=String(g.summary||'');$('gcalEdDate').value=dISO(st);$('gcalEdStart').value=tHM(st);$('gcalEdEnd').value=tHM(en);
   $('gcalEdWork').checked=!!(g.extendedProperties&&g.extendedProperties.private&&g.extendedProperties.private.maya_domain==='work');
-  $('gcalEdNote').textContent=(g.recurringEventId?'אירוע חוזר: בשמירה או במחיקה תישאל אם זה חל על האירוע הזה בלבד או על יותר. ':'')+(((g.attendees||[]).length>1)?'באירוע יש משתתפים — שינוי עלול להישלח אליהם.':'');
+  $('gcalEdNote').textContent=(b.gAccountEmail?'יומן: '+b.gAccountEmail+'. ':'')+(g.recurringEventId?'אירוע חוזר: בשמירה או במחיקה תישאל אם זה חל על האירוע הזה בלבד או על יותר. ':'')+(((g.attendees||[]).length>1)?'באירוע יש משתתפים — שינוי עלול להישלח אליהם.':'');
   const err=m=>{$('gcalEdErr').textContent=m||'';};
   const close=()=>ov.remove();
   const hm=v=>{const m=/^(\d{2}):(\d{2})$/.exec(v||'');return m?(+m[1])*60+(+m[2]):NaN;};
@@ -8658,7 +8659,7 @@ async function openGcalEditor(blockId){
       if(!scope)return;
     }
     $('gcalEdSave').disabled=true;err('שומר…');
-    const r=await gcalUpdateScoped(g,ev,scope);
+    const r=await gcalUpdateScoped(g,ev,scope,accountId);
     if(r.ok){close();showToast(scope==='all'?'כל הסדרה עודכנה ביומן גוגל ✓':'האירוע עודכן ביומן גוגל ✓');}else{$('gcalEdSave').disabled=false;err(r.error);}
   };
   $('gcalEdDel').onclick=async()=>{
@@ -8668,7 +8669,7 @@ async function openGcalEditor(blockId){
       if(!scope)return;
     }else if(!(await _gcalAsk('למחוק את "'+String(g.summary||'האירוע')+'" מיומן גוגל?'))){return;}
     $('gcalEdDel').disabled=true;err('מוחק…');
-    const r=await gcalDeleteScoped(g,scope);
+    const r=await gcalDeleteScoped(g,scope,accountId);
     if(r.ok){close();showToast(scope==='all'?'כל הסדרה נמחקה מיומן גוגל ✓':scope==='following'?'האירוע וכל הבאים אחריו נמחקו ✓':'האירוע נמחק מיומן גוגל ✓');}else{$('gcalEdDel').disabled=false;err(r.error);}
   };
 }
