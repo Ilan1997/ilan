@@ -8570,38 +8570,38 @@ function rruleUntilBefore(recurrence,instanceStartISO){
   return had?out:null;
 }
 // Delete with a scope: 'one' (this instance), 'following' (this and later ones), 'all' (the whole series). g = the instance as returned by Google.
-async function gcalDeleteScoped(g,scope){
+async function gcalDeleteScoped(g,scope,accountId){
   try{
     if(!g||!g.id)return{ok:false,error:'האירוע לא נמצא'};
-    if(!g.recurringEventId||scope==='one'){await _gcalCall('DELETE','/'+encodeURIComponent(g.id));}
-    else if(scope==='all'){await _gcalCall('DELETE','/'+encodeURIComponent(g.recurringEventId));}
+    if(!g.recurringEventId||scope==='one'){await _gcalCall('DELETE','/'+encodeURIComponent(g.id),undefined,accountId);}
+    else if(scope==='all'){await _gcalCall('DELETE','/'+encodeURIComponent(g.recurringEventId),undefined,accountId);}
     else if(scope==='following'){
-      const m=await gcalGetEvent(g.recurringEventId);
+      const m=await gcalGetEvent(g.recurringEventId,accountId);
       const sameStart=m&&m.start&&g.start&&m.start.dateTime&&new Date(m.start.dateTime).getTime()===new Date(g.start.dateTime).getTime();
-      if(sameStart)await _gcalCall('DELETE','/'+encodeURIComponent(g.recurringEventId)); // first occurrence → the whole series
+      if(sameStart)await _gcalCall('DELETE','/'+encodeURIComponent(g.recurringEventId),undefined,accountId); // first occurrence → the whole series
       else{
         const rec=rruleUntilBefore(m&&m.recurrence,g.start.dateTime);
         if(!rec)return{ok:false,error:'לא הצלחתי לקצר את הסדרה — אפשר למחוק ישירות ביומן גוגל'};
-        await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),{recurrence:rec});
+        await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),{recurrence:rec},accountId);
       }
     }else return{ok:false,error:'בחירה לא חוקית'};
-    const sy=await gcalSync();
+    const sy=await gcalSync({accountId,interactive:false});
     return{ok:true,synced:!!(sy&&sy.ok)};
   }catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
 // Edit with a scope: 'one' (this instance) or 'all' (whole series: title and times only — a date change applies to one instance).
-async function gcalUpdateScoped(g,ev,scope){
+async function gcalUpdateScoped(g,ev,scope,accountId){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
   try{
     if(!g||!g.id)return{ok:false,error:'האירוע לא נמצא'};
-    if(!g.recurringEventId||scope==='one'){await _gcalCall('PATCH','/'+encodeURIComponent(g.id),_gcalBody(v.ev,true));}
+    if(!g.recurringEventId||scope==='one'){await _gcalCall('PATCH','/'+encodeURIComponent(g.id),_gcalBody(v.ev,true),accountId);}
     else if(scope==='all'){
       const origDate=(()=>{const d=new Date(g.start.dateTime),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());})();
       if(v.ev.date!==origDate)return{ok:false,error:'שינוי תאריך חל רק על האירוע הזה — בחר "רק האירוע הזה"'};
-      const m=await gcalGetEvent(g.recurringEventId);
+      const m=await gcalGetEvent(g.recurringEventId,accountId);
       const md=new Date(m.start.dateTime),p=n=>String(n).padStart(2,'0');
       const mDate=md.getFullYear()+'-'+p(md.getMonth()+1)+'-'+p(md.getDate());
-      await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),_gcalBody({...v.ev,date:mDate},true));
+      await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),_gcalBody({...v.ev,date:mDate},true),accountId);
     }else return{ok:false,error:'בחירה לא חוקית'};
     const sy=await gcalSync();
     return{ok:true,synced:!!(sy&&sy.ok)};
