@@ -8281,16 +8281,49 @@ function _gcalLoadGis(){
     document.head.appendChild(sc);
   });
 }
-const GCAL_TOK_KEY='maya_gcal_tok';
-// A reload inside the same tab reuses a still-valid token instead of asking Google again (sessionStorage only; gone when the tab closes).
-(function(){try{const o=JSON.parse(sessionStorage.getItem(GCAL_TOK_KEY)||'null');if(o&&o.t&&o.e>Date.now()+60000&&_gcalPrefs().on){_gcalLastToken=o.t;_gcalTokenExp=o.e;}}catch(_e){}})();
-function _gcalRequestToken(forceConsent){
-  const _pr=_gcalPrefs();
+// Access tokens are kept per connected Google account, in sessionStorage only.
+function _gcalLoadTokens(){
+  try{
+    const o=JSON.parse(sessionStorage.getItem(GCAL_TOK_KEY)||'{}');
+    if(o&&typeof o==='object'&&!Array.isArray(o))_gcalTokens=o;
+    const legacy=JSON.parse(sessionStorage.getItem('maya_gcal_tok')||'null');
+    if(legacy&&legacy.t&&legacy.e>Date.now()+60000&&!_gcalTokens.legacy)_gcalTokens.legacy={t:legacy.t,e:legacy.e};
+  }catch(_e){_gcalTokens={};}
+  const wa=_gcalWriteAccount(),first=wa||_gcalStore().accounts[0],tok=first&&_gcalTokens[first.id];
+  if(tok&&tok.t&&tok.e>Date.now()+60000){_gcalLastToken=tok.t;_gcalTokenExp=tok.e;}
+}
+function _gcalSaveTokens(){try{sessionStorage.setItem(GCAL_TOK_KEY,JSON.stringify(_gcalTokens));sessionStorage.removeItem('maya_gcal_tok');}catch(_e){}}
+function _gcalToken(id){const x=_gcalTokens[id];return x&&x.t&&x.e>Date.now()+60000?x:null;}
+function _gcalSetToken(id,t,e){if(!id||!t)return;_gcalTokens[id]={t,e};_gcalSaveTokens();const wa=_gcalWriteAccount();if(!wa||wa.id===id){_gcalLastToken=t;_gcalTokenExp=e;}}
+function _gcalDropToken(id){if(id)delete _gcalTokens[id];_gcalSaveTokens();const wa=_gcalWriteAccount();const x=wa&&_gcalToken(wa.id);_gcalLastToken=x?x.t:'';_gcalTokenExp=x?x.e:0;}
+_gcalLoadTokens();
+function _gcalRequestTokenForAccount(account,opts){
+  account=account||{};opts=opts||{};const scope=account.write?GCAL_CONFIG.scopeWrite:GCAL_CONFIG.scope;
   return _gcalLoadGis().then(o2=>new Promise((res,rej)=>{
-    const tc=o2.initTokenClient({client_id:GCAL_CONFIG.clientId,scope:_pr.write?GCAL_CONFIG.scopeWrite:GCAL_CONFIG.scope,callback:r=>{if(r&&r.access_token){_gcalTokenExp=Date.now()+Math.max(60,(+r.expires_in||3600)-120)*1000;try{sessionStorage.setItem(GCAL_TOK_KEY,JSON.stringify({t:r.access_token,e:_gcalTokenExp}));}catch(_e){}res(r.access_token);}else rej(new Error((r&&r.error)||'denied'));},error_callback:e=>rej(new Error((e&&e.type)||'popup'))});
-    _gcalTokenClient=tc;
-    tc.requestAccessToken({prompt:(forceConsent||!_pr.on)?'consent':''});
+    const cfg={client_id:GCAL_CONFIG.clientId,scope,callback:r=>{
+      if(r&&r.access_token){
+        const exp=Date.now()+Math.max(60,(+r.expires_in||3600)-120)*1000;
+        const id=account.id||'pending';_gcalSetToken(id,r.access_token,exp);res({token:r.access_token,exp});
+      }else rej(new Error((r&&r.error)||'denied'));
+    },error_callback:e=>rej(new Error((e&&e.type)||'popup'))};
+    if(account.email)cfg.login_hint=account.email;
+    const tc=o2.initTokenClient(cfg);_gcalTokenClient=tc;
+    const prompt=opts.selectAccount?'select_account':opts.forceConsent?'consent':'';
+    tc.requestAccessToken({prompt});
   }));
+}
+// Backward-compatible wrapper: uses the write target, otherwise the first account.
+async function _gcalRequestToken(forceConsent){
+  const a=_gcalWriteAccount()||_gcalStore().accounts[0]||{id:'legacy',write:_gcalPrefs().write===true};
+  const r=await _gcalRequestTokenForAccount(a,{forceConsent:!!forceConsent,selectAccount:!a.email&&!_gcalToken(a.id)});
+  _gcalLastToken=r.token;_gcalTokenExp=r.exp;return r.token;
+}
+async function _gcalAccountMeta(token){
+  const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary',{headers:{Authorization:'Bearer '+token}});
+  if(r.status===401||r.status===403){const e=new Error('auth');e.status=r.status;throw e;}
+  if(!r.ok)throw new Error('http-'+r.status);
+  const d=await r.json();const email=String(d.id||d.summary||'').trim();
+  return{email,label:String(d.summary||d.id||'יומן גוגל').trim().slice(0,120),timeZone:d.timeZone||null};
 }
 async function _gcalFetchItems(token){
   const from=new Date();from.setHours(0,0,0,0);const to=new Date(+from+GCAL_CONFIG.days*86400000);
