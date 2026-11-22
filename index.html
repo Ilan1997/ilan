@@ -8603,7 +8603,7 @@ async function gcalUpdateScoped(g,ev,scope,accountId){
       const mDate=md.getFullYear()+'-'+p(md.getMonth()+1)+'-'+p(md.getDate());
       await _gcalCall('PATCH','/'+encodeURIComponent(g.recurringEventId),_gcalBody({...v.ev,date:mDate},true),accountId);
     }else return{ok:false,error:'בחירה לא חוקית'};
-    const sy=await gcalSync();
+    const sy=await gcalSync({accountId,interactive:false});
     return{ok:true,synced:!!(sy&&sy.ok)};
   }catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
