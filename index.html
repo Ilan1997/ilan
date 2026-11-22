@@ -8460,7 +8460,10 @@ window.addEventListener('focus',()=>{gcalAutoSync();});
 setInterval(()=>{gcalAutoSync();},5*60*1000);
 setTimeout(()=>{gcalAutoSync();},3000);
 // ── Google Calendar WRITE (create / edit / delete). Opt-in (separate Google permission), primary calendar only, every action approved by the user. ──
-function gcalWriteEnabled(){const p=_gcalPrefs();return !!(p.on&&p.write);}
+function gcalWriteEnabled(accountId){
+  const s=_gcalStore(),id=accountId||s.writeAccountId;
+  return !!(id&&s.accounts.some(a=>a.id===id&&a.write));
+}
 function _gcalAsk(msg,needCheck){ // Promise<boolean>. Tests replace it with _gcalAskWrite(msg).
   if(typeof _gcalAskWrite==='function')return Promise.resolve(_gcalAskWrite(msg));
   return new Promise(res=>{
@@ -8479,27 +8482,33 @@ function _gcalAsk(msg,needCheck){ // Promise<boolean>. Tests replace it with _gc
 }
 function _gcalErrText(e){
   const m=String(e&&e.message||e);
-  if(m==='no-write')return'צריך קודם לאפשר כתיבה ליומן ב-👤 החשבון';
+  if(m==='no-write')return'צריך קודם לבחור יומן גוגל לכתיבה ב-👤 החשבון';
   if(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')return'לא אושרה גישה ליומן בגוגל';
   if(m==='gone')return'האירוע כבר לא קיים ביומן גוגל — סנכרן מחדש';
   if(e&&e.status)return'ההרשאה ליומן פגה או נדחתה — נסה לאפשר כתיבה מחדש';
   if(m==='gis-load')return'לא הצלחתי לטעון את גוגל — בדוק אינטרנט';
   return'הפעולה ביומן גוגל נכשלה — נסה שוב';
 }
-async function gcalEnableWrite(){
-  const pr=_gcalPrefs();
-  if(!gcalAvailable()||!pr.on)return{ok:false,error:'חבר קודם את יומן גוגל'};
-  const okc=await _gcalAsk('מאיה תוכל ליצור, לערוך ולמחוק אירועים ביומן הראשי שלך בגוגל.\n• כל פעולה תתבצע רק אחרי שאישרת אותה במפורש (כרטיס אישור בשיחה, או כפתור שמירה/מחיקה).\n• גוגל תבקש ממך הרשאה נוספת (עריכת אירועים).\n• מחיקה ביומן גוגל אפשר לשחזר מהאשפה של גוגל, אבל שינויים נשלחים אליו מיד ועלולים להגיע גם למשתתפים באירוע.\n• אפשר לבטל את ההרשאה בכל רגע.',true);
+async function gcalEnableWrite(accountId){
+  const s=_gcalStore(),a=s.accounts.find(x=>x.id===(accountId||s.writeAccountId))||s.accounts[0];
+  if(!gcalAvailable()||!a)return{ok:false,error:'חבר קודם את יומן גוגל'};
+  const who=a.email||a.label||'יומן גוגל';
+  const okc=await _gcalAsk('מאיה תוכל ליצור, לערוך ולמחוק אירועים ביומן '+who+'.\n• כל פעולה תתבצע רק אחרי שאישרת אותה במפורש.\n• גוגל תבקש הרשאת עריכה לחשבון הזה.\n• היומן הזה יהפוך ליעד ברירת המחדל לאירועים חדשים של מאיה.\n• אפשר לבטל בכל רגע.',true);
   if(!okc)return{ok:false,cancelled:true};
-  _gcalSavePrefs({...pr,write:true,writeConsent:new Date().toISOString()});
-  try{_gcalTokenExp=0;_gcalLastToken='';_gcalLastToken=await _gcalRequestToken(true);}
-  catch(e){_gcalSavePrefs({..._gcalPrefs(),write:false});return{ok:false,error:_gcalErrText(e)};}
-  return{ok:true};
+  const upd={...a,write:true,writeConsent:new Date().toISOString()};const ix=s.accounts.findIndex(x=>x.id===a.id);s.accounts[ix]=upd;s.writeAccountId=a.id;_gcalSaveStore(s);_gcalDropToken(a.id);
+  try{const tr=await _gcalRequestTokenForAccount(upd,{forceConsent:true,selectAccount:!upd.email});_gcalSetToken(a.id,tr.token,tr.exp);}
+  catch(e){const s2=_gcalStore(),j=s2.accounts.findIndex(x=>x.id===a.id);if(j>=0)s2.accounts[j]={...s2.accounts[j],write:false};if(s2.writeAccountId===a.id)s2.writeAccountId=null;_gcalSaveStore(s2);return{ok:false,error:_gcalErrText(e)};}
+  return{ok:true,accountId:a.id};
 }
-function gcalDisableWrite(){_gcalSavePrefs({..._gcalPrefs(),write:false});_gcalTokenExp=0;_gcalLastToken='';try{sessionStorage.removeItem(GCAL_TOK_KEY);}catch(_e){}}
-async function _gcalGetToken(){
-  if(_gcalLastToken&&Date.now()<_gcalTokenExp)return _gcalLastToken;
-  const t=await _gcalRequestToken(false);_gcalLastToken=t;return t;
+function gcalDisableWrite(accountId){
+  const s=_gcalStore(),id=accountId||s.writeAccountId;if(!id)return;
+  const i=s.accounts.findIndex(a=>a.id===id);if(i>=0)s.accounts[i]={...s.accounts[i],write:false};if(s.writeAccountId===id)s.writeAccountId=null;_gcalSaveStore(s);_gcalDropToken(id);
+}
+async function _gcalGetToken(accountId){
+  const s=_gcalStore(),a=s.accounts.find(x=>x.id===(accountId||s.writeAccountId))||null;
+  if(!a){const e=new Error('no-write');throw e;}
+  let t=_gcalToken(a.id);if(t)return t.t;
+  const tr=await _gcalRequestTokenForAccount(a,{selectAccount:!a.email,forceConsent:false});_gcalSetToken(a.id,tr.token,tr.exp);return tr.token;
 }
 function _gcalTz(){try{return Intl.DateTimeFormat().resolvedOptions().timeZone||'Asia/Jerusalem';}catch(_e){return'Asia/Jerusalem';}}
 function _gcalWhen(date,min){
