@@ -3,7 +3,7 @@
   "private": true,
   "description": "מנוע תכנון — מזכירה אישית לניהול זמן (קובץ HTML יחיד)",
   "scripts": {
-    "test": "node tests/run.js && node tests/multi-gcal.test.js",
+    "test": "node tests/check-index-syntax.js && node tests/run.js && node tests/multi-gcal.test.js",
     "test:proxy": "node --experimental-strip-types tests/proxy.test.mjs"
   },
   "devDependencies": {
