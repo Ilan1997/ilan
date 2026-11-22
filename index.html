@@ -8198,7 +8198,16 @@ function _gcalPrefs(){
     count:s.accounts.reduce((n,x)=>n+(x.count||0),0),last,hideTitles:s.accounts.length?s.accounts.every(x=>x.hideTitles!==false):true,write:!!(s.writeAccountId&&s.accounts.some(x=>x.id===s.writeAccountId&&x.write))};
 }
 // Compatibility for old tests/setup. Production multi-account code uses _gcalSaveStore.
-function _gcalSavePrefs(o){try{if(o&&o.v===GCAL_MULTI_VERSION&&Array.isArray(o.accounts))_gcalSaveStore(o);else localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o||{}));}catch(_e){}}
+function _gcalSavePrefs(o){try{
+  if(o&&o.v===GCAL_MULTI_VERSION&&Array.isArray(o.accounts)){
+    const s={v:GCAL_MULTI_VERSION,accounts:o.accounts.map(a=>({...a})),writeAccountId:o.writeAccountId||null};
+    // Legacy callers/tests still mutate the aggregate facade. Preserve that behaviour without weakening the v2 store.
+    if(o.write===true&&!s.writeAccountId&&s.accounts.length){s.writeAccountId=s.accounts[0].id;s.accounts[0].write=true;}
+    if(o.write===false&&s.writeAccountId){s.accounts=s.accounts.map(a=>a.id===s.writeAccountId?{...a,write:false}:a);s.writeAccountId=null;}
+    if(typeof o.hideTitles==='boolean'&&s.accounts.length===1)s.accounts[0].hideTitles=o.hideTitles;
+    _gcalSaveStore(s);
+  }else localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o||{}));
+}catch(_e){}}
 function _gcalAid(email){return'ga_'+String(email||'unknown').toLowerCase().replace(/[^a-z0-9._-]/g,'_').slice(0,80);}
 function _gcalAccount(id){return _gcalStore().accounts.find(a=>a.id===id)||null;}
 function _gcalWriteAccount(){const s=_gcalStore();return s.accounts.find(a=>a.id===s.writeAccountId&&a.write)||null;}
@@ -8293,7 +8302,7 @@ function _gcalLoadTokens(){
   if(tok&&tok.t&&tok.e>Date.now()+60000){_gcalLastToken=tok.t;_gcalTokenExp=tok.e;}
 }
 function _gcalSaveTokens(){try{sessionStorage.setItem(GCAL_TOK_KEY,JSON.stringify(_gcalTokens));sessionStorage.removeItem('maya_gcal_tok');}catch(_e){}}
-function _gcalToken(id){const x=_gcalTokens[id];return x&&x.t&&x.e>Date.now()+60000?x:null;}
+function _gcalToken(id){const x=_gcalTokens[id];if(x&&x.t&&x.e>Date.now()+60000)return x;if(id==='legacy'&&_gcalLastToken&&_gcalTokenExp>Date.now()+60000)return{t:_gcalLastToken,e:_gcalTokenExp};return null;}
 function _gcalSetToken(id,t,e){if(!id||!t)return;_gcalTokens[id]={t,e};_gcalSaveTokens();const wa=_gcalWriteAccount();if(!wa||wa.id===id){_gcalLastToken=t;_gcalTokenExp=e;}}
 function _gcalDropToken(id){if(id)delete _gcalTokens[id];_gcalSaveTokens();const wa=_gcalWriteAccount();const x=wa&&_gcalToken(wa.id);_gcalLastToken=x?x.t:'';_gcalTokenExp=x?x.e:0;}
 _gcalLoadTokens();
