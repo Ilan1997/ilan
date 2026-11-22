@@ -15180,7 +15180,7 @@ async function runAccountTests(){
         ok('GC5. עם Client ID — מוצג כפתור "חבר יומן גוגל"',!!document.getElementById('accGcal'));
         let tokenReqs=0,gCalls=[];
         window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>{tokenReqs++;window.__lastGScope=c.scope;c.callback({access_token:'g-tok'});}}),revoke:()=>{}}}};
-        window.fetch=async(u,o)=>{gCalls.push({u:String(u),h:o&&o.headers});return{ok:true,status:200,json:async()=>({items})};};
+        window.fetch=async(u,o)=>{gCalls.push({u:String(u),h:o&&o.headers});return{ok:true,status:200,json:async()=>String(u).endsWith('/calendars/primary')?({id:'personal@example.com',summary:'personal@example.com',timeZone:'Asia/Jerusalem'}):({items})};};
         STATE_ACTIVE=baseState([]);
         _gcalAskConsent=()=>({ok:false});
         const rc=await gcalConnect();
@@ -15188,8 +15188,8 @@ async function runAccountTests(){
         _gcalAskConsent=()=>({ok:true,hideTitles:true});
         const rs=await gcalConnect();
         const evs=(STATE_ACTIVE.constraintsGlobal.events||[]).filter(e=>e.id.startsWith('gcal_'));
-        ok('GC7. אחרי אישור: נקרא רק googleapis calendar עם הטוקן, האירועים נכנסו כזמן תפוס, האישור והמצב נשמרו',rs.ok&&tokenReqs===1&&gCalls.length===1&&gCalls[0].u.startsWith('https://www.googleapis.com/calendar/v3/calendars/primary/events')&&gCalls[0].h.Authorization==='Bearer g-tok'&&evs.length===hid.length&&_gcalPrefs().consent&&_gcalPrefs().on===true,JSON.stringify(rs));
-        ok('GC7b. חיבור באישור אחד: כתיבה מופעלת כברירת מחדל, בקשת גוגל אחת עם הרשאת calendar.events, בלי חלון נוסף',gcalWriteEnabled()&&!!_gcalPrefs().writeConsent&&tokenReqs===1&&window.__lastGScope==='https://www.googleapis.com/auth/calendar.events');
+        ok('GC7. אחרי אישור: החשבון מזוהה ואז האירועים נקראים עם אותו טוקן, נשמרים כזמן תפוס',rs.ok&&tokenReqs===1&&gCalls.length===2&&gCalls[0].u.endsWith('/calendars/primary')&&gCalls[1].u.startsWith('https://www.googleapis.com/calendar/v3/calendars/primary/events')&&gCalls.every(x=>x.h.Authorization==='Bearer g-tok')&&evs.length===hid.length&&_gcalPrefs().accounts.length===1&&_gcalPrefs().accounts[0].email==='personal@example.com',JSON.stringify(rs));
+        ok('GC7b. חיבור באישור אחד: כתיבה מופעלת כברירת מחדל לאותו חשבון, בקשת הרשאה אחת',gcalWriteEnabled()&&_gcalPrefs().writeAccountId===_gcalPrefs().accounts[0].id&&!!_gcalPrefs().accounts[0].writeConsent&&tokenReqs===1&&window.__lastGScope==='https://www.googleapis.com/auth/calendar.events');
         STATE_ACTIVE=commitState({...STATE_ACTIVE,constraintsGlobal:{...STATE_ACTIVE.constraintsGlobal,events:[...STATE_ACTIVE.constraintsGlobal.events,{id:'mine1',title:'שלי',date:'2026-10-20',startH:10,endH:11}]}},'test-own-event',{save:false,render:false});
         window.fetch=async()=>({ok:true,status:200,json:async()=>({items:[items[0]]})});
         await gcalSync();
