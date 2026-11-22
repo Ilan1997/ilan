@@ -8493,7 +8493,7 @@ function _gcalAsk(msg,needCheck){ // Promise<boolean>. Tests replace it with _gc
 }
 function _gcalErrText(e){
   const m=String(e&&e.message||e);
-  if(m==='no-write')return'צריך קודם לבחור יומן גוגל ולאפשר בו כתיבה ב-👤 החשבון';
+  if(m==='no-write')return'צריך קודם לבחור יומן גוגל ולאפשר כתיבה אליו ב-👤 החשבון';
   if(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')return'לא אושרה גישה ליומן בגוגל';
   if(m==='gone')return'האירוע כבר לא קיים ביומן גוגל — סנכרן מחדש';
   if(e&&e.status)return'ההרשאה ליומן פגה או נדחתה — נסה לאפשר כתיבה מחדש';
@@ -8636,7 +8636,7 @@ async function openGcalEditor(blockId){
   const evs=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal)||{}).events||[];
   const b=evs.find(e=>e.id===blockId);if(!b||!b.gid)return;
   const accountId=b.gAccountId||_gcalStore().writeAccountId||'legacy';
-  if(evs.filter(e=>e.gid===b.gid&&(e.gAccountId||'legacy')===accountId).length>1){showToast('אירוע שנמשך כמה ימים — אפשר לערוך אותו ישירות ביומן גוגל');return;}
+  if(evs.filter(e=>e.gid===b.gid&&(!b.gAccountId||(e.gAccountId||'legacy')===accountId)).length>1){showToast('אירוע שנמשך כמה ימים — אפשר לערוך אותו ישירות ביומן גוגל');return;}
   if(!gcalWriteEnabled(accountId)){const r=await gcalEnableWrite(accountId);if(!r.ok){if(!r.cancelled)showErrorToast(r.error);return;}}
   let g=null;try{g=await gcalGetEvent(b.gid,accountId);}catch(e){showErrorToast(_gcalErrText(e));return;}
   if(!g||!g.start||!g.start.dateTime||!g.end||!g.end.dateTime){showToast('אירוע כל-היום — אפשר לערוך אותו ישירות ביומן גוגל');return;}
@@ -14811,8 +14811,8 @@ async function runAccountTests(){
         r=await gcalSync({auto:true});
         ok('AS4. שינוי ביומן גוגל נקלט אוטומטית: השם והשעה החדשים, הישנים נעלמו',r.ok&&r.changed&&has('פגישה עם לקוח (הוזזה)')&&!has('פגישה עם לקוח'));
         r=await gcalSync();
-        ok('AS5. סנכרון ידני תמיד מבצע רענון מלא (גם בלי שינוי ביומן)',r.ok&&r.changed===true);
-        _gcalTokenExp=0;_gcalLastToken='';tokenMode='fail';const ref3=STATE_ACTIVE;r=await gcalSync({auto:true});
+        ok('AS5. סנכרון ידני מאמת מול גוגל, אבל אם אין שינוי לא משכתב state',r.ok&&r.changed===false);
+        _gcalTokenExp=0;_gcalLastToken='';_gcalTokens={};_gcalSaveTokens();tokenMode='fail';const ref3=STATE_ACTIVE;r=await gcalSync({auto:true});
         ok('AS6. כשל שקט ברענון הטוקן: בלי הודעת שגיאה למשתמש, והלוח לא משתנה',!r.ok&&r.silent===true&&STATE_ACTIVE===ref3);
         tokenMode='ok';_gcalLastAuto=Date.now();fetches=0;const thr=await gcalAutoSync();
         ok('AS7. gcalAutoSync בתוך חלון ההגבלה לא פונה לרשת',thr===null&&fetches===0);
