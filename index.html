@@ -10399,8 +10399,7 @@ function onbNormalizeExtraction(raw,ctx){
     if(!ans)return true;
     const src=arr(x.routines).find(z=>z&&((z.key&&z.key===r.key)||(z.title&&z.title===r.title)))||{};
     const ev=str(src.frequencyEvidence,80);if(ev&&ans.includes(ev)&&FREQ.test(ev))return true;
-    const esc=s=>String(s||'').replace(/[.*+?^$()|[\]\\]/g,'\\  const FREQ=/(כל|בכל|ב)\s*(שבוע|יום|חודש)|שבועיים|פעמ|\dx|\d\s*x|ימים|ערבים|שבועי|יומי|בשבוע|ביום/i;
-  if(ans&&!FREQ.test(ans))o.routines.forEach(r=>{delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;});   // a frequency the user never expressed is never kept');
+    const esc=s=>String(s||'').replace(/[.*+?^$()|[\]\\]/g,'\\$&');
     const near=t=>{if(!t)return false;let m=null;try{m=ans.match(new RegExp('.{0,45}'+esc(t)+'.{0,45}','i'));}catch(_e){}return !!(m&&FREQ.test(m[0]));};
     if(near(r.title)||near(r.key))return true;
     const kp=r.kind==='fitness'?/ריצ|ספורט|אימון|כושר|הליכה/:r.kind==='family'?/ילד|משפח|ארוחת/:r.kind==='deep_work'?/עבודה עמוקה|ריכוז/:r.kind==='email'?/מייל|דוא.?ל|אימייל/:r.kind==='payments'?/חשבונ|תשלומ/:r.kind==='shopping'?/קני/:null;
