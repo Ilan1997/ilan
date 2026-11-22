@@ -1615,9 +1615,10 @@ let CLOUD_SESSION=null;
 // Google Calendar import (read-only). clientId = an OAuth *Web* client created by the site owner in Google Cloud; empty → the feature stays hidden.
 const GCAL_CONFIG={clientId:'435739967813-98m64qlsqnsrtl9tkjotabviutsj5upg.apps.googleusercontent.com',scope:'https://www.googleapis.com/auth/calendar.events.readonly',scopeWrite:'https://www.googleapis.com/auth/calendar.events',days:60};
 const GCAL_ALLDAY_KEY='maya_gcal_allday';
-let _gcalTokenExp=0,_gcalAskWrite=null; // test hook: replaces the per-action write confirmation dialog
+let _gcalTokenExp=0,_gcalAskWrite=null; // legacy aliases kept for existing tests; multi-account tokens live in _gcalTokens
 let _gcalAskConsent=null,_gcalTokenClient=null,_gcalBusy=false,_gcalLastToken='';
-const GCAL_PREF_KEY='maya_gcal',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
+const GCAL_PREF_KEY='maya_gcal',GCAL_MULTI_VERSION=2,GCAL_TOK_KEY='maya_gcal_tok_v2',MIC_CONSENT_KEY='maya_mic_consent',MIC_PREF_KEY='maya_mic_prefs';
+let _gcalTokens={}; // accountId -> {t,e}; session-only, never synced to cloud
 let _micSpeakNext=false;
 let _boardCat='all';
 let _aiLastIntakeTopic=null;
