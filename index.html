@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-22.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-22.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -8813,27 +8813,43 @@ function _aiOfferMeeting(req){
   btns.push({label:'לא עכשיו',onclick:(div)=>{const t=div.querySelector('.ai-bubble-txt');if(t)t.textContent='בסדר, לא קבעתי כלום.';div.querySelectorAll('button').forEach(b=>b.remove());}});
   return _aiAppendActionBubble(txt,btns);
 }
-function gcalDisconnect(){
-  try{dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:[]});}catch(_e){}
-  _gcalSaveAllDay([]);_gcalTokenExp=0;_gcalSig='';
-  try{sessionStorage.removeItem(GCAL_TOK_KEY);}catch(_e){}
-  try{const o2=window.google&&window.google.accounts&&window.google.accounts.oauth2;if(o2&&o2.revoke&&_gcalLastToken)o2.revoke(_gcalLastToken,()=>{});}catch(_e){}
-  try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}
-  try{_gcalHintSync();}catch(_e){}
+function gcalDisconnect(accountId){
+  const s=_gcalStore(),ids=accountId?[accountId]:s.accounts.map(a=>a.id);
+  const evs=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal&&STATE_ACTIVE.constraintsGlobal.events)||[]);
+  const keep=evs.filter(e=>!String(e.id||'').startsWith('gcal_')||ids.indexOf(e.gAccountId||'legacy')<0);
+  try{dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:keep.filter(e=>String(e.id||'').startsWith('gcal_'))});}catch(_e){}
+  const all=_gcalAllDay().filter(e=>ids.indexOf(e.gAccountId||'legacy')<0);_gcalSaveAllDay(all);
+  ids.forEach(id=>{
+    const tok=_gcalToken(id);try{const o2=window.google&&window.google.accounts&&window.google.accounts.oauth2;if(o2&&o2.revoke&&tok&&tok.t)o2.revoke(tok.t,()=>{});}catch(_e){}
+    _gcalDropToken(id);
+  });
+  if(accountId)_gcalRemoveAccountPrefs(accountId);else{try{localStorage.removeItem(GCAL_PREF_KEY);}catch(_e){}_gcalTokens={};_gcalSaveTokens();}
+  _gcalSig='';try{_gcalHintSync();}catch(_e){}
 }
 function _gcalBlockHTML(btn){
   if(!gcalAvailable())return'';
-  const pr=_gcalPrefs();
-  if(!pr.on)return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">📅 יומן גוגל</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">ייבוא אירועים כזמן תפוס, כדי שמאיה לא תשבץ עליהם. אישור אחד מכסה גם יצירה ועריכה של אירועים — רק באישורך על כל פעולה.</div><button id="accGcal" onclick="_accGcalConnect()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">חבר יומן גוגל</button></div>';
-  const t=pr.last?new Date(pr.last).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-  return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:4px;">📅 יומן גוגל — מחובר</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">'+(pr.hideTitles!==false?'רק זמנים תפוסים · ':'')+(pr.count||0)+' אירועים'+(t?' · סונכרן '+escapeHTML(t):'')+'</div>'+(pr.write?'<div id="accGcalWriteOn" style="font-size:.8em;color:var(--text2);margin-bottom:8px;">✏️ כתיבה ליומן מאופשרת (כל פעולה באישורך). <a href="#" onclick="event.preventDefault();_accGcalWriteOff()" style="color:inherit;text-decoration:underline;">בטל</a></div>':'<button id="accGcalWriteBtn" onclick="_accGcalWriteOn()" style="'+btn+'width:100%;margin-bottom:8px;background:var(--card);border:1.5px solid var(--border);color:var(--text);">✏️ אפשר ליצור ולערוך אירועים ביומן גוגל</button>')+'<label style="display:flex;gap:6px;align-items:flex-start;font-size:.78em;color:var(--text2);margin-bottom:8px;cursor:pointer;"><input type="checkbox" id="accGcalTitles" '+(pr.hideTitles===false?'checked ':'')+'onchange="_accGcalTitles(this.checked)"> הצג את שמות האירועים (ולא רק "תפוס"). השמות יישלחו גם ל-AI כשאתה מדבר איתה.</label><div style="display:flex;gap:8px;"><button id="accGcalSync" onclick="_accGcalSync()" style="'+btn+'flex:1;background:var(--blue);color:#fff;">סנכרן עכשיו</button><button id="accGcalOff" onclick="_accGcalOff()" style="'+btn+'flex:1;background:var(--card);border:1.5px solid var(--border);color:var(--text);">נתק ומחק</button></div></div>';
+  const pr=_gcalPrefs(),s=_gcalStore();
+  if(!s.accounts.length)return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:6px;">📅 יומני גוגל</div><div style="font-size:.8em;color:var(--text2);margin-bottom:8px;">אפשר לחבר את היומן האישי ואת יומן העבודה יחד. שניהם יוצגו ויסנכרנו, וגם אם אותו אירוע קיים בשניהם — שתי ההופעות נשמרות.</div><button id="accGcal" onclick="_accGcalConnect()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">חבר יומן גוגל</button></div>';
+  const rows=s.accounts.map(a=>{
+    const t=a.last?new Date(a.last).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}):'טרם סונכרן';
+    const who=escapeHTML(a.email||a.label||'יומן גוגל'),id=String(a.id).replace(/'/g,'');
+    const target=s.writeAccountId===a.id&&a.write;
+    return '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0;">'
+      +'<div style="font-weight:700;font-size:.85em;" dir="ltr">'+who+'</div>'
+      +'<div style="font-size:.76em;color:var(--text2);margin:3px 0 8px;">'+(a.hideTitles!==false?'רק זמנים תפוסים · ':'')+(a.count||0)+' אירועים · '+escapeHTML(t)+(target?' · ✏️ יעד לכתיבה':'')+'</div>'
+      +'<label style="display:flex;gap:6px;align-items:flex-start;font-size:.75em;color:var(--text2);margin-bottom:7px;cursor:pointer;"><input type="checkbox" '+(a.hideTitles===false?'checked ':'')+'onchange="_accGcalTitles(\''+id+'\',this.checked)"> הצג שמות אירועים מהחשבון הזה</label>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;"><button onclick="_accGcalSync(\''+id+'\')" style="'+btn+'flex:1;min-width:90px;padding:7px;background:var(--blue);color:#fff;">סנכרן</button>'
+      +(target?'<button onclick="_accGcalWriteOff(\''+id+'\')" style="'+btn+'flex:1;min-width:90px;padding:7px;background:var(--card);border:1.5px solid var(--border);color:var(--text);">בטל כתיבה</button>':'<button onclick="_accGcalWriteOn(\''+id+'\')" style="'+btn+'flex:1;min-width:90px;padding:7px;background:var(--card);border:1.5px solid var(--border);color:var(--text);">הגדר כיעד כתיבה</button>')
+      +'<button onclick="_accGcalOff(\''+id+'\')" style="'+btn+'padding:7px 10px;background:var(--card);border:1.5px solid #fca5a5;color:#b91c1c;">נתק</button></div></div>';
+  }).join('');
+  return'<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><div style="font-weight:700;font-size:.9em;margin-bottom:4px;">📅 יומני גוגל — '+s.accounts.length+' מחוברים</div><div style="font-size:.78em;color:var(--text2);margin-bottom:6px;">מאיה מתכננת מול כל היומנים יחד. חפיפות בין שני חשבונות נשארות מוצגות, ולא נמחקות ככפילות.</div>'+rows+'<button onclick="_accGcalConnect()" style="'+btn+'width:100%;margin-top:4px;background:var(--card);border:1.5px solid var(--border);color:var(--text);">＋ חבר יומן גוגל נוסף</button></div>';
 }
-async function _accGcalConnect(){_cloudMsg('מחבר…');const r=await gcalConnect();renderAccountModal();if(r.cancelled){_cloudMsg('');return;}_cloudMsg(r.ok?'היומן סונכרן ✓ ('+r.count+' אירועים)':r.error,!r.ok);}
-async function _accGcalSync(){_cloudMsg('מסנכרן יומן…');const r=await gcalSync();renderAccountModal();_cloudMsg(r.ok?'היומן סונכרן ✓ ('+r.count+' אירועים)':r.error,!r.ok);}
-async function _accGcalWriteOn(){_cloudMsg('מבקש הרשאה…');const r=await gcalEnableWrite();renderAccountModal();if(r.cancelled){_cloudMsg('');return;}_cloudMsg(r.ok?'הכתיבה ליומן אופשרה ✓':r.error,!r.ok);}
-function _accGcalWriteOff(){gcalDisableWrite();renderAccountModal();_cloudMsg('הכתיבה ליומן בוטלה (הקריאה נשארת)');}
-async function _accGcalTitles(show){const pr=_gcalPrefs();_gcalSavePrefs({...pr,hideTitles:!show});await _accGcalSync();}
-function _accGcalOff(){gcalDisconnect();renderAccountModal();_cloudMsg('היומן נותק והאירועים שיובאו נמחקו');}
+async function _accGcalConnect(){_cloudMsg('מחבר חשבון גוגל…');const r=await gcalConnect();renderAccountModal();if(r.cancelled){_cloudMsg('');return;}_cloudMsg(r.ok?'היומן נוסף וסונכרן ✓ ('+r.count+' אירועים בסך הכול)':r.error,!r.ok);}
+async function _accGcalSync(id){_cloudMsg('מסנכרן יומן…');const r=await gcalSync({accountId:id,interactive:true});renderAccountModal();_cloudMsg(r.ok?'היומן סונכרן ✓':r.error,!r.ok);}
+async function _accGcalWriteOn(id){_cloudMsg('מבקש הרשאת כתיבה…');const r=await gcalEnableWrite(id);renderAccountModal();if(r.cancelled){_cloudMsg('');return;}_cloudMsg(r.ok?'היומן הוגדר כיעד הכתיבה ✓':r.error,!r.ok);}
+function _accGcalWriteOff(id){gcalDisableWrite(id);renderAccountModal();_cloudMsg('הכתיבה ליומן הזה בוטלה (הקריאה נשארת)');}
+async function _accGcalTitles(id,show){const s=_gcalStore(),i=s.accounts.findIndex(a=>a.id===id);if(i<0)return;s.accounts[i]={...s.accounts[i],hideTitles:!show};_gcalSaveStore(s);await _accGcalSync(id);}
+function _accGcalOff(id){gcalDisconnect(id);renderAccountModal();_cloudMsg('היומן נותק והאירועים שלו נמחקו מהתצוגה');}
 
 // ── Microphone → text (browser speech recognition, Hebrew). The text lands in the input box for the user to review and send. ──
 let _micRec=null,_micOn=false;
