@@ -8375,7 +8375,7 @@ async function gcalConnect(){
     _gcalDropToken('pending');_gcalSetToken(id,tok.token,tok.exp);
     const account={...(existing||{}),...tmp,id,email:meta.email,label:meta.label||meta.email,timeZone:meta.timeZone||null};
     // If the old single-account placeholder is this account, replace it rather than creating a duplicate.
-    s.accounts=s.accounts.filter(a=>a.id!=='legacy'&&a.id!==id&&a.email!==meta.email);s.accounts.push(account);
+    s.accounts=s.accounts.filter(a=>a.id!=='legacy'&&a.id!==id&&a.email!==meta.email);if(account.write)s.accounts=s.accounts.map(x=>({...x,write:false}));s.accounts.push(account);
     if(account.write)s.writeAccountId=id;_gcalSaveStore(s);
     const sy=await gcalSync({accountId:id,interactive:false});
     return{...sy,account,alreadyConnected:!!existing};
