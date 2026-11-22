@@ -8366,39 +8366,70 @@ function _gcalConsentDialog(){
 }
 async function gcalConnect(){
   if(!gcalAvailable()||_gcalBusy)return{ok:false,error:'חיבור יומן גוגל עוד לא הופעל באתר הזה'};
-  const pr=_gcalPrefs();
-  if(!pr.consent){
-    const c=await _gcalConsentDialog();
-    if(!c||!c.ok)return{ok:false,cancelled:true};
-    const _now=new Date().toISOString(),_w=c.write!==false;
-    _gcalSavePrefs({...pr,consent:_now,hideTitles:c.hideTitles!==false,write:_w,...(_w?{writeConsent:_now}:{})});
+  const consent=await _gcalConsentDialog();if(!consent||!consent.ok)return{ok:false,cancelled:true};
+  const now=new Date().toISOString(),tmp={id:'pending',email:'',label:'יומן גוגל',hideTitles:consent.hideTitles!==false,write:consent.write!==false,consent:now,writeConsent:consent.write!==false?now:null,last:null,count:0};
+  try{
+    const tok=await _gcalRequestTokenForAccount(tmp,{selectAccount:true,forceConsent:false});
+    const meta=await _gcalAccountMeta(tok.token);if(!meta.email)throw new Error('account');
+    const id=_gcalAid(meta.email),s=_gcalStore(),existing=s.accounts.find(a=>a.id===id||a.email===meta.email);
+    _gcalDropToken('pending');_gcalSetToken(id,tok.token,tok.exp);
+    const account={...(existing||{}),...tmp,id,email:meta.email,label:meta.label||meta.email,timeZone:meta.timeZone||null};
+    // If the old single-account placeholder is this account, replace it rather than creating a duplicate.
+    s.accounts=s.accounts.filter(a=>a.id!=='legacy'&&a.id!==id&&a.email!==meta.email);s.accounts.push(account);
+    if(account.write)s.writeAccountId=id;_gcalSaveStore(s);
+    const sy=await gcalSync({accountId:id,interactive:false});
+    return{...sy,account,alreadyConnected:!!existing};
+  }catch(e){
+    _gcalDropToken('pending');const m=String(e&&e.message||e);
+    return{ok:false,error:(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')?'לא אושרה גישה ליומן בגוגל':(e&&e.status?'ההרשאה ליומן פגה או נדחתה — נסה שוב':(m==='gis-load'?'לא הצלחתי לטעון את גוגל — בדוק אינטרנט':'החיבור ליומן נכשל — נסה שוב'))};
   }
-  return gcalSync();
 }
-// opts.auto: silent background refresh — no popups beyond Google's own silent token refresh, no error UI, skips the dispatch when nothing changed.
 async function gcalSync(opts){
-  const auto=!!(opts&&opts.auto);
+  opts=opts||{};const auto=!!opts.auto;
   if(!gcalAvailable()||_gcalBusy)return{ok:false,error:'חיבור יומן גוגל עוד לא הופעל באתר הזה',silent:auto};
-  const pr=_gcalPrefs();if(!pr.consent)return{ok:false,error:'צריך קודם לאשר את חיבור היומן',silent:auto};
+  let store=_gcalStore(),targets=opts.accountId?store.accounts.filter(a=>a.id===opts.accountId):store.accounts.slice();
+  if(!targets.length)return{ok:false,error:'צריך קודם לחבר יומן גוגל',silent:auto};
   _gcalBusy=true;
   try{
-    const token=(auto&&_gcalLastToken&&Date.now()<_gcalTokenExp)?_gcalLastToken:await _gcalRequestToken();_gcalLastToken=token;
-    const items=await _gcalFetchItems(token);
-    const blocks=gcalItemsToBlocks(items,pr.hideTitles!==false);
-    const sig=JSON.stringify(blocks)+'|'+JSON.stringify(gcalAllDayFromItems(items,pr.hideTitles!==false));
-    const changed=!(auto&&sig===_gcalSig);
-    if(changed){
-      dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:blocks});
-      _gcalSaveAllDay(gcalAllDayFromItems(items,pr.hideTitles!==false));
+    const current=((STATE_ACTIVE&&STATE_ACTIVE.constraintsGlobal&&STATE_ACTIVE.constraintsGlobal.events)||[]).filter(e=>String(e.id||'').startsWith('gcal_'));
+    const currentAll=_gcalAllDay();let merged=current.slice(),mergedAll=currentAll.slice(),success=0,lastErr=null;const needsReconnect=[];
+    for(let ai=0;ai<targets.length;ai++){
+      let a=targets[ai],tok=_gcalToken(a.id);
+      try{
+        if(!tok){
+          if(auto){needsReconnect.push(a.id);continue;}
+          if(targets.length>1&&!opts.interactive){needsReconnect.push(a.id);continue;}
+          const tr=await _gcalRequestTokenForAccount(a,{selectAccount:!a.email,forceConsent:false});tok={t:tr.token,e:tr.exp};
+        }
+        // A legacy connection learns its stable account id/email on the first successful sync.
+        if(!a.email||a.id==='legacy'){
+          const meta=await _gcalAccountMeta(tok.t),newId=_gcalAid(meta.email);
+          _gcalSetToken(newId,tok.t,tok.e);if(a.id!==newId)_gcalDropToken(a.id);
+          store.accounts=store.accounts.filter(x=>x.id!==a.id&&x.id!==newId&&x.email!==meta.email);
+          a={...a,id:newId,email:meta.email,label:meta.label||meta.email,timeZone:meta.timeZone||null};store.accounts.push(a);
+          if(store.writeAccountId==='legacy')store.writeAccountId=newId;
+        }
+        const items=await _gcalFetchItems(tok.t),blocks=gcalItemsToBlocks(items,a.hideTitles!==false,a),all=gcalAllDayFromItems(items,a.hideTitles!==false,a);
+        // Replace only this account. Same event from another Google account intentionally remains as a second visible block.
+        merged=merged.filter(e=>(e.gAccountId||'legacy')!==a.id&&!(a.id!=='legacy'&&(e.gAccountId||'legacy')==='legacy'&&targets.length===1)).concat(blocks);
+        mergedAll=mergedAll.filter(e=>(e.gAccountId||'legacy')!==a.id).concat(all);
+        const ix=store.accounts.findIndex(x=>x.id===a.id);const upd={...a,last:new Date().toISOString(),count:blocks.length};if(ix>=0)store.accounts[ix]=upd;else store.accounts.push(upd);
+        success++;
+      }catch(e){
+        lastErr=e;if(e&&e.status&&(e.status===401||e.status===403)){_gcalDropToken(a.id);needsReconnect.push(a.id);}
+      }
     }
-    _gcalSig=sig;
-    _gcalSavePrefs({..._gcalPrefs(),on:true,last:new Date().toISOString(),count:blocks.length});
-    try{_gcalHintSync();}catch(_e){}
+    _gcalSaveStore(store);
+    const sig=JSON.stringify(merged.map(e=>[e.id,e.date,e.startMin,e.endMin,e.title]))+'|'+JSON.stringify(mergedAll);
+    const changed=sig!==_gcalSig;
+    if(changed){dispatchEvent('personal',{type:'REPLACE_GCAL_EVENTS',events:merged});_gcalSaveAllDay(mergedAll);}
+    _gcalSig=sig;try{_gcalHintSync();}catch(_e){}
     if(changed&&ACTIVE_TAB==='ai'){try{renderMayaScreen();}catch(_e){}}
-    return{ok:true,count:blocks.length,changed};
-  }catch(e){
-    const m=String(e&&e.message||e);
-    return{ok:false,silent:auto,error:(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')?'לא אושרה גישה ליומן בגוגל':(e&&e.status?'ההרשאה ליומן פגה או נדחתה — נסה לחבר שוב':(m==='gis-load'?'לא הצלחתי לטעון את גוגל — בדוק אינטרנט':'הסנכרון נכשל — נסה שוב'))};
+    if(!success){
+      const m=String(lastErr&&lastErr.message||lastErr||'');
+      return{ok:false,silent:auto,needsReconnect,error:auto?'':(m==='denied'||m==='access_denied'||m==='popup_closed'||m==='popup_failed_to_open')?'לא אושרה גישה ליומן בגוגל':(lastErr&&lastErr.status?'ההרשאה ליומן פגה — לחץ סנכרון ליד החשבון כדי להתחבר מחדש':'הסנכרון נכשל — נסה שוב')};
+    }
+    return{ok:true,count:merged.length,accountsSynced:success,needsReconnect,changed};
   }finally{_gcalBusy=false;}
 }
 // Keeps the calendar fresh without the user pressing sync: on open, when the tab comes back, and every few minutes while visible.
