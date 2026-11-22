@@ -8526,11 +8526,11 @@ function _gcalValidateEv(ev){
   const tv=Number.isFinite(ev.travelMin)?Math.max(0,Math.min(240,Math.round(ev.travelMin))):0;
   return{ok:true,ev:{title,date,startMin:s,endMin:e,domain:ev.domain==='work'?'work':(ev.domain==='life'?'life':undefined),...(tv?{travelMin:tv}:{}),...(/^(1[01]|[1-9])$/.test(String(ev.colorId||''))?{colorId:String(ev.colorId)}:{})}};
 }
-async function _gcalCall(method,path,body){
-  if(!gcalWriteEnabled()){const e=new Error('no-write');throw e;}
-  const t=await _gcalGetToken();
+async function _gcalCall(method,path,body,accountId){
+  if(!gcalWriteEnabled(accountId)){const e=new Error('no-write');throw e;}
+  const t=await _gcalGetToken(accountId);
   const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events'+path,{method,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
-  if(r.status===401||r.status===403){_gcalLastToken='';_gcalTokenExp=0;const e=new Error('auth');e.status=r.status;throw e;}
+  if(r.status===401||r.status===403){const s=_gcalStore(),id=accountId||s.writeAccountId;if(id)_gcalDropToken(id);const e=new Error('auth');e.status=r.status;throw e;}
   if(r.status===404||r.status===410)throw new Error('gone');
   if(!r.ok)throw new Error('http-'+r.status);
   return r.status===204?null:await r.json().catch(()=>null);
@@ -8542,17 +8542,18 @@ const _gcalBody=(v,isUpdate)=>{
   if(v.travelMin>0)pr.maya_travel=String(v.travelMin);
   return{summary:v.title,...(v.colorId?{colorId:v.colorId}:{}),start:_gcalWhen(v.date,v.startMin),end:_gcalWhen(v.date,v.endMin),...(Object.keys(pr).length?{extendedProperties:{private:pr}}:{})};
 };
-async function gcalCreateEvent(ev){
+async function gcalCreateEvent(ev,accountId){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
-  try{const d=await _gcalCall('POST','',_gcalBody(v.ev));await gcalSync();return{ok:true,id:d&&d.id};}catch(e){return{ok:false,error:_gcalErrText(e)};}
+  const s=_gcalStore(),id=accountId||s.writeAccountId;
+  try{const d=await _gcalCall('POST','',_gcalBody(v.ev),id);await gcalSync({accountId:id,interactive:false});return{ok:true,id:d&&d.id,accountId:id};}catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
-async function gcalGetEvent(gid){return _gcalCall('GET','/'+encodeURIComponent(gid));}
-async function gcalUpdateEvent(gid,ev){
+async function gcalGetEvent(gid,accountId){return _gcalCall('GET','/'+encodeURIComponent(gid),undefined,accountId);}
+async function gcalUpdateEvent(gid,ev,accountId){
   const v=_gcalValidateEv(ev);if(!v.ok)return{ok:false,error:v.error};
-  try{await _gcalCall('PATCH','/'+encodeURIComponent(gid),_gcalBody(v.ev,true));await gcalSync();return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
+  try{await _gcalCall('PATCH','/'+encodeURIComponent(gid),_gcalBody(v.ev,true),accountId);await gcalSync({accountId,interactive:false});return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
-async function gcalDeleteEvent(gid){
-  try{await _gcalCall('DELETE','/'+encodeURIComponent(gid));await gcalSync();return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
+async function gcalDeleteEvent(gid,accountId){
+  try{await _gcalCall('DELETE','/'+encodeURIComponent(gid),undefined,accountId);await gcalSync({accountId,interactive:false});return{ok:true};}catch(e){return{ok:false,error:_gcalErrText(e)};}
 }
 // PURE: cut a recurring series so it ends right before an instance ("this and following" delete). recurrence = master.recurrence (RRULE/EXDATE lines).
 function rruleUntilBefore(recurrence,instanceStartISO){
