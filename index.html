@@ -8221,7 +8221,7 @@ function gcalTextOn(hex){
   const n=parseInt(m[1],16),r=n>>16,g=(n>>8)&255,b=n&255;
   return (0.2126*r+0.7152*g+0.0722*b)/255>0.62?'#202124':'#fff';
 }
-function gcalItemsToBlocks(items,hideTitles){
+function gcalItemsToBlocks(items,hideTitles,account){
   const out=[];const pad=n=>String(n).padStart(2,'0');
   const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
   (items||[]).forEach(it=>{
@@ -8238,7 +8238,7 @@ function gcalItemsToBlocks(items,hideTitles){
       const endH=last?Math.min(24,Math.ceil(en.getHours()+en.getMinutes()/60)):24;
       if(endH<=startH)continue;
       const sMin=first?st.getHours()*60+st.getMinutes():0,eMin=last?Math.min(1440,en.getHours()*60+en.getMinutes()||1440):1440;
-      const blk={id:'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),color:gcalColorOf(it)};
+      const aid=account&&account.id?String(account.id):'legacy';const blk={id:'gcal_'+aid+'_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),gAccountId:aid,gAccountEmail:account&&account.email?String(account.email):'',color:gcalColorOf(it)};
       if(it.extendedProperties&&it.extendedProperties.private&&it.extendedProperties.private.maya_domain==='work')blk.domain='work';
       {const tv=it.extendedProperties&&it.extendedProperties.private&&parseInt(it.extendedProperties.private.maya_travel,10);if(tv>0&&tv<=240)blk.travelMin=tv;}
       // context fields (title-like data is dropped when the user chose to hide titles)
@@ -8257,7 +8257,7 @@ function gcalItemsToBlocks(items,hideTitles){
   return out;
 }
 // PURE: all-day Google events → [{date,title,gid}] for the briefing only (they never block hours). Titles hidden → nothing stored.
-function gcalAllDayFromItems(items,hideTitles){
+function gcalAllDayFromItems(items,hideTitles,account){
   const out=[];if(hideTitles)return out;
   const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().split('T')[0];};
   (items||[]).forEach(it=>{
@@ -8266,13 +8266,13 @@ function gcalAllDayFromItems(items,hideTitles){
     if((it.attendees||[]).some(a=>a&&a.self&&a.responseStatus==='declined'))return;
     const a=String(it.start.date),b=String((it.end&&it.end.date)||addDays(a,1));
     if(!/^\d{4}-\d{2}-\d{2}$/.test(a))return;
-    for(let d=a,g=0;d<b&&g<14;d=addDays(d,1),g++)out.push({date:d,title:String(it.summary||'אירוע כל היום').slice(0,80),gid:String(it.id)});
+    for(let d=a,g=0;d<b&&g<14;d=addDays(d,1),g++)out.push({date:d,title:String(it.summary||'אירוע כל היום').slice(0,80),gid:String(it.id),gAccountId:account&&account.id?String(account.id):'legacy',gAccountEmail:account&&account.email?String(account.email):''});
   });
   return out.slice(0,200);
 }
 function _gcalAllDay(){try{const a=JSON.parse(localStorage.getItem(GCAL_ALLDAY_KEY)||'[]');return Array.isArray(a)?a.filter(x=>x&&typeof x.date==='string'&&typeof x.title==='string'):[];}catch(_e){return[];}}
 function _gcalSaveAllDay(list){try{if(list&&list.length)localStorage.setItem(GCAL_ALLDAY_KEY,JSON.stringify(list));else localStorage.removeItem(GCAL_ALLDAY_KEY);}catch(_e){}}
-function _gcalBriefExtra(){const pr=_gcalPrefs();return{allDay:_gcalAllDay(),hiddenTitles:!!(pr.on&&pr.hideTitles!==false),busyCount:pr.count||0};}
+function _gcalBriefExtra(){const pr=_gcalPrefs();return{allDay:_gcalAllDay(),hiddenTitles:!!(pr.on&&pr.hideTitles!==false),busyCount:pr.count||0,accounts:(pr.accounts||[]).map(a=>({id:a.id,email:a.email||a.label||'',count:a.count||0}))};}
 function _gcalLoadGis(){
   return new Promise((res,rej)=>{
     try{if(window.google&&window.google.accounts&&window.google.accounts.oauth2)return res(window.google.accounts.oauth2);}catch(_e){}
