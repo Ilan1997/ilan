@@ -21,7 +21,7 @@ const w=dom.window;
   sync('runSemanticCompilerAudit',()=>w.runSemanticCompilerAudit());
   sync('runFullSystemAudit',()=>w.runFullSystemAudit());
   for(const n of ['runBlockRenderTests','runApprovalCTATests','runAIProfileTests','runMayaInsightsTests','runSacredEnforcementTests','runProfileEnforcementTests','runPlacementOptionsTests','runMayaScreenTests','runDayOverrideTests'])sync(n,()=>w[n]());
-  for(const n of ['runAIBootTests','runAccountTests']){try{const r=await w[n]();rows.push([n,`${r.passed}/${r.passed+r.failed}`]);if(r.failed)failed=true;}catch(e){rows.push([n,'THROW '+e.message]);failed=true;}}
+  for(const n of ['runAIBootTests','runAccountTests']){try{const r=await w[n]();const bad=(r.results||[]).filter(x=>!x.passed).map(x=>x.name+(x.details?' — '+x.details:'')).slice(0,20);rows.push([n,`${r.passed}/${r.passed+r.failed}`+(bad.length?' FAIL: '+bad.join(' || '):'')]);if(r.failed)failed=true;}catch(e){rows.push([n,'THROW '+e.message]);failed=true;}}
   // Google colours copied onto calendar chips
   try{
     const c=w.eval(`(()=>{const r={};
