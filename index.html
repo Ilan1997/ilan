@@ -1749,7 +1749,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-19.5';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-22.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10185,7 +10185,7 @@ const ONB_EXTRACT_SCHEMA=(()=>{
   return{type:'OBJECT',properties:{
     answeredTopics:A(S),successCriteria:{type:'ARRAY',items:S,description:'רק מטרות כלליות של שבוע טוב (למשל "פחות לחץ"). כל דבר עם יום, שעה, תדירות או שעות מצטברות לא נכנס לכאן אלא ל-routines/fixed/goals.'},minimumViableWeek:{type:'ARRAY',items:S,description:'מה חייב לא ללכת לאיבוד בשבוע עמוס, משפטים קצרים כמו "2 ריצות".'},
     routines:A({type:'OBJECT',properties:{key:S,title:S,kind:{type:'STRING',enum:ONB_KINDS},domain:{type:'STRING',enum:['work','life']},maintenance:{type:'STRING',enum:['work','life']},
-      stated:{type:'STRING',enum:['fact','maybe']},perWeek:I,perDay:B,perTwoWeeks:B,durationMin:I,days:A(I),window:{type:'OBJECT',properties:{from:S,to:S}},protected:B,inMvw:B,confidence:N},required:['key','title']}),
+      stated:{type:'STRING',enum:['fact','maybe']},perWeek:I,perDay:B,perTwoWeeks:B,frequencyEvidence:{type:'STRING',description:'ציטוט קצר ומדויק מהתשובה שמוכיח את התדירות.'},durationMin:I,days:A(I),window:{type:'OBJECT',properties:{from:S,to:S}},protected:B,inMvw:B,confidence:N},required:['key','title']}),
     fixed:{type:'ARRAY',description:'אירועים עם יום ו/או שעה קבועים: ישיבה, טיפול, שיעור, קורס, איסוף מהגן, פגישה. לא פעילות שהמשתמש רוצה לעשות X פעמים בשבוע.',items:{type:'OBJECT',properties:{key:S,title:S,days:A(I),dayUnknown:B,start:TF,end:TF,travelMin:{type:'OBJECT',properties:{min:I,precision:{type:'STRING',enum:['exact','approx']}}},travelNeeded:B,
       semanticWindow:S,window:{type:'OBJECT',properties:{from:S,to:S}}},required:['key','title']}},
     officeHours:{type:'OBJECT',properties:{days:A(I),from:S,to:S}},
@@ -10211,7 +10211,7 @@ function onbExtractPrompt(st,answer){
     'protected=true ו-inMvw=true רק כשהמשתמש אמר במפורש שזה קדוש/חייב/לא מוותר/לא מפסיד, או נתן רצפה לשבוע עמוס ("לפחות שתיים אם עמוס"); אחרת השמט. כל פריט כזה גם נכנס ל-minimumViableWeek כמשפט קצר ("2 ריצות", "2 ערבים עם הילדים"); אל תוסיף ל-minimumViableWeek דבר שלא נאמר כך. '+
     'officeHours: שעות משרד/עבודה קבועות ("משרד 9 עד 5", "אני עובד 9–17") → officeHours (days,from,to) בלבד — לעולם לא פריט fixed. fixed: רק אירוע עם יום/שעה שמתרחש בזמן קבוע (טיפול, קורס, פגישה, ישיבה, איסוף מהגן); "עד HH:MM" = end, "מ-/ב-HH:MM" = start, חלק מיום ("אחה״צ") = semanticWindow. '+
     'boundaries: "ביום X לא עובד/כלום" → closed_day עם dow; "אחרי HH:MM לא עובד" → no_work_after עם time; חלק מיום ("שישי אחר הצהריים") → closed_day עם dow ו-semanticWindow ובלי time; "בערב" בלי שעה → no_work_evening עם defined=false ובלי time. '+
-    'תחזוקה: דברים שמצטברים (מיילים, חשבוניות, תשלומים, קניות, סידורים, מעקב לידים, משוב) → routines עם maintenance=work|life ו-domain תואם, בלי perWeek/durationMin אלא אם נאמרו ("כל שבוע"=perWeek 1, "אחת לשבועיים"=perTwoWeeks). לא goals. '+
+    'תחזוקה: דברים שמצטברים (מיילים, חשבוניות, תשלומים, קניות, סידורים, מעקב לידים, משוב) → routines עם maintenance=work|life ו-domain תואם, בלי perWeek/perDay/perTwoWeeks/durationMin אלא אם נאמרו על אותו פריט. כשאתה מחלץ תדירות, העתק גם frequencyEvidence כציטוט קצר ומדויק מהתשובה שמוכיח אותה. לא goals. '+
     'goals: רק כשצריך שעות מצטברות (תזה, מבחן, פרויקט, הצעת מחיר): requiredPerWeekMinutes או requiredTotalMinutes (שעות×60) ו-deadline כ-YYYY-MM-DD לפי היום ("עד 25 בנובמבר", "14 בדצמבר"). פעילות חוזרת (ריצה, ארוחה, ספורט, עבודה עמוקה) = routine ולא goal; "תזה שש שעות בשבוע" = goal ולא routine. '+
     'dontKnow: "אין לי מושג" על מה שמצטבר → "maintenance"; על כמה שעות ליעד → "goal.<key>.total"; על שעת אירוע → "fixed.<key>.start"; ערב לא מוגדר → "evening". '+
     'אל תחשב סכומים: "שעתיים כל יום ראשון עד חמישי ללמוד לבחינה" → goal עם sessionMinutes=120 ו-days=[0,1,2,3,4] (הקוד יחשב). משך מוצהר ("שעתיים עבודה עמוקה") → durationMin בדקות. '+
@@ -10278,7 +10278,20 @@ function onbNormalizeExtraction(raw,ctx){
     const m=ans.match(/(\d{1,2}):(\d{2})\s*(?:עד|-|–)\s*(\d{1,2}):(\d{2})/);if(m&&(+m[1])*60+(+m[2])===f.start.min){const e=(+m[3])*60+(+m[4]);if(e>f.start.min&&e<=1439){f.end={min:e,precision:'exact'};return;}}
     const d=ans.match(/נמשכ(?:ת|ים)?\s+(?:בערך\s+)?(שעתיים|חצי שעה|שעה|\d+\s*(?:שעות|דקות))/);if(d){const dm=durText(d[1]);if(dm&&f.start.min+dm<=1439)f.end={min:f.start.min+dm,precision:/בערך/.test(d[0])?'approx':'exact'};}});
   const FREQ=/(כל|בכל|ב)\s*(שבוע|יום|חודש)|שבועיים|פעמ|\dx|\d\s*x|ימים|ערבים|שבועי|יומי|בשבוע|ביום/i;
-  if(ans&&!FREQ.test(ans))o.routines.forEach(r=>{delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;});   // a frequency the user never expressed is never kept
+  // Ground cadence per item: a frequency stated for one activity must never leak onto another.
+  const freqGrounded=r=>{
+    if(!ans)return true;
+    const src=arr(x.routines).find(z=>z&&((z.key&&z.key===r.key)||(z.title&&z.title===r.title)))||{};
+    const ev=str(src.frequencyEvidence,80);if(ev&&ans.includes(ev)&&FREQ.test(ev))return true;
+    const esc=s=>String(s||'').replace(/[.*+?^$()|[\]\\]/g,'\\  const FREQ=/(כל|בכל|ב)\s*(שבוע|יום|חודש)|שבועיים|פעמ|\dx|\d\s*x|ימים|ערבים|שבועי|יומי|בשבוע|ביום/i;
+  if(ans&&!FREQ.test(ans))o.routines.forEach(r=>{delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;});   // a frequency the user never expressed is never kept');
+    const near=t=>{if(!t)return false;let m=null;try{m=ans.match(new RegExp('.{0,45}'+esc(t)+'.{0,45}','i'));}catch(_e){}return !!(m&&FREQ.test(m[0]));};
+    if(near(r.title)||near(r.key))return true;
+    const kp=r.kind==='fitness'?/ריצ|ספורט|אימון|כושר|הליכה/:r.kind==='family'?/ילד|משפח|ארוחת/:r.kind==='deep_work'?/עבודה עמוקה|ריכוז/:r.kind==='email'?/מייל|דוא.?ל|אימייל/:r.kind==='payments'?/חשבונ|תשלומ/:r.kind==='shopping'?/קני/:null;
+    if(kp){const m=ans.match(new RegExp('.{0,45}'+kp.source+'.{0,45}','i'));if(m&&FREQ.test(m[0]))return true;}
+    return false;
+  };
+  o.routines.forEach(r=>{if((r.perWeek!==undefined||r.perDay||r.perTwoWeeks)&&!freqGrounded(r)){delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;}});
   const MON={ינואר:1,פברואר:2,מרץ:3,אפריל:4,מאי:5,יוני:6,יולי:7,אוגוסט:8,ספטמבר:9,אוקטובר:10,נובמבר:11,דצמבר:12};
   if(today&&o.goals.length===1&&!o.goals[0].deadline){const m=ans.match(/(?:עד|ב-?)\s*(\d{1,2})\s+ב?(ינואר|פברואר|מרץ|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)/);
     if(m){const [ty,tm,td]=today.split('-').map(Number);let y=ty;const mo=MON[m[2]],dd=+m[1];if(mo<tm||(mo===tm&&dd<td))y++;if(dd>=1&&dd<=31)o.goals[0].deadline=y+'-'+String(mo).padStart(2,'0')+'-'+String(dd).padStart(2,'0');}}
