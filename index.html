@@ -8182,8 +8182,32 @@ function saveDayEditor(){
    Calendar: user consent first; times-only mode by default; events become blocked time (constraintsGlobal.events, ids 'gcal_…').
    ═══════════════════════════════════════════════════════ */
 function gcalAvailable(){return !!GCAL_CONFIG.clientId;}
-function _gcalPrefs(){try{return JSON.parse(localStorage.getItem(GCAL_PREF_KEY)||'null')||{};}catch(_e){return{};}}
-function _gcalSavePrefs(o){try{localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o));}catch(_e){}}
+function _gcalStore(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(GCAL_PREF_KEY)||'null')||{};
+    if(raw.v===GCAL_MULTI_VERSION&&Array.isArray(raw.accounts))return raw;
+    // Legacy single-account preferences are migrated lazily. The old token may still identify the account on the next sync.
+    if(raw.on||raw.consent||raw.last)return{v:GCAL_MULTI_VERSION,accounts:[{id:'legacy',email:'',label:'יומן גוגל',hideTitles:raw.hideTitles!==false,write:raw.write===true,consent:raw.consent||null,writeConsent:raw.writeConsent||null,last:raw.last||null,count:raw.count||0}],writeAccountId:raw.write?'legacy':null,legacy:true};
+    return{v:GCAL_MULTI_VERSION,accounts:[],writeAccountId:null};
+  }catch(_e){return{v:GCAL_MULTI_VERSION,accounts:[],writeAccountId:null};}
+}
+function _gcalSaveStore(s){try{localStorage.setItem(GCAL_PREF_KEY,JSON.stringify({v:GCAL_MULTI_VERSION,accounts:Array.isArray(s&&s.accounts)?s.accounts:[],writeAccountId:s&&s.writeAccountId||null}));}catch(_e){}}
+function _gcalPrefs(){
+  const s=_gcalStore(),a=s.accounts[0]||{},last=s.accounts.map(x=>x.last).filter(Boolean).sort().pop()||null;
+  return{...a,v:GCAL_MULTI_VERSION,accounts:s.accounts,writeAccountId:s.writeAccountId||null,on:s.accounts.length>0,consent:s.accounts.length>0,
+    count:s.accounts.reduce((n,x)=>n+(x.count||0),0),last,hideTitles:s.accounts.length?s.accounts.every(x=>x.hideTitles!==false):true,write:!!(s.writeAccountId&&s.accounts.some(x=>x.id===s.writeAccountId&&x.write))};
+}
+// Compatibility for old tests/setup. Production multi-account code uses _gcalSaveStore.
+function _gcalSavePrefs(o){try{if(o&&o.v===GCAL_MULTI_VERSION&&Array.isArray(o.accounts))_gcalSaveStore(o);else localStorage.setItem(GCAL_PREF_KEY,JSON.stringify(o||{}));}catch(_e){}}
+function _gcalAid(email){return'ga_'+String(email||'unknown').toLowerCase().replace(/[^a-z0-9._-]/g,'_').slice(0,80);}
+function _gcalAccount(id){return _gcalStore().accounts.find(a=>a.id===id)||null;}
+function _gcalWriteAccount(){const s=_gcalStore();return s.accounts.find(a=>a.id===s.writeAccountId&&a.write)||null;}
+function _gcalSetAccount(next){
+  const s=_gcalStore(),i=s.accounts.findIndex(a=>a.id===next.id||next.email&&a.email===next.email);
+  if(i>=0)s.accounts[i]={...s.accounts[i],...next};else s.accounts.push(next);
+  if(next.write)s.writeAccountId=next.id;_gcalSaveStore(s);return next;
+}
+function _gcalRemoveAccountPrefs(id){const s=_gcalStore();s.accounts=s.accounts.filter(a=>a.id!==id);if(s.writeAccountId===id)s.writeAccountId=null;_gcalSaveStore(s);return s;}
 // PURE: Google event items → engine blocks. Skips all-day, cancelled, "free" (transparent) and declined events; splits multi-day events.
 // Google's own event palette (colorId → colour, as shown in Google Calendar). Events with no colorId use the calendar's default blue.
 // Events Maya creates get vivid Google colours (blueberry for events, banana for travel legs) so they stand out in both calendars
