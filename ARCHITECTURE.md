@@ -728,3 +728,16 @@ First clean full run: no critical, no invented/wrong consequential, no infra fai
 
 ### §64 addendum 5 — run 6 (build 2026-11-19.4): 28 pass / 11 major / 0 critical / 1 infra → build 2026-11-19.5
 The report now shows why the primary fails: **`gemini-3.8-flash: 429 You exceeded your current quota`** (billing/quota of the Gemini API key), and the lite fallbacks intermittently return 503 (high demand). So the primary has never answered; all measurements are of lite models, and a 28 s wait on the primary precedes each fallback in the earlier run (p50 26 s). Action is account-side (quota/billing), not code. Code-side: "I work in the office" is never a routine (A03); fixed-event end recovered from "HH:MM עד HH:MM" (only when the first time equals the start) and from "נמשכת בערך שעה" (E03, B03). Tests nx27–nx28 (151). F04's corrected expectation requires re-downloading cases.json.
+
+
+## 65. Multi-account Google Calendar (2026-11-22)
+- Google Calendar is no longer a single replaceable connection. `maya_gcal` v2 stores `accounts[]` plus one optional `writeAccountId`.
+- Each connected Google account has its own session-only access token (`maya_gcal_tok_v2`). Tokens are never cloud-synced.
+- New connection uses the Google account chooser; the primary Calendar resource identifies the selected account. Known accounts use `login_hint` when a token must be reacquired.
+- Imported event ids include the Google account id: `gcal_<accountId>_<eventId>_<date>`, and carry `gAccountId/gAccountEmail`.
+- Sync replaces only the selected account's imported blocks and preserves the others. A failed/expired account never causes another account's events to be deleted.
+- **Google-vs-Google duplicates are intentional.** If the same meeting exists in both personal and work accounts, both blocks stay in state and are rendered as overlapping events. The context layer only deduplicates a local app event against a Google event; it does not dedupe one Google account against another.
+- Editing/deleting an imported event routes the API call to the source Google account. New Maya-created Google events go to the single `writeAccountId` selected by the user.
+- Disconnect can remove one Google account without touching the others.
+- Legacy single-account preferences/tokens migrate lazily into the v2 model.
+- Regression coverage: `tests/multi-gcal.test.js` plus the existing Google calendar tests. CI runs `npm test` in UTC, Asia/Jerusalem and America/Los_Angeles.
