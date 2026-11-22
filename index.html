@@ -8193,9 +8193,10 @@ function _gcalStore(){
 }
 function _gcalSaveStore(s){try{localStorage.setItem(GCAL_PREF_KEY,JSON.stringify({v:GCAL_MULTI_VERSION,accounts:Array.isArray(s&&s.accounts)?s.accounts:[],writeAccountId:s&&s.writeAccountId||null}));}catch(_e){}}
 function _gcalPrefs(){
-  const s=_gcalStore(),a=s.accounts[0]||{},last=s.accounts.map(x=>x.last).filter(Boolean).sort().pop()||null;
-  return{...a,v:GCAL_MULTI_VERSION,accounts:s.accounts,writeAccountId:s.writeAccountId||null,on:s.accounts.length>0,consent:s.accounts.length>0,
-    count:s.accounts.reduce((n,x)=>n+(x.count||0),0),last,hideTitles:s.accounts.length?s.accounts.every(x=>x.hideTitles!==false):true,write:!!(s.writeAccountId&&s.accounts.some(x=>x.id===s.writeAccountId&&x.write))};
+  const s=_gcalStore();if(!s.accounts.length)return{};
+  const a=s.accounts[0]||{},last=s.accounts.map(x=>x.last).filter(Boolean).sort().pop()||null;
+  return{...a,v:GCAL_MULTI_VERSION,accounts:s.accounts,writeAccountId:s.writeAccountId||null,on:true,consent:true,
+    count:s.accounts.reduce((n,x)=>n+(x.count||0),0),last,hideTitles:s.accounts.every(x=>x.hideTitles!==false),write:!!(s.writeAccountId&&s.accounts.some(x=>x.id===s.writeAccountId&&x.write))};
 }
 // Compatibility for old tests/setup. Production multi-account code uses _gcalSaveStore.
 function _gcalSavePrefs(o){try{
@@ -8247,7 +8248,7 @@ function gcalItemsToBlocks(items,hideTitles,account){
       const endH=last?Math.min(24,Math.ceil(en.getHours()+en.getMinutes()/60)):24;
       if(endH<=startH)continue;
       const sMin=first?st.getHours()*60+st.getMinutes():0,eMin=last?Math.min(1440,en.getHours()*60+en.getMinutes()||1440):1440;
-      const aid=account&&account.id?String(account.id):'legacy';const blk={id:'gcal_'+aid+'_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),gAccountId:aid,gAccountEmail:account&&account.email?String(account.email):'',color:gcalColorOf(it)};
+      const hasAccount=!!(account&&account.id),aid=hasAccount?String(account.id):'legacy';const blk={id:hasAccount?'gcal_'+aid+'_'+it.id+'_'+iso(day):'gcal_'+it.id+'_'+iso(day),title,date:iso(day),startH,endH,source:'gcal',gid:String(it.id),gAccountId:aid,gAccountEmail:account&&account.email?String(account.email):'',color:gcalColorOf(it)};
       if(it.extendedProperties&&it.extendedProperties.private&&it.extendedProperties.private.maya_domain==='work')blk.domain='work';
       {const tv=it.extendedProperties&&it.extendedProperties.private&&parseInt(it.extendedProperties.private.maya_travel,10);if(tv>0&&tv<=240)blk.travelMin=tv;}
       // context fields (title-like data is dropped when the user chose to hide titles)
