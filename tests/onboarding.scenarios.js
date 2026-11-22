@@ -283,6 +283,10 @@
       o.nx27_officeWorkIsNeverARoutine=r1.length===1&&r1[0].key==='r';
       const e1=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'}}]},{answer:'הטיפול ביום שלישי 17:00 עד 18:00'}).fixed[0],e2=A({fixed:[{key:'m',title:'ישיבת צוות',days:[0],start:{hhmm:'09:30',precision:'approx'}}]},{answer:'ביום ראשון בבוקר יש לי ישיבת צוות ב-9:30 שנמשכת בערך שעה'}).fixed[0],e3=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'}}]},{answer:'הטיפול ביום שלישי ב-17:00'}).fixed[0],e4=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'16:00'}}]},{answer:'טיפול 17:00 עד 18:00'}).fixed[0];
       o.nx28_endRecoveredFromTheAnswerOnlyWhenItMatchesTheStart=e1.end.min===1080&&e2.end.min===630&&e2.end.precision==='approx'&&e3.end===undefined&&e4.end===undefined;}
+    {const a='אני רץ שלוש פעמים בשבוע ומיילים מצטברים לי בעבודה.';
+      const rs=onbNormalizeExtraction({routines:[{key:'run',title:'ריצה',kind:'fitness',domain:'life',perWeek:3,frequencyEvidence:'שלוש פעמים בשבוע'},{key:'mail',title:'מיילים',kind:'email',domain:'work',maintenance:'work',perDay:true,frequencyEvidence:'כל יום'}]},{topic:'q3',answer:a}).routines;
+      const run=rs.find(r=>r.key==='run'),mail=rs.find(r=>r.key==='mail');
+      o.nx29_frequencyIsGroundedPerItem=run&&run.perWeek===3&&mail&&mail.perDay!==true&&mail.perWeek===undefined&&mail.perTwoWeeks!==true;}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;
