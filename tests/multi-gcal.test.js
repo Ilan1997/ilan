@@ -27,6 +27,7 @@ const w=dom.window;
         provenance:A[0].gAccountId==='ga_personal'&&B[0].gAccountId==='ga_work'&&A[0].gAccountEmail==='personal@example.com',
         bothStored:(st.constraintsGlobal.events||[]).filter(e=>e.source==='gcal').length===2,
         bothInContext:ctx.filter(e=>e.source==='gcal'&&e.title==='אותה פגישה').length===2,
+        layout:(()=>{const L=evaluateEvLayout(both);return L.get(both[0])&&L.get(both[1])?{n1:L.get(both[0]).n,n2:L.get(both[1]).n,c1:L.get(both[0]).col,c2:L.get(both[1]).col}:null;})(),
         prefs:_gcalPrefs(),
         ui:_gcalBlockHTML('padding:4px;')
       };
@@ -35,6 +36,7 @@ const w=dom.window;
     ok('each imported event keeps account provenance',out.provenance);
     ok('REPLACE_GCAL_EVENTS keeps both account copies',out.bothStored);
     ok('context layer does not dedupe Google-vs-Google',out.bothInContext);
+    ok('overlapping copies are laid out as two visible columns',out.layout&&out.layout.n1===2&&out.layout.n2===2&&out.layout.c1!==out.layout.c2,JSON.stringify(out.layout));
     ok('aggregate prefs count both connected accounts',out.prefs.accounts.length===2&&out.prefs.count===2&&out.prefs.writeAccountId==='ga_work');
     ok('account UI shows both emails and add-another action',out.ui.includes('personal@example.com')&&out.ui.includes('work@example.com')&&out.ui.includes('חבר יומן גוגל נוסף'));
   }catch(e){ok('multi-account test executed',false,e&&e.stack||String(e));}
