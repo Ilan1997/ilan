@@ -68,3 +68,14 @@ Deterministic onboarding core fixed before Gemini eval: materialization of accep
 
 ### Update 2026-11-19 (build .10)
 First real eval ran (see ARCHITECTURE §64). Re-run the full eval after pulling .10. If `git pull` fails with schannel/TLS (antivirus HTTPS scanning), download `index.html` and `tests/onboarding-eval/cases.json` from raw.githubusercontent.com instead. Consider lowering `PER_MODEL_MS` for onboarding (p95 ≈ 32s).
+
+
+## עבודה פעילה 22.11.2026 — multi-account Google Calendar
+ענף עבודה: `chatgpt/onboarding-multi-gcal` (PR #1, draft).
+- מחברים כמה חשבונות Google Calendar במקביל (למשל אישי + עבודה); כל חשבון נשמר בנפרד עם token זמני ב-session בלבד.
+- אירוע זהה שמופיע בשני חשבונות נשאר פעמיים בכוונה ומוצג כחפיפה; אין Google-vs-Google dedupe.
+- עריכה/מחיקה נשלחת לחשבון המקור; אירועים חדשים של מאיה נכתבים רק ליומן שנבחר כ-`writeAccountId`.
+- ניתוק חשבון אחד לא מוחק את אירועי החשבון השני.
+- נוסף CI בשלושה אזורי זמן + `tests/multi-gcal.test.js`.
+- באונבורדינג תוקן cadence grounding לכל פריט בנפרד וה-spec יושר מול materialization של סגירת שבוע.
+- לפני merge: CI ירוק + בדיקת browser חיה עם שני חשבונות Google אמיתיים.

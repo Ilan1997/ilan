@@ -100,7 +100,7 @@ TemplateItem { origin:"calendar"|"proposal"|"hold", status:"existing"|"proposed"
 ## 8. החלטות מימוש (שלב 1)
 - המודל מחלץ בלבד (`ONB_EXTRACT_SCHEMA` → `onbNormalizeExtraction`, שדות שלא נאמרו נשמטים; תשובה לא תקינה → ניסיון תיקון אחד → חילוץ ריק, לעולם לא זורק). שאלות, follow-ups, הנחות, הצעות, מיקום וכל טקסט — קוד.
 - gaps חוסמים: יום לא ידוע (קודם), התחלה/סיום חסרים בפגישה קשיחה שאין ממה לגזור hold, זמן נסיעה לא ידוע. סדר: יום → שעה → נסיעה. שדה נשאל פעם אחת בלבד.
-- "סגירת שבוע" היא Proposal (`pr_review`); בקבלה היא מסומנת accepted ולא הופכת ל־Routine (טקס של מאיה, לא הרגל של המשתמש). Proposal שהמשתמש אמר עליו "אולי" (ספורט) נשאר pending עד אישור.
+- "סגירת שבוע" היא Proposal (`pr_review`); בקבלה היא עוברת materialization והופכת ל־Routine עם `source:"maya_proposal"`, בהתאם ל־Lifecycle שבסעיף 9. Proposal שהמשתמש אמר עליו "אולי" (ספורט) נשאר pending עד אישור.
 - Routine בלי תדירות ("ערבים עם המשפחה") נשמר כמוגן ולא משובץ; לא נרשמת עליו הנחת משך.
 - יעד שיש לו רק deadline בלי כמות: `trialAllocationMinutes=150` לשבוע (Proposal tentative) + Unknown. יעד עם `requiredTotalMinutes` ו־deadline רחוק מחולק לפי שבועות שנותרו.
 - ימי א׳–ה׳ מועדפים בשיבוץ; שישי/שבת **לא** חסומים אלא אם יש `AvailabilityRule` מחייב (`user_setting` / `user_said` / `calendar`). `onbAvailabilityFromSnap` ממיר סגירות שכבר בהגדרות (freeHours) ל־`user_setting`, ולא נשען על ברירות המחדל של `ctxFreeIntervals`.
@@ -127,3 +127,7 @@ TemplateItem { origin:"calendar"|"proposal"|"hold", status:"existing"|"proposed"
 - MaintenanceNeed (user_said) vs RoutineProposal (maya_proposal); Routine only after approval.
 - workHours unknown = blocking; one short follow-up; if unknown, `templateStatus:'partially_placed'` with unscheduled time budgets, no invented availability.
 - dayStart ("קם מאוחר") is a Proposal; becomes preference only on approval.
+
+
+## Update 2026-11-22
+- תדירות של Routine חייבת להיות grounded **לכל פריט בנפרד**. תדירות שנאמרה על ריצה לא יכולה לזלוג למיילים/תחזוקה אחרת באותה תשובה. `frequencyEvidence` הוא ציטוט קצר מהמשתמש; הקוד מאמת שהוא באמת מופיע בתשובה, עם fallback מקומי סמוך לשם/סוג הפריט.
