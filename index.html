@@ -8495,7 +8495,7 @@ async function gcalEnableWrite(accountId){
   const who=a.email||a.label||'יומן גוגל';
   const okc=await _gcalAsk('מאיה תוכל ליצור, לערוך ולמחוק אירועים ביומן '+who+'.\n• כל פעולה תתבצע רק אחרי שאישרת אותה במפורש.\n• גוגל תבקש הרשאת עריכה לחשבון הזה.\n• היומן הזה יהפוך ליעד ברירת המחדל לאירועים חדשים של מאיה.\n• אפשר לבטל בכל רגע.',true);
   if(!okc)return{ok:false,cancelled:true};
-  const upd={...a,write:true,writeConsent:new Date().toISOString()};const ix=s.accounts.findIndex(x=>x.id===a.id);s.accounts[ix]=upd;s.writeAccountId=a.id;_gcalSaveStore(s);_gcalDropToken(a.id);
+  s.accounts=s.accounts.map(x=>x.id===a.id?{...x,write:true,writeConsent:new Date().toISOString()}:{...x,write:false});const ix=s.accounts.findIndex(x=>x.id===a.id),upd=s.accounts[ix];s.writeAccountId=a.id;_gcalSaveStore(s);_gcalDropToken(a.id);
   try{const tr=await _gcalRequestTokenForAccount(upd,{forceConsent:true,selectAccount:!upd.email});_gcalSetToken(a.id,tr.token,tr.exp);}
   catch(e){const s2=_gcalStore(),j=s2.accounts.findIndex(x=>x.id===a.id);if(j>=0)s2.accounts[j]={...s2.accounts[j],write:false};if(s2.writeAccountId===a.id)s2.writeAccountId=null;_gcalSaveStore(s2);return{ok:false,error:_gcalErrText(e)};}
   return{ok:true,accountId:a.id};
