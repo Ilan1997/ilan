@@ -79,3 +79,4 @@ First real eval ran (see ARCHITECTURE §64). Re-run the full eval after pulling 
 - נוסף CI בשלושה אזורי זמן + `tests/multi-gcal.test.js`.
 - באונבורדינג תוקן cadence grounding לכל פריט בנפרד וה-spec יושר מול materialization של סגירת שבוע.
 - לפני merge: CI ירוק + בדיקת browser חיה עם שני חשבונות Google אמיתיים.
+- 2026-11-23.1: vision-anchored voice for free-chat Maya (see ARCHITECTURE §65); friendly 503/429 message.

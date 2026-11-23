@@ -741,3 +741,10 @@ The report now shows why the primary fails: **`gemini-3.8-flash: 429 You exceede
 - Disconnect can remove one Google account without touching the others.
 - Legacy single-account preferences/tokens migrate lazily into the v2 model.
 - Regression coverage: `tests/multi-gcal.test.js` plus the existing Google calendar tests. CI runs `npm test` in UTC, Asia/Jerusalem and America/Los_Angeles.
+## §65 — Vision-anchored voice (legacy free-chat Maya), build 2026-11-23.1
+Trigger: live-chat feedback ("too practical, doesn't draw conclusions from what I set, asks me to decide what she should propose, doesn't keep me connected to my vision").
+- Profile: optional topic `vision` (`AI_PROFILE_OPTIONAL`, never part of intake/`nextIntakeTopic`). Value `{quotes:[…]}`: only verbatim substrings of the user's own message (4–160 chars), merged, max 8. Invented quotes are rejected (`quote_not_exact`).
+- Context: `_aiProfileContext` feeds the quotes each message and tells Maya to open from them, then the practical step, and say what the step protects.
+- Prompt: rule 1/7/9 softened; new 9א (vision voice, no invented values, shared link ≤ one word), 9ב (draw conclusions from what the user already set; propose one concrete step with a default derived from his words; ≤1 question; respect "not now"), 9ג (hidden `vision` quotes in PROFILE_UPDATE).
+- Errors: transient upstream failures (429/5xx/high demand/quota) show a friendly "Maya is busy" message, not raw model text; non-transient detail is still shown for diagnosis.
+- Tests: V1–V6, P6c. Effect on real Gemini replies is unmeasured.

@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-22.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-23.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -5220,13 +5220,17 @@ const AI_PROFILE_TOPIC_HINT={
   sacred:'שעות קדושות — זמן שאסור לתכנן בו כלום (למשל משפחה, תפילה). רק ביום שהמשתמש/ת ציין/ה במפורש',
   routines:'שגרות שבועיות קבועות (כמו אימונים) — בקצרה'
 };
+// Optional topics: never asked in intake (nextIntakeTopic ignores them); filled only when the user volunteers them.
+// vision = the user's OWN words about what matters to them (verbatim quotes, merged, max 8) — Maya reflects them back.
+const AI_PROFILE_OPTIONAL=['vision'];
+const AI_VISION_MAX=8;
 const AI_DAY_NAMES_HE=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
 const AI_MIN_FREE_HOURS_PER_WEEK=2;
 function emptyAIProfile(){return{v:1,topics:{role:null,work:null,freeDays:null,peak:null,sacred:null,routines:null}};}
 function normalizeAIProfile(p){
   const e=emptyAIProfile();
   if(!p||typeof p!=='object'||!p.topics)return e;
-  AI_PROFILE_TOPICS.forEach(t=>{ if(p.topics[t]!==undefined&&p.topics[t]!==null)e.topics[t]=p.topics[t]; });
+  [...AI_PROFILE_TOPICS,...AI_PROFILE_OPTIONAL].forEach(t=>{ if(p.topics[t]!==undefined&&p.topics[t]!==null)e.topics[t]=p.topics[t]; });
   return e;
 }
 function _validDays(d){return Array.isArray(d)&&d.length>0&&d.every(x=>Number.isInteger(x)&&x>=0&&x<=6)&&new Set(d).size===d.length;}
@@ -5249,9 +5253,23 @@ function applyProfileUpdate(profile,update,userText,gridStart,gridEnd){
   if(!update||typeof update!=='object')return{profile:next,accepted,rejected};
   const gs=Number.isInteger(gridStart)?gridStart:8,ge=Number.isInteger(gridEnd)?gridEnd:24;
   const text=String(userText||'');
-  AI_PROFILE_TOPICS.forEach(t=>{
+  [...AI_PROFILE_TOPICS,...AI_PROFILE_OPTIONAL].forEach(t=>{
     if(!(t in update))return;
     const v=update[t];
+    if(t==='vision'){ // verbatim quotes only: each must be copied word-for-word from the user's own message
+      const arr=Array.isArray(v)?v:(v&&Array.isArray(v.quotes)?v.quotes:null);
+      if(!arr){rej(t,'bad_shape');return;}
+      const cur=(next.topics.vision&&Array.isArray(next.topics.vision.quotes))?next.topics.vision.quotes:[];
+      const add=[];
+      for(const q0 of arr){
+        const q=typeof q0==='string'?q0.trim().replace(/\s+/g,' '):'';
+        const flat=text.replace(/\s+/g,' ');
+        if(q.length<4||q.length>160||!flat.includes(q)){rej(t,'quote_not_exact');continue;}
+        if(!cur.includes(q)&&!add.includes(q))add.push(q);
+      }
+      if(add.length===0)return;
+      next.topics.vision={quotes:[...cur,...add].slice(-AI_VISION_MAX)};accepted.push(t);return;
+    }
     if(v==='none'){next.topics[t]={none:true};accepted.push(t);return;}
     if(!v||typeof v!=='object'){rej(t,'bad_shape');return;}
     let cand=null;
@@ -5424,6 +5442,7 @@ function _aiProfileContext(profile){
   const sum=_aiProfileSummary(profile),nt=nextIntakeTopic(profile);
   let c='';
   { const T=normalizeAIProfile(profile).topics; if(T.work&&!T.work.none)c+=`\nשעות העבודה שהמשתמש/ת קבע/ה: ${T.work.days.map(x=>AI_DAY_NAMES_HE[x]).join(', ')} ${T.work.start}:00–${T.work.end}:00. התחייבת לכבד אותן: אל תציע/י ואל תתכנן/י עבודה מחוץ להן; אם נדרשת חריגה — שאל/י ובקש/י אישור מפורש לפני.`; }
+  { const V=normalizeAIProfile(profile).topics.vision; if(V&&V.quotes&&V.quotes.length)c+='\nהחזון של המשתמש/ת במילים שלו/ה (ציטוטים מדויקים — אלה העוגן לקול שלך): '+V.quotes.map(q=>'«'+q+'»').join(' ')+'\nפתח/י בקצרה מהחזון הזה (בניסוח שלו/ה, לא בהמצאה), ורק אחר כך הצעד המעשי, והראי מה הצעד הזה שומר.'; }
   if(sum)c+=`\nפרופיל מה שכבר ידוע על המשתמש/ת (אל תשאל/י שוב על זה): ${sum}.`;
   if(nt)c+=`\nשלב היכרות (עדיפות נמוכה מאוד): קודם כל מבצעים את מה שהמשתמש/ת ביקש/ה. אסור לשאול שאלת היכרות באותה הודעה שבה את/ה מחכה לפרט חסר ממנו/ה, באמצע משימה, או כשיש בקשה פתוחה. רק כשהבקשה טופלה במלואה ואין לך שום שאלה אחרת — מותר שאלה אחת קצרה על: ${AI_PROFILE_TOPIC_HINT[nt]}. אם המשתמש/ת אמר/ה "לא יודע/אין/לא משנה" — החזר/י "none" לנושא ואל תשאל/י עליו שוב לעולם.`;
   else c+='\nההיכרות הסתיימה — אל תשאל/י שאלות היכרות נוספות.';
@@ -5832,7 +5851,7 @@ async function resetAILearned(){
 }
 
 const AI_SYSTEM_PROMPT_BASE=`את/ה מאיה, המזכירה האישית של המשתמש/ת — עוזר/ת תכנון שבועי חברותי/ת, משולב/ת בתוך אפליקציית לוח זמנים. משתמש/ת כותב/ת בשפה חופשית מה יש לה/לו על הראש השבוע (מבחנים, אימונים, פגישות, מטלות). תפקידך:
-1. לענות בעברית, בטון חם וקצר (2-4 משפטים), ולשקף מה הבנת.
+1. לענות בעברית, בטון חם (בדרך כלל 2-5 משפטים), ולשקף מה הבנת — קודם את מה שחשוב לו/לה, ורק אחר כך את הפרקטי.
 2. אם זיהית משימות/אירועים/שינוי שעות זמינות קבועות לתזמון — לצרף בסוף התשובה בלוק כזה בדיוק (ורק כשיש משהו קונקרטי):
 \`\`\`SEMANTIC_PLAN
 {"semanticVersion":1,"intents":[{"action":"create_task","title":"...","calendar":"personal","durationHours":3,"deadline":"YYYY-MM-DD","importance":"normal","schedulingPreference":"flexible"}]}
@@ -5862,12 +5881,15 @@ intents מסוג create_event (דברים עם שעה קבועה בלו"ז — �
 7ג2. קביעת פגישה/אירוע בלי שעה מוכנה ("אני צריך לקבוע פגישה עם הרואה חשבון"): אל תמציא/י שעות בטקסט. צרף/י בסוף התשובה בלוק מוסתר \`\`\`MEETING_REQUEST {"title":"שם","durationMin":60,"domain":"work"|"life","date":"YYYY-MM-DD" (רק אם ביקש/ה יום מסוים),"after":"HH:MM" (רק אם ביקש/ה אחרי שעה),"travelMin":דקות נסיעה לכיוון אחד (רק אם המשתמש/ת אמר/ה)} \`\`\` — האפליקציה תחשב בעצמה 2–3 חלונות פנויים אמיתיים ותציג ככפתורים. בטקסט הגלוי כתבי רק משפט קצר כמו "בודקת מתי נוח לך". לא לכתוב שעות בעצמך.
 7א. הוספה ליומן: כשהמשתמש/ת מבקש/ת להוסיף אירוע/רצף אירועים ליומן — צרף/י בסוף התשובה בלוק \`\`\`CAL_CREATE עם JSON: {"events":[{"title":"שם","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","kind":"event"|"travel","domain":"work"|"life"}]} (עד 12 אירועים, תאריכים שונים מותרים; כל קטע נסיעה הוא אירוע נפרד עם kind=travel וכותרת כמו "נסיעה לאריאל"). חשבי בעצמך את השעות ברצף מהזמנים שנמסרו (התחלה + משך כל קטע), בלי לשאול על כל פרט; שאלי רק על דבר חיוני אחד שחסר (למשל שעת התחלה) ורק אם אי אפשר להסיק אותו. "מחר"/"ביום ג׳" – חשבי לפי התאריך של היום שמופיע בהקשר. בטקסט הגלוי תני סיכום קצר של הרצף ואל תטעני שכבר נוצר — האירועים ייווצרו רק אחרי שהמשתמש/ת יאשר בכרטיס (ביומן גוגל אם מחובר, ואחרת ביומן של האפליקציה). אל תסרבי ואל תפני לחשבון: תמיד צרפי את הבלוק.
 8. שיקול דעת (את מזכירה, לא מכונה שמציתת): החליטי יחד עם המשתמש/ת מה חשוב היום, מה יכול לחכות ומה לא נכנס ליום הזה בכלל. אל תמלאי זמן פנוי רק כי הוא קיים. כשיום כבר עמוס אמרי ישר: "היום הזה כבר מלא" או "אם מוסיפים את זה, משהו אחר חייב לצאת" והציעי יום אחר.
-9. סגנון תשובה: בביצוע — קצר, ישיר, פעולה אחת ברורה, בלי הרצאות ("קיבלתי. זה נכנס לשלישי."). בתכנון אפשר להסביר יותר.
+9. סגנון תשובה: בביצוע של בקשה קונקרטית קטנה — קצר וישיר ("קיבלתי. זה נכנס לשלישי."). כשהמשתמש/ת משתף/ת חזון, ערכים, מסמך אישי או מה שחשוב לו/לה בחיים — זה לא ביצוע אלא שיחה: בתכנון ובחזון אפשר להסביר יותר.
+9א. קול שמחבר לחזון: המשתמש/ת צריך/ה להרגיש שאת זוכרת למה הוא/היא עושה את כל זה. כשהוא/היא מספר/ת מה חשוב לו/לה — החזירי את זה במילים שלו/ה (לא "עושה סדר", לא סיכום ניהולי), ושמרי על החזון כעוגן גם כשעוברים לפרקטי: כל צעד שמציעים מקושר במשפט אחד למה שהוא שומר ("זה מה שישאיר מקום לתורה"). אל תחליפי את המילים שלו/ה בז'רגון תכנוני. אל תמציאי חזון, ערכים או עוגנים שלא נאמרו — רק מה שנאמר. אם בהודעה יש קישור שלא ניתן לפתוח — מילה אחת על זה לכל היותר; אם הודבק תוכן, התייחסי לתוכן.
+9ב. להסיק מסקנות, לא לחזור ולשאול: מה שהמשתמש/ת כבר קבע/ה (עוגנים קבועים, נקודת חזרה, יעדים עם מספרים, "אני עמוס היום") הוא נתון — פעלי לפיו. אל תשאלי "מה הכי דחוף?" או "מה לקבוע?" כשהתשובה כבר בדבריו/ה; הציעי בעצמך צעד אחד קונקרטי (למשל "ביום שני אחרי השיעור יש חלון לחזור ללימודים — לשים שם שעה?"), עם ברירת מחדל שנגזרת ממה שאמר/ה, ושאלה אחת לכל היותר. אם אמר/ה "לא עכשיו" לנושא — אל תחזרי אליו עד המועד שקבע/ה.
+9ג. בלוק נסתר: כשהמשתמש/ת מנסח/ת במילים שלו/ה מה חשוב לו/לה בחיים או לאן הוא/היא מכוון/ת — הוסיפי ל-PROFILE_UPDATE את המפתח "vision": ["ציטוט מילה במילה מהודעתו/ה", ...] (עד 3 ציטוטים קצרים של 4–160 תווים, העתקה מדויקת בלבד, בלי לשנות מילה). אם אין ציטוט מדויק — אל תכללי.
 10. שאלות מיותרות: אם פרט חסר ולא משנה מהותית — הניחי הנחה סבירה ואמרי אותה ("שמתי שעה, אפשר לשנות"). שאלי רק על פרט שמשנה את האירוע מהותית.
 11. ריכוז: שיחות טלפון מתאימות לזמן נסיעה; סידורים באותו אזור — ליציאה אחת; הודעות/וואטסאפ — בלוק אחד; משימות עומק — בלוק רציף; משימות קטנות — חלון אדמיניסטרציה אחד. הציעי ריכוז כשזה רלוונטי ("יש לך 3 דברים בתלפיות — עדיף ליציאה אחת").
 12. כשאין מספיק זמן: הציעי גרסה מקוצרת במקום "לעשות/לא לעשות" — מלאה / מצומצמת / מינימום (למשל סדר חדר → 15 דקות, אימון → 10 דקות).
 13. שפיכת משימות (Brain Dump): כשהמשתמש/ת זורק/ת הרבה דברים ברצף או אומר/ת שהוא/היא "זורק/ת הכול" — אל תקטעי ואל תשאלי באמצע. אחרי שסיים/ה, אל תחזירי רשימה שטוחה אלא מבנה: היום בערב / מחר בבוקר / בנסיעה / גמיש / מה לדחות — ושמרי משימות בלי זמן קבוע ב-SMALL_ADD.
-7. התשובה הגלויה: אך ורק תשובה פרקטית וקצרה לעניין (מה עשית / מה הצעת / מה השאלה האחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
+7. התשובה הגלויה: חמה ולעניין, מעוגנת במה שהמשתמש/ת אמר/ה (מה עשית / מה הצעת / לכל היותר שאלה אחת). לעולם אל תזכיר/י בטקסט הגלוי כללים, למידה, פרופיל, "שמרתי", "למדתי" או את התהליך הנסתר — פשוט פעל/י לפיהם.`;
 
 let AI_PENDING_PROPOSAL=null; // the one in-flight AI plan proposal awaiting explicit user approval
 
@@ -5912,7 +5934,7 @@ async function _aiCallProxy(sys,msgs,opts){
   if(r.timeout){const e=new Error('ai-timeout');e.userMessage='מאיה לא ענתה בזמן. נסה שוב, ואם זה חוזר, ייתכן עומס אצל גוגל.';throw e;}
   if(r.network){const e=new Error('network');e.userMessage='אין חיבור לשרת — בדוק אינטרנט ונסה שוב.';throw e;}
   if(r.status===404){const e=new Error('proxy-not-deployed');e.noKey=true;throw e;} // service not set up yet → offer a personal key
-  if(!r.ok){const e=new Error((r.data&&r.data.error)||('HTTP '+r.status));e.userMessage=(r.data&&r.data.message)?(r.data.message+((r.data.detail&&r.data.error==='upstream')?' ('+String(r.data.detail).slice(0,140)+')':'')):null;e.noKey=!!(r.data&&r.data.error==='not_configured');throw e;}
+  if(!r.ok){const e=new Error((r.data&&r.data.error)||('HTTP '+r.status));e.userMessage=(r.data&&r.data.error==='upstream'&&/\b(429|500|502|503|504)\b|high demand|overload|quota|RESOURCE_EXHAUSTED/i.test(String(r.data.detail||'')))?'מאיה עמוסה כרגע (העומס אצל ספק ה-AI, לא אצלך). נסה שוב בעוד דקה.':(r.data&&r.data.message)?(r.data.message+((r.data.detail&&r.data.error==='upstream')?' ('+String(r.data.detail).slice(0,140)+')':'')):null;e.noKey=!!(r.data&&r.data.error==='not_configured');throw e;}
   return String((r.data&&r.data.text)||'');
 }
 // Which route would a message take right now? 'claude' | 'proxy' | 'none'
@@ -14145,6 +14167,18 @@ function runAIProfileTests(){
   ok('12. אירוע בשעות קדושות מקבל אזהרה',fri===5&&sacredConflicts(pr,[{action:'create_event',title:'פגישה',date:'2026-02-20',startHour:18,endHour:19}]).length===1);
   ok('13. אירוע מחוץ לשעות קדושות — בלי אזהרה',sacredConflicts(pr,[{action:'create_event',title:'פגישה',date:'2026-02-20',startHour:9,endHour:10}]).length===0);
   ok('14. normalizeAIProfile מקבל זבל בלי לזרוק',normalizeAIProfile('junk').topics.work===null&&normalizeAIProfile({topics:{work:{days:[1]}}}).topics.work.days[0]===1);
+  { // vision-anchored voice
+    const doc='השגרה אמורה לפנות לך מקום לחיים\nחופש פנימי, ולב פנוי\nביקשת לתחום את העבודה';
+    let r=applyProfileUpdate(emptyAIProfile(),{vision:['חופש פנימי, ולב פנוי','מקום לחיים מושלמים']},doc,8,24);
+    ok('V1. חזון: רק ציטוט מדויק מהודעת המשתמש/ת נשמר, ציטוט מומצא נדחה',r.accepted.includes('vision')&&r.profile.topics.vision.quotes.length===1&&r.profile.topics.vision.quotes[0]==='חופש פנימי, ולב פנוי'&&r.rejected.some(x=>x.topic==='vision'&&x.reason==='quote_not_exact'));
+    let r2=applyProfileUpdate(r.profile,{vision:['לפנות לך מקום לחיים','חופש פנימי, ולב פנוי']},doc,8,24);
+    ok('V2. חזון: מתמזג בלי כפילויות ומוגבל',r2.profile.topics.vision.quotes.length===2);
+    ok('V3. חזון אינו נושא היכרות: ההיכרות לא נשאלת עליו ולא נשברת',nextIntakeTopic(emptyAIProfile())==='role'&&!AI_PROFILE_TOPICS.includes('vision'));
+    const ctx=_aiProfileContext(r2.profile);
+    ok('V4. החזון מוזן להקשר של מאיה בציטוטים',ctx.includes('«חופש פנימי, ולב פנוי»')&&ctx.includes('פתח/י בקצרה מהחזון'));
+    ok('V5. הנחיית המערכת: קול מחובר לחזון, מסקנות במקום שאלות, בלי "אך ורק פרקטית"',AI_SYSTEM_PROMPT_BASE.includes('9א. קול שמחבר לחזון')&&AI_SYSTEM_PROMPT_BASE.includes('9ב. להסיק מסקנות')&&!AI_SYSTEM_PROMPT_BASE.includes('אך ורק תשובה פרקטית')&&AI_SYSTEM_PROMPT_BASE.includes('אל תמציאי חזון'));
+    ok('V6. נסיגה: ללא חזון אין שורת חזון בהקשר',!_aiProfileContext(emptyAIProfile()).includes('החזון של המשתמש'));
+  }
   ok('15. PROFILE_UPDATE נחלץ ו-JSON שבור מחזיר null',_aiExtractProfileUpdate('hi\n```PROFILE_UPDATE\n{"peak":"none"}\n```').peak==='none'&&_aiExtractProfileUpdate('```PROFILE_UPDATE\n{bad\n```')===null);
   const passed=results.filter(r=>r.passed).length;
   console.log(`%cAI PROFILE TESTS: ${passed}/${results.length} PASSED`,'font-weight:bold;font-size:1.1em;');
@@ -14621,6 +14655,9 @@ async function runAccountTests(){
     srv.fn=()=>J(502,{error:'upstream',detail:'gemini-x: 404 model not found',message:'שגיאה מול ה-AI.'});
     let e5=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e5=e;}
     ok('P6b. שגיאת upstream (502): ההודעה כוללת את פירוט השגיאה מהשרת כדי שאפשר יהיה לאבחן',!!e5&&e5.userMessage.includes('שגיאה מול ה-AI')&&e5.userMessage.includes('model not found')&&!e5.noKey);
+    srv.fn=()=>J(502,{error:'upstream',detail:'gemini-3.8-flash: 503 This model is currently experiencing high demand.',message:'שגיאה מול ה-AI.'});
+    let e6=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e6=e;}
+    ok('P6c. עומס זמני (503): הודעה ידידותית בלי טקסט גולמי של המודל',!!e6&&e6.userMessage.includes('עמוסה')&&!e6.userMessage.includes('gemini')&&!e6.userMessage.includes('503'));
     srv.fn=()=>J(404,{});
     let e2=null;try{await _aiCallModel('S',[{role:'user',content:'x'}]);}catch(e){e2=e;}
     ok('P7. הפונקציה עוד לא הופעלה (404) → noKey=true',!!e2&&e2.noKey===true);
