@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-25.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-25.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -8059,7 +8059,8 @@ function renderAccountModal(){
   const diag=(_accForced||!errs.length)?'':'<div style="margin-top:12px;"><button id="accDiag" onclick="_accShowDiag()" style="'+btn+'width:100%;padding:8px;font-size:.8em;background:var(--card);border:1.5px solid #fca5a5;color:#b91c1c;">🐞 פרטי תקלה ('+errs.length+')</button></div>';
   const setBtn=_accForced?'':'<div style="margin-top:14px;"><button id="accSettings" onclick="closeAccount();openSettings()" style="'+btn+'width:100%;background:var(--card);border:1.5px solid var(--border);color:var(--text);">⚙ הגדרות</button></div>';
   const gc=(_accForced||!cloudSignedIn())?'':_gcalBlockHTML(btn);
-  body.innerHTML=h+gc+setBtn+diag+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
+  const devKey=(_accForced||!cloudSignedIn())?'':'<div style="margin-top:10px;"><button id="accCopyJwt" onclick="_accCopyJwt()" style="'+btn+'width:100%;padding:8px;font-size:.8em;background:var(--card);border:1.5px solid var(--border);color:var(--muted);">🔑 העתק מפתח זמני לבדיקות (תקף כשעה)</button></div>';
+  body.innerHTML=h+gc+setBtn+devKey+diag+(_accForced?'':ai)+'<div id="accMsg" style="margin-top:12px;font-size:.85em;min-height:1.2em;"></div>';
   _accRouteLabel();
 }
 async function _accRouteLabel(){
@@ -8068,6 +8069,15 @@ async function _accRouteLabel(){
   el.textContent={claude:'מחובר דרך Claude — אין צורך במפתח.',proxy:'משתמש בשירות המשותף של האפליקציה (עם מכסה יומית).',none:'לא מחובר ל-AI. התחבר לחשבון.'}[r]||'';
 }
 async function _accTestAI(){_cloudMsg('בודק…');const r=await testAIConnection();_cloudMsg(r.ok?'ה-AI עובד ✓ ('+r.route+')':r.error,!r.ok);_accRouteLabel();}
+// Developer convenience: copy the CURRENT (refreshed) session access token — your own login, valid ~1h — for tests/onboarding-eval. Never sent anywhere by the app.
+async function _accCopyJwt(){
+  const m=document.getElementById('accMsg');
+  try{await _cloudEnsureFresh();}catch(_e){}
+  const t=CLOUD_SESSION&&CLOUD_SESSION.access_token;
+  if(!t){if(m)m.textContent='אין חיבור פעיל. התחבר ונסה שוב.';return;}
+  try{await navigator.clipboard.writeText(t);if(m)m.textContent='✅ המפתח הועתק. בחלון PowerShell כתוב: $env:JWT="  ואז הדבק (Ctrl+V) וסגור במרכאות. אל תשלח אותו לאף אחד.';return;}catch(_e){}
+  if(m){m.innerHTML='<textarea id="accJwtText" readonly rows="4" style="width:100%;box-sizing:border-box;font-size:.7em;direction:ltr;"></textarea><div style="font-size:.78em;color:var(--muted);">ההעתקה האוטומטית נחסמה — הטקסט מסומן, לחץ Ctrl+C.</div>';const ta=document.getElementById('accJwtText');ta.value=t;ta.focus();ta.select();}
+}
 function _accDiagText(){return (window.__mayaErrors||[]).map(e=>e.t+' | '+e.msg+(e.at?' | '+e.at:'')).join('\n')+'\n'+navigator.userAgent;}
 function _accShowDiag(){
   const t=_accDiagText();const m=document.getElementById('accMsg');if(!m)return;
@@ -14167,6 +14177,7 @@ function runAIProfileTests(){
   ok('12. אירוע בשעות קדושות מקבל אזהרה',fri===5&&sacredConflicts(pr,[{action:'create_event',title:'פגישה',date:'2026-02-20',startHour:18,endHour:19}]).length===1);
   ok('13. אירוע מחוץ לשעות קדושות — בלי אזהרה',sacredConflicts(pr,[{action:'create_event',title:'פגישה',date:'2026-02-20',startHour:9,endHour:10}]).length===0);
   ok('14. normalizeAIProfile מקבל זבל בלי לזרוק',normalizeAIProfile('junk').topics.work===null&&normalizeAIProfile({topics:{work:{days:[1]}}}).topics.work.days[0]===1);
+  { ok('J1. כפתור "העתק מפתח" קיים כשיש פונקציה, ואינו שולח את המפתח לשום מקום',typeof _accCopyJwt==='function'&&!/_accCopyJwt[\s\S]{0,900}fetch\(/.test(String(_accCopyJwt))); }
   { // XSS hardening: task titles are escaped at HTML sinks
     ok('X1. escapeHTML מנטרל תגיות וגרשיים',escapeHTML('<img src=x onerror=1>"\'')==='&lt;img src=x onerror=1&gt;&quot;&#39;');
     const _s=String(document.querySelector('script:not([src])')?.textContent||'');

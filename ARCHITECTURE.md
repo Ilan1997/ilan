@@ -751,3 +751,6 @@ Trigger: live-chat feedback ("too practical, doesn't draw conclusions from what 
 
 ## §66 — innerHTML hardening (build 2026-11-25.1)
 Task/event titles and alert messages are now escaped with escapeHTML at 8 HTML sinks (urgent bar, exam cells, exam cards, alert list, global events, grid blocks, exam chooser). Tests X1–X2. Remaining ~70 innerHTML sites were heuristically scanned; no other raw user-text sinks found.
+
+## §67 — Copy test JWT button (build 2026-11-25.2)
+Account screen: "העתק מפתח זמני לבדיקות" copies the refreshed session access_token to the clipboard (textarea fallback) so eval/E2E can run without devtools or a password. Local only, never sent anywhere. Test J1.
