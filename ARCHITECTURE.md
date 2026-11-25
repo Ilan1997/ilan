@@ -748,3 +748,6 @@ Trigger: live-chat feedback ("too practical, doesn't draw conclusions from what 
 - Prompt: rule 1/7/9 softened; new 9א (vision voice, no invented values, shared link ≤ one word), 9ב (draw conclusions from what the user already set; propose one concrete step with a default derived from his words; ≤1 question; respect "not now"), 9ג (hidden `vision` quotes in PROFILE_UPDATE).
 - Errors: transient upstream failures (429/5xx/high demand/quota) show a friendly "Maya is busy" message, not raw model text; non-transient detail is still shown for diagnosis.
 - Tests: V1–V6, P6c. Effect on real Gemini replies is unmeasured.
+
+## §66 — innerHTML hardening (build 2026-11-25.1)
+Task/event titles and alert messages are now escaped with escapeHTML at 8 HTML sinks (urgent bar, exam cells, exam cards, alert list, global events, grid blocks, exam chooser). Tests X1–X2. Remaining ~70 innerHTML sites were heuristically scanned; no other raw user-text sinks found.

@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-23.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-25.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -4301,7 +4301,7 @@ function renderEngine(){
   // deadline bar — מוצג רק אם יש משימות urgent; אחרת מוסתר תמיד
   const urgent=tasks.filter(t=>{const rp=getRiskPresentation(risk[t.id]);return rp.level!=='done'&&risk[t.id]?.daysLeft<=3;});
   const bar=document.getElementById('deadlineBar');
-  if(urgent.length&&tasks.length>0){bar.style.display='flex';bar.innerHTML=urgent.map(t=>{const r=risk[t.id];const rp=getRiskPresentation(r);return`<span class="dl-chip">${rp.icon} <strong>${t.title}</strong>: ${r.done}/${t.needed} · ${r.daysLeft} ימים</span>`;}).join('');}
+  if(urgent.length&&tasks.length>0){bar.style.display='flex';bar.innerHTML=urgent.map(t=>{const r=risk[t.id];const rp=getRiskPresentation(r);return`<span class="dl-chip">${rp.icon} <strong>${escapeHTML(t.title)}</strong>: ${r.done}/${t.needed} · ${r.daysLeft} ימים</span>`;}).join('');}
   else bar.style.display='none';
 
   // summary strip
@@ -4374,7 +4374,7 @@ function renderEngine(){
       const _prevStatus=h>HOURS[0]?uiStatus(date,h-1,ww):null;
       const _isFirstBlocked=(_prevStatus!=='exam_day');
       if(_isFirstBlocked){
-        return`<td class="exam-day-td${_todayClass}" style="cursor:pointer;" onclick="openExamDayModal('${_edId}','${_examTaskIds}')" title="לחץ לשינוי מצב חסימה">${examsDy.map(t=>`<div class="blk-exam-day"><div>📝 ${t.title}</div></div>`).join('')}</td>`;
+        return`<td class="exam-day-td${_todayClass}" style="cursor:pointer;" onclick="openExamDayModal('${_edId}','${_examTaskIds}')" title="לחץ לשינוי מצב חסימה">${examsDy.map(t=>`<div class="blk-exam-day"><div>📝 ${escapeHTML(t.title)}</div></div>`).join('')}</td>`;
       }
       return`<td class="exam-day-td${_todayClass}" style="cursor:pointer;opacity:.35;" onclick="openExamDayModal('${_edId}','${_examTaskIds}')"></td>`;
     }
@@ -4580,7 +4580,7 @@ function renderEngine(){
     const traceHint=phases.length?`<span class="trace-icon" title="שלב שיבוץ: ${phases.join(', ')}">🔍</span>`:'';
     cards+=`<div class="ex-card ${_rp.cardBorderClass}">
       <div class="ex-top">
-        <div class="ex-name">${splitBadge}${task.title} ${traceHint}</div>
+        <div class="ex-name">${splitBadge}${escapeHTML(task.title)} ${traceHint}</div>
         <div style="display:flex;align-items:center;gap:4px;">
           <div class="ex-count ${cntCls}">${done}/${task.needed}</div>
           <button class="btn btn-xs btn-danger" onclick="removeTask(ACTIVE_CALENDAR,\'${task.id}\')">בטל</button>
@@ -4666,7 +4666,7 @@ function renderEngine(){
       ?'<div class="alert-item" style="color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:.76em;">אין משימות מתוזמנות</div>'
       :alerts.length===0
         ?'<div class="alert-item al-ok"><span>✅</span><span>כל המשימות שובצו לפני הדדליין</span></div>'
-        :alerts.map(a=>`<div class="alert-item al-${a.type}"><span>${a.type==='crit'?'🔴':'⚠️'}</span><span>${a.msg}</span></div>`).join('');
+        :alerts.map(a=>`<div class="alert-item al-${a.type}"><span>${a.type==='crit'?'🔴':'⚠️'}</span><span>${escapeHTML(a.msg)}</span></div>`).join('');
 
   // Global events sidebar list
   {const gr=document.getElementById('evGoogleRow');if(gr)gr.style.display=gcalWriteEnabled()?'flex':'none';}
@@ -4678,7 +4678,7 @@ function renderEngine(){
       evSection.innerHTML=globalEvents.map(ev=>`
         <div class="event-card">
           <div class="event-card-top">
-            <div class="event-card-name">📅 ${ev.title}</div>
+            <div class="event-card-name">📅 ${escapeHTML(ev.title)}</div>
             ${ev.gid?`<button class="ex-remove-btn" data-gcal="${escapeHTML(String(ev.id))}" onclick="openGcalEditor(this.dataset.gcal)" title="ערוך ביומן גוגל" aria-label="ערוך ביומן גוגל">✏️</button>`:`<button class="ex-remove-btn" onclick="removeGlobalEvent('${ev.id}')" title="הסר אירוע" aria-label="הסר אירוע">✕</button>`}
           </div>
           <div class="event-card-meta">${ev.date} · <bdi dir="ltr">${_evTimeText(ev)}</bdi></div>
@@ -7248,10 +7248,10 @@ tr.tr-now td.td-hour-label{background:#fef08a!important;font-weight:700;color:#8
         const st=computeSlotStatusDual(date,h,MODE,constraintsWithMode,examDaysSet,onceM,gc,gOnceP,gRangeP,ww,gEvents,window.UI_CTX?.examDayConfigMap||new Map());
         const ent=assignments[sid2];
         const examsDy=examDaysMap[dId2];
-        if(examsDy&&h===HOURS[0])html+=`<td><span class="exam">📝 ${examsDy.map(t=>t.title).join(', ')}</span></td>`;
+        if(examsDy&&h===HOURS[0])html+=`<td><span class="exam">📝 ${escapeHTML(examsDy.map(t=>t.title).join(', '))}</span></td>`;
         else if(examsDy)html+=`<td><span class="blocked">🚫</span></td>`;
         else if(isGlobalEvent(st))html+=`<td><span class="ev">📅 ${globalEventTitle(st)}</span></td>`;
-        else if(ent&&taskMap[ent.taskId])html+=`<td><span class="blk">${taskMap[ent.taskId].title} (${ent.nth}/${taskMap[ent.taskId].needed})</span></td>`;
+        else if(ent&&taskMap[ent.taskId])html+=`<td><span class="blk">${escapeHTML(taskMap[ent.taskId].title)} (${ent.nth}/${taskMap[ent.taskId].needed})</span></td>`;
         else if(st!=='free')html+=`<td><span class="blocked">${getBlockedLabel(st)||'—'}</span></td>`;
         else html+=`<td></td>`;
       }
@@ -11438,7 +11438,7 @@ function _openExamDayChooser(dId, tasks){
   const div=document.createElement('div');
   div.id='examChooserModal';
   div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3100;display:flex;align-items:center;justify-content:center;';
-  const opts=tasks.map(t=>`<button onclick="document.getElementById('examChooserModal').remove();openExamDayModal('${dId}','${t.id}')" style="padding:10px 14px;border-radius:9px;border:1.5px solid var(--border);background:#fff;font-size:.88em;cursor:pointer;text-align:right;font-family:inherit;width:100%;">📝 ${t.title}<span style="color:var(--muted);font-size:.8em;margin-right:6px;">${t.calendarId==='work'?'💼':'📚'}</span></button>`).join('');
+  const opts=tasks.map(t=>`<button onclick="document.getElementById('examChooserModal').remove();openExamDayModal('${dId}','${t.id}')" style="padding:10px 14px;border-radius:9px;border:1.5px solid var(--border);background:#fff;font-size:.88em;cursor:pointer;text-align:right;font-family:inherit;width:100%;">📝 ${escapeHTML(t.title)}<span style="color:var(--muted);font-size:.8em;margin-right:6px;">${t.calendarId==='work'?'💼':'📚'}</span></button>`).join('');
   div.innerHTML=`<div style="background:var(--card);border-radius:14px;padding:18px 16px;max-width:320px;width:90%;direction:rtl;"><div style="font-weight:700;font-size:.9em;margin-bottom:12px;">בחר משימה לעריכה</div><div style="display:flex;flex-direction:column;gap:6px;">${opts}</div><button onclick="document.getElementById('examChooserModal').remove()" style="margin-top:10px;width:100%;padding:8px;border-radius:8px;border:none;background:var(--bg2);font-size:.82em;cursor:pointer;">ביטול</button></div>`;
   document.body.appendChild(div);
 }
@@ -14167,6 +14167,11 @@ function runAIProfileTests(){
   ok('12. אירוע בשעות קדושות מקבל אזהרה',fri===5&&sacredConflicts(pr,[{action:'create_event',title:'פגישה',date:'2026-02-20',startHour:18,endHour:19}]).length===1);
   ok('13. אירוע מחוץ לשעות קדושות — בלי אזהרה',sacredConflicts(pr,[{action:'create_event',title:'פגישה',date:'2026-02-20',startHour:9,endHour:10}]).length===0);
   ok('14. normalizeAIProfile מקבל זבל בלי לזרוק',normalizeAIProfile('junk').topics.work===null&&normalizeAIProfile({topics:{work:{days:[1]}}}).topics.work.days[0]===1);
+  { // XSS hardening: task titles are escaped at HTML sinks
+    ok('X1. escapeHTML מנטרל תגיות וגרשיים',escapeHTML('<img src=x onerror=1>"\'')==='&lt;img src=x onerror=1&gt;&quot;&#39;');
+    const _s=String(document.querySelector('script:not([src])')?.textContent||'');
+    ok('X2. אין עוד הזרקת title/msg גולמית ל-HTML של אזהרות/אירועים/בלוקים',_s.length>100000&&!/\$\{a\.msg\}<\/span>/.test(_s)&&!/event-card-name">📅 \$\{ev\.title\}/.test(_s)&&!/ex-name">\$\{splitBadge\}\$\{task\.title\}/.test(_s));
+  }
   { // vision-anchored voice
     const doc='השגרה אמורה לפנות לך מקום לחיים\nחופש פנימי, ולב פנוי\nביקשת לתחום את העבודה';
     let r=applyProfileUpdate(emptyAIProfile(),{vision:['חופש פנימי, ולב פנוי','מקום לחיים מושלמים']},doc,8,24);
