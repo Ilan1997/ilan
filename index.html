@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-26.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-26.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10432,6 +10432,8 @@ function onbNormalizeExtraction(raw,ctx){
     const q={key,title,kind:ONB_KINDS.includes(g.kind)?g.kind:'work'};const t=Math.round(Number(g.requiredTotalMinutes)),w=Math.round(Number(g.requiredPerWeekMinutes));
     q.requiredTotalMinutes=t>=15&&t<=6000?t:null;q.requiredPerWeekMinutes=w>=15&&w<=3000?w:null;
     const sm=Math.round(Number(g.sessionMinutes)),gd=dows(g.days);if(sm>=10&&sm<=600&&gd.length)q.requiredPerWeekMinutes=sm*gd.length;q.deadline=date(g.deadline)||null;q.fillsRoutineKey=str(g.fillsRoutineKey,40)||null;o.goals.push(q);});
+  if(!o.officeHours){const rr=o.routines.find(r=>OFFICE_TITLE.test(String(r.title||'').trim())&&!r.perWeek&&!r.perDay&&!r.perTwoWeeks&&r.window&&r.window.to>r.window.from);
+    if(rr)o.officeHours={days:rr.days&&rr.days.length?rr.days:[0,1,2,3,4],from:rr.window.from,to:rr.window.to};}   // the model recorded the office as a routine with a window: that is work hours
   if(o.routines.length)o.routines=o.routines.filter(r=>!(OFFICE_TITLE.test(String(r.title||'').trim())&&!r.perWeek&&!r.perDay&&!r.perTwoWeeks));   // "I work in the office" is not a routine and carries no hours
   o.fixed.forEach(f=>{if(!f.start||f.end||!ans)return;
     const m=ans.match(/(\d{1,2}):(\d{2})\s*(?:עד|-|–)\s*(\d{1,2}):(\d{2})/);if(m&&(+m[1])*60+(+m[2])===f.start.min){const e=(+m[3])*60+(+m[4]);if(e>f.start.min&&e<=1439){f.end={min:e,precision:'exact'};return;}}
@@ -10481,7 +10483,7 @@ function onbNormalizeExtraction(raw,ctx){
     while((m=rc.exec(ans))){const dw=DN_HE[m[1]];if(/אחה.?צ|אחר הצהריים|בוקר|צהריים|בערב|אחרי|עד\s*\d/.test(String(m[2]||'').split(/\s+ו/)[0]))continue;if(!hasB('closed_day',dw))o.boundaries.push({rule:m[0].trim().slice(0,100),kind:'closed_day',defined:true,dow:dw});}
   }
   // 4) a single fixed appointment stated with a weekday and times in one sentence, dropped by the model (kept only as a success criterion)
-  if(ans&&topic==='q2'&&!o.fixed.length){
+  if(ans&&topic==='q2'&&(!o.fixed.length||o.fixed.every(f=>!f.start&&!f.end))){
     const sentences=ans.split(/[.\n]/);
     for(const sen of sentences){
       const m=sen.match(/^\s*([א-ת][א-ת\s]{1,40}?)\s+ב(?:יום\s*)?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)(?![א-ת])(.*)$/);
@@ -10490,10 +10492,35 @@ function onbNormalizeExtraction(raw,ctx){
       if(!em||!sm)continue;
       const eh=+em[1]*60+(em[2]?+em[2]:0),sh=+sm[2]*60+(sm[3]?+sm[3]:0);
       if(!(sh<eh)||sh<300||eh>1439)continue;
-      o.fixed.push({key:m[1].trim().slice(0,40),title:m[1].trim().slice(0,80),days:[DN_HE[m[2]]],start:{min:sh,precision:sm[1]?'approx':'exact'},end:{min:eh,precision:'exact'}});
+      const ex=o.fixed.find(f=>f.title&&(m[1].includes(f.title)||String(f.title).includes(m[1].trim())));
+      if(ex)Object.assign(ex,{start:{min:sh,precision:sm[1]?'approx':'exact'},end:{min:eh,precision:'exact'}},ex.days&&ex.days.length?{}:{days:[DN_HE[m[2]]]});
+      else o.fixed.push({key:m[1].trim().slice(0,40),title:m[1].trim().slice(0,80),days:[DN_HE[m[2]]],start:{min:sh,precision:sm[1]?'approx':'exact'},end:{min:eh,precision:'exact'}});
       break;
     }
   }
+  // 4b) brain dump: "<day phrase> … at HH:MM" / "<thing> on <day>s" clauses the model skipped (appointments, courses, pickups) — only with an explicit day and a commitment marker or a time
+  if(ans&&(topic==='q1'||topic==='q2')){
+    const DAYS_P={'ראשון':0,'שני':1,'שלישי':2,'רביעי':3,'חמישי':4,'שישי':5,'שבת':6,'שבתות':6};
+    const MARK=/קורס|שיעור|טיפול|פגישה|ישיבה|תור|חוג|הרצאה|לוקח|אוסף|מגיע|מסיע|מתאמן/;
+    const words=t=>String(t||'').split(/[\s,.()"׳']+/).map(w=>w.replace(/^[והבלמש]+/,'')).filter(w=>w.length>=3).map(w=>w.slice(0,4));
+    ans.split(/[,.;\n]/).forEach(cl=>{
+      const dm=cl.match(/ב(?:ימי\s+|יום\s+)?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבתות|שבת)(?![א-ת])/);
+      if(!dm||/משרד|עובד|עבוד|פנוי|אצל אמא|ביומן|כבר שם|כבר קבוע/.test(cl))return;
+      const tm=cl.match(/(?:^|[\s,])ב-?\s*(\d{1,2})(?::([0-5]\d))?(?![\d:])(?!\s*(?:שעות|דקות|ימים|פעמים|ילדים))/);
+      const hasT=!!tm&&+tm[1]>=5&&+tm[1]<=23;
+      if(!hasT&&!MARK.test(cl))return;
+      const idx=cl.indexOf(dm[0]);let title=cl.slice(0,idx).trim()||cl.slice(idx+dm[0].length).trim();
+      title=title.replace(/(?:^|\s)ב-?\s*\d{1,2}(?::[0-5]\d)?/g,' ').replace(/\s+ש.*$/,'').replace(/^ו/,'').replace(/^(?:אני|אצלי)\s+/,'').replace(/\s+/g,' ').trim().slice(0,60);
+      if(title.length<3)return;
+      const day=DAYS_P[dm[1]],tw=words(title);
+      const dup=o.fixed.some(f=>words(f.title).some(w=>tw.indexOf(w)>=0)||((f.days||[]).indexOf(day)>=0&&hasT&&f.start&&f.start.min===+tm[1]*60+(tm[2]?+tm[2]:0)))||o.routines.some(r=>words(r.title).some(w=>tw.indexOf(w)>=0));
+      if(dup)return;
+      const f={key:title.slice(0,40),title,days:[day]};if(hasT)f.start={min:+tm[1]*60+(tm[2]?+tm[2]:0),precision:'exact'};o.fixed.push(f);
+    });
+  }
+  // 4c) chaos triggers said as "what breaks my week is X or Y"
+  if(ans&&!o.chaosTriggers.length){const cm=ans.match(/מה\s*ש(?:מפרק|שובר|הורס|מפיל|מבלבל)\s*(?:לי\s*)?(?:את\s*)?(?:ה?שבוע|הכול|הכל)\s*(?:זה\s*)?([^.]+)/);
+    if(cm)o.chaosTriggers=cm[1].split(/\s+או\s+|,\s*/).map(t=>t.trim().replace(/^ו/,'').slice(0,100)).filter(t=>t.length>=3).slice(0,6);}
   // 5) a weekly time budget stated as "<thing> N hours per week" and not captured as a goal or routine
   if(ans){
     const NUMW={'שעה':1,'שעתיים':2,'שלוש':3,'ארבע':4,'חמש':5,'שש':6,'שבע':7,'שמונה':8,'תשע':9,'עשר':10};
@@ -10503,6 +10530,14 @@ function onbNormalizeExtraction(raw,ctx){
       if(!known&&hrs>=1&&hrs<=40&&title.length>=3&&!/^(שעות|פעמים|ימים|לפחות|בערך|כמעט|רק|עוד|עד|בסך|הכל|כ|וגם|ו?אחרי|בין|סביב|מקסימום|מינימום)$/.test(title))
         o.goals.push({key:title,title,kind:'work',requiredPerWeekMinutes:hrs*60});}
   }
+  // 3a) the model sometimes records the busy-week floor as extra routines ("ריצות (שבוע עמוס)"): that is a minimum viable week, never a second routine
+  { const MVWDUP=/שבוע עמוס|שבוע לחוץ|מינימום|מינימלי|_mvw$|_min$/;
+    const keep=o.routines.filter(r=>!MVWDUP.test(String(r.title||'')+' '+String(r.key||'')));
+    if(keep.length&&keep.length<o.routines.length){
+      const dropped=o.routines.filter(r=>keep.indexOf(r)<0);
+      dropped.forEach(d=>{const stem=String(d.title||'').split(/[\s(]+/).filter(w=>w.length>=3)[0]||'';const base=keep.find(k=>stem&&String(k.title||'').includes(stem.slice(0,Math.max(3,stem.length-1))));
+        if(base){base.inMvw=true;base.protected=true;if(!o.minimumViableWeek.length&&d.perWeek)o.minimumViableWeek.push(d.perWeek+' '+String(base.title).slice(0,60));}});
+      o.routines=keep;} }
   // 3) minimum viable week: "if the week is heavy — at least …" / "the two most important: …" → clause is kept verbatim and mapped to the routines it names
   if(ans&&topic==='q1'){
     const m1=ans.match(/אם\s+(?:השבוע|זה|הוא)\s+(?:עמוס|לחוץ|קשה|מטורף|צפוף)[^—\-:,]{0,15}[—\-:,]\s*([^.]*לפחות[^.]*)/)||ans.match(/(?:שני|שלושת|שלוש)\s+הדברים\s+הכי\s+(?:חשובים|חשוב)[^:]{0,10}:\s*([^.]*)/);

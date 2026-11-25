@@ -763,3 +763,6 @@ Run 8 (real Gemini, lite models; 40 cases): 33 pass, 2 minor, 4 major, 1 critica
 - a single fixed appointment with weekday + end + start in one sentence recovered (T02); "<thing> N שעות בשבוע" recovered as a weekly-minutes goal with a stop-word list (M01);
 - a single activity's stated cadence is grounded (C02).
 Replaying run 8's raw outputs: 0 critical, 0 major, 1 minor (P04 dinner kind). Tests nx29–nx32. Bug caught on the way: a replaced block had dropped the lateRiser line (daystart proposal vanished) — scenarios caught it.
+
+## §69 — Eval run 9 fixes (build 2026-11-26.2)
+Run 9: 35 pass, 0 critical, 5 major (T01 invented "busy-week" duplicate routines; T02 appointment returned day-only; B01 skipped appointments; B03 office returned as a routine; M03 chaos triggers). Grounded fixes in `onbNormalizeExtraction`: busy-week duplicate routines folded into the base routine (inMvw+protected, MVW kept); times filled onto an existing day-only fixed item from its sentence; brain-dump clauses with an explicit day + (time or commitment marker) recovered as fixed items, never duplicating anything the model already has or calendar items ("כבר ביומן"); an office-like routine with a window becomes work hours; "מה שמפרק לי את השבוע זה X או Y" → chaosTriggers. Replaying run 8 + run 9 raw outputs: 0 critical, 0 major; mock-expected 40/40. Tests nx33–nx36.

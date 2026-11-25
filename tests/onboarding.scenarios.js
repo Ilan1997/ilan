@@ -298,6 +298,23 @@
       const f1=A({officeHours:{days:[0,1,2,3,4],from:'08:30',to:'17:30'}},{topic:'q2',answer:'משרד 08:30 עד 17:30 בימים א׳ עד ה׳. טיפול משפחתי ביום שני עד 17:00, מתחיל בערך ב-15:30.'}).fixed;
       const g1=A({},{topic:'q1',answer:'תזה שש שעות בשבוע'}).goals,g0=A({},{topic:'q1',answer:'אני רץ הרבה'}).goals;
       o.nx32_fixedAndWeeklyBudgetRecoveredFromText=f1.length===1&&f1[0].days[0]===1&&f1[0].start.min===930&&f1[0].start.precision==='approx'&&f1[0].end.min===1020&&g1.length===1&&g1[0].requiredPerWeekMinutes===360&&g0.length===0;}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      // eval run 9: busy-week floor recorded as extra routines is folded into the base routines (T01)
+      const t1=A({routines:[{key:'running',title:'ריצות',kind:'fitness',perWeek:3},{key:'running_mvw',title:'ריצות (שבוע עמוס)',kind:'fitness',perWeek:2}]},{topic:'q1',answer:'שלוש ריצות בשבוע. אם השבוע עמוס — לפחות שתי ריצות.'});
+      o.nx33_busyWeekDuplicatesFoldIntoBaseRoutine=t1.routines.length===1&&t1.routines[0].inMvw===true&&t1.minimumViableWeek.length===1;
+      // the model returned the appointment as a day-only fixed item: times come from the sentence (T02)
+      const t2=A({fixed:[{key:'t',title:'טיפול משפחתי',days:[1]}]},{topic:'q2',answer:'משרד 08:30 עד 17:30 בימים א׳ עד ה׳. טיפול משפחתי ביום שני עד 17:00, מתחיל בערך ב-15:30.'}).fixed;
+      o.nx34_timesFilledOntoExistingFixed=t2.length===1&&t2[0].start.min===930&&t2[0].end.min===1020;
+      // brain dump: skipped appointments recovered; ones the model already has / calendar items are not duplicated (X02, A02, E03)
+      const bd='אני חייב 3 ריצות בשבוע, בימי שלישי אני לוקח את הקטנה מהגן ב-16:00, וקורס אונליין בשבתות שאני לא מוותר עליו.';
+      const b1=A({routines:[{key:'r',title:'ריצות',kind:'fitness',perWeek:3}]},{topic:'q1',answer:bd}).fixed;
+      const b2=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'},end:{hhmm:'18:00'}}]},{topic:'q2',answer:'הטיפול ביום שני. לא, בעצם ביום שלישי, שעה 17:00 עד 18:00.'}).fixed;
+      const b3=A({},{topic:'q2',answer:'הישיבה ביום שני כבר שם'}).fixed;
+      o.nx35_brainDumpFixedRecoveredNotDuplicated=b1.length===2&&b1.some(f=>f.days[0]===2&&f.start.min===960)&&b1.some(f=>f.days[0]===6&&f.start===undefined&&/קורס/.test(f.title))&&b2.length===1&&b3.length===0;
+      // office recorded as a routine with a window → work hours; chaos triggers from "what breaks my week"
+      const c1=A({routines:[{key:'o',title:'עבודה במשרד',kind:'work',days:[0,1,2,3],window:{from:'09:00',to:'18:00'}}]},{topic:'q2',answer:'אני עובד במשרד בכל יום מ-9 עד 6'});
+      const c2=A({},{topic:'q3',answer:'ומה שמפרק לי את השבוע זה ילד חולה או לקוח שמתקשר בפאניקה.'});
+      o.nx36_officeRoutineBecomesWorkHoursAndChaosFromWords=c1.officeHours&&c1.officeHours.from===540&&c1.officeHours.to===1080&&c1.routines.length===0&&c2.chaosTriggers.length===2;}
     {const a='אני רץ שלוש פעמים בשבוע ומיילים מצטברים לי בעבודה.';
       const rs=onbNormalizeExtraction({routines:[{key:'run',title:'ריצה',kind:'fitness',domain:'life',perWeek:3,frequencyEvidence:'שלוש פעמים בשבוע'},{key:'mail',title:'מיילים',kind:'email',domain:'work',maintenance:'work',perDay:true,frequencyEvidence:'כל יום'}]},{topic:'q3',answer:a}).routines;
       const run=rs.find(r=>r.key==='run'),mail=rs.find(r=>r.key==='mail');
