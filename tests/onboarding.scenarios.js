@@ -315,6 +315,8 @@
       const c1=A({routines:[{key:'o',title:'עבודה במשרד',kind:'work',days:[0,1,2,3],window:{from:'09:00',to:'18:00'}}]},{topic:'q2',answer:'אני עובד במשרד בכל יום מ-9 עד 6'});
       const c2=A({},{topic:'q3',answer:'ומה שמפרק לי את השבוע זה ילד חולה או לקוח שמתקשר בפאניקה.'});
       o.nx36_officeRoutineBecomesWorkHoursAndChaosFromWords=c1.officeHours&&c1.officeHours.from===540&&c1.officeHours.to===1080&&c1.routines.length===0&&c2.chaosTriggers.length===2;}
+    {const r1=onbNormalizeExtraction({routines:[{key:'c',title:'קורס אונליין',kind:'study',perWeek:1,protected:true},{key:'r',title:'ריצות',kind:'fitness',perWeek:3}]},{topic:'q1',answer:'אני חייב 3 ריצות בשבוע, וקורס אונליין בשבתות שאני לא מוותר עליו.'});
+      o.nx37_courseRoutineWithoutDayBecomesFixedOnNamedDay=r1.fixed.length===1&&r1.fixed[0].days[0]===6&&r1.routines.length===1&&r1.routines[0].key==='r';}
     {const a='אני רץ שלוש פעמים בשבוע ומיילים מצטברים לי בעבודה.';
       const rs=onbNormalizeExtraction({routines:[{key:'run',title:'ריצה',kind:'fitness',domain:'life',perWeek:3,frequencyEvidence:'שלוש פעמים בשבוע'},{key:'mail',title:'מיילים',kind:'email',domain:'work',maintenance:'work',perDay:true,frequencyEvidence:'כל יום'}]},{topic:'q3',answer:a}).routines;
       const run=rs.find(r=>r.key==='run'),mail=rs.find(r=>r.key==='mail');

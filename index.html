@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-26.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-26.3';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10513,8 +10513,10 @@ function onbNormalizeExtraction(raw,ctx){
       title=title.replace(/(?:^|\s)ב-?\s*\d{1,2}(?::[0-5]\d)?/g,' ').replace(/\s+ש.*$/,'').replace(/^ו/,'').replace(/^(?:אני|אצלי)\s+/,'').replace(/\s+/g,' ').trim().slice(0,60);
       if(title.length<3)return;
       const day=DAYS_P[dm[1]],tw=words(title);
-      const dup=o.fixed.some(f=>words(f.title).some(w=>tw.indexOf(w)>=0)||((f.days||[]).indexOf(day)>=0&&hasT&&f.start&&f.start.min===+tm[1]*60+(tm[2]?+tm[2]:0)))||o.routines.some(r=>words(r.title).some(w=>tw.indexOf(w)>=0));
+      const dup=o.fixed.some(f=>words(f.title).some(w=>tw.indexOf(w)>=0)||((f.days||[]).indexOf(day)>=0&&hasT&&f.start&&f.start.min===+tm[1]*60+(tm[2]?+tm[2]:0)))||o.routines.some(r=>words(r.title).some(w=>tw.indexOf(w)>=0)&&!(/^(טיפול|פגישה|ישיבה|שיעור|קורס|הרצאה|תור)/.test(String(r.title||'').trim())&&!(r.days&&r.days.length)&&!r.perDay));
       if(dup)return;
+      // the model recorded a day-bound appointment/course as a weekly routine without the day: it is a fixed event on the day the user named
+      const asR=o.routines.find(r=>words(r.title).some(w=>tw.indexOf(w)>=0));if(asR)o.routines=o.routines.filter(r=>r!==asR);
       const f={key:title.slice(0,40),title,days:[day]};if(hasT)f.start={min:+tm[1]*60+(tm[2]?+tm[2]:0),precision:'exact'};o.fixed.push(f);
     });
   }
