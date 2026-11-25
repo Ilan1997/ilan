@@ -754,3 +754,12 @@ Task/event titles and alert messages are now escaped with escapeHTML at 8 HTML s
 
 ## §67 — Copy test JWT button (build 2026-11-25.2)
 Account screen: "העתק מפתח זמני לבדיקות" copies the refreshed session access_token to the clipboard (textarea fallback) so eval/E2E can run without devtools or a password. Local only, never sent anywhere. Test J1.
+
+## §68 — Eval run 8 fixes (build 2026-11-26.1)
+Run 8 (real Gemini, lite models; 40 cases): 33 pass, 2 minor, 4 major, 1 critical (A02: "חמישי" returned as Wednesday). Fixes are grounded completions in `onbNormalizeExtraction`, never model arithmetic:
+- a single fixed event whose weekday the user named → the named day wins (critical A02);
+- boundaries said in words ("בשישי לא עובד בכלל", "אחרי 20:00 לא עובד") recovered when the model only echoed them into successCriteria; part-day closures are not full closed days;
+- minimum-viable-week clause ("אם השבוע עמוס — לפחות…", "שני הדברים הכי חשובים: …") kept verbatim, mapped to the routines it names (inMvw+protected);
+- a single fixed appointment with weekday + end + start in one sentence recovered (T02); "<thing> N שעות בשבוע" recovered as a weekly-minutes goal with a stop-word list (M01);
+- a single activity's stated cadence is grounded (C02).
+Replaying run 8's raw outputs: 0 critical, 0 major, 1 minor (P04 dinner kind). Tests nx29–nx32. Bug caught on the way: a replaced block had dropped the lateRiser line (daystart proposal vanished) — scenarios caught it.

@@ -283,6 +283,21 @@
       o.nx27_officeWorkIsNeverARoutine=r1.length===1&&r1[0].key==='r';
       const e1=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'}}]},{answer:'הטיפול ביום שלישי 17:00 עד 18:00'}).fixed[0],e2=A({fixed:[{key:'m',title:'ישיבת צוות',days:[0],start:{hhmm:'09:30',precision:'approx'}}]},{answer:'ביום ראשון בבוקר יש לי ישיבת צוות ב-9:30 שנמשכת בערך שעה'}).fixed[0],e3=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'17:00'}}]},{answer:'הטיפול ביום שלישי ב-17:00'}).fixed[0],e4=A({fixed:[{key:'t',title:'טיפול',days:[2],start:{hhmm:'16:00'}}]},{answer:'טיפול 17:00 עד 18:00'}).fixed[0];
       o.nx28_endRecoveredFromTheAnswerOnlyWhenItMatchesTheStart=e1.end.min===1080&&e2.end.min===630&&e2.end.precision==='approx'&&e3.end===undefined&&e4.end===undefined;}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      // eval run 8: named weekday wins over the model's day arithmetic (critical A02)
+      const d1=A({fixed:[{key:'m',title:'פגישה עם המנחה',days:[3],semanticWindow:'אחה״צ'}]},{topic:'q2',answer:'פגישה עם המנחה ביום חמישי אחה״צ.'}).fixed[0];
+      const d2=A({fixed:[{key:'m',title:'פגישה',days:[2]}]},{topic:'q2',answer:'יש פגישה שבועית'}).fixed[0];
+      o.nx29_namedWeekdayWinsOverModelDay=d1.days[0]===4&&d2.days[0]===2;
+      // boundaries stated in words are recovered; part-day closure is not a full closed day
+      const b1=A({successCriteria:['x']},{topic:'q2',answer:'אני במשרד 9–17, בשישי אני לא עובד בכלל ואחרי 20:00 לא עובד.'}).boundaries,b2=A({},{topic:'q2',answer:'בשישי אחר הצהריים אני לא עובד'}).boundaries;
+      o.nx30_boundariesRecoveredFromWords=b1.some(b=>b.kind==='closed_day'&&b.dow===5)&&b1.some(b=>b.kind==='no_work_after'&&b.time===1200)&&!b2.some(b=>b.kind==='closed_day');
+      // minimum viable week clause is kept verbatim and mapped to the routines it names
+      const m1=A({routines:[{key:'r',title:'ריצה',kind:'fitness',perWeek:3},{key:'d',title:'ארוחת ערב',kind:'family',perWeek:4}]},{topic:'q1',answer:'שלוש ריצות בשבוע, ארוחת ערב ארבעה ערבים. אם השבוע עמוס — לפחות שתי ריצות ושני ערבים עם הילדים.'});
+      o.nx31_mvwClauseMapsToNamedRoutines=m1.minimumViableWeek.length===1&&m1.routines.every(r=>r.inMvw&&r.protected);
+      // dropped fixed appointment and weekly hour budget are recovered only from explicit text
+      const f1=A({officeHours:{days:[0,1,2,3,4],from:'08:30',to:'17:30'}},{topic:'q2',answer:'משרד 08:30 עד 17:30 בימים א׳ עד ה׳. טיפול משפחתי ביום שני עד 17:00, מתחיל בערך ב-15:30.'}).fixed;
+      const g1=A({},{topic:'q1',answer:'תזה שש שעות בשבוע'}).goals,g0=A({},{topic:'q1',answer:'אני רץ הרבה'}).goals;
+      o.nx32_fixedAndWeeklyBudgetRecoveredFromText=f1.length===1&&f1[0].days[0]===1&&f1[0].start.min===930&&f1[0].start.precision==='approx'&&f1[0].end.min===1020&&g1.length===1&&g1[0].requiredPerWeekMinutes===360&&g0.length===0;}
     {const a='אני רץ שלוש פעמים בשבוע ומיילים מצטברים לי בעבודה.';
       const rs=onbNormalizeExtraction({routines:[{key:'run',title:'ריצה',kind:'fitness',domain:'life',perWeek:3,frequencyEvidence:'שלוש פעמים בשבוע'},{key:'mail',title:'מיילים',kind:'email',domain:'work',maintenance:'work',perDay:true,frequencyEvidence:'כל יום'}]},{topic:'q3',answer:a}).routines;
       const run=rs.find(r=>r.key==='run'),mail=rs.find(r=>r.key==='mail');

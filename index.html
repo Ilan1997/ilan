@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-25.2';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-26.1';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10445,8 +10445,9 @@ function onbNormalizeExtraction(raw,ctx){
     const esc=s=>String(s||'').replace(/[.*+?^$()|[\]\\]/g,'\\$&');
     const near=t=>{if(!t)return false;let m=null;try{m=ans.match(new RegExp('.{0,45}'+esc(t)+'.{0,45}','i'));}catch(_e){}return !!(m&&FREQ.test(m[0]));};
     if(near(r.title)||near(r.key))return true;
-    const kp=r.kind==='fitness'?/ריצ|ספורט|אימון|כושר|הליכה/:r.kind==='family'?/ילד|משפח|ארוחת/:r.kind==='deep_work'?/עבודה עמוקה|ריכוז/:r.kind==='email'?/מייל|דוא.?ל|אימייל/:r.kind==='payments'?/חשבונ|תשלומ/:r.kind==='shopping'?/קני/:null;
+    const kp=r.kind==='fitness'?/ריצ|רץ|רצ|ספורט|אימון|כושר|הליכה/:r.kind==='family'?/ילד|משפח|ארוחת/:r.kind==='deep_work'?/עבודה עמוקה|ריכוז/:r.kind==='email'?/מייל|דוא.?ל|אימייל/:r.kind==='payments'?/חשבונ|תשלומ/:r.kind==='shopping'?/קני/:null;
     if(kp){const m=ans.match(new RegExp('.{0,45}'+kp.source+'.{0,45}','i'));if(m&&FREQ.test(m[0]))return true;}
+    if(o.routines.length===1&&FREQ.test(ans))return true;   // a single activity: the stated cadence cannot belong to anything else
     return false;
   };
   o.routines.forEach(r=>{if((r.perWeek!==undefined||r.perDay||r.perTwoWeeks)&&!freqGrounded(r)){delete r.perWeek;delete r.perDay;delete r.perTwoWeeks;}});
@@ -10464,6 +10465,57 @@ function onbNormalizeExtraction(raw,ctx){
     if(q.kind==='closed_day'&&q.semanticWindow)delete q.time;               // part-day closure is a semantic window, never a timed rule
     if(q.kind==='no_work_after'&&q.time==null)q.defined=false;o.boundaries.push(q);});
   if(x.lateRiser&&hm(x.lateRiser.earliest)!=null)o.lateRiser={earliest:hm(x.lateRiser.earliest)};
+  // ── grounded completions from the user's own words (eval run 8) ──
+  const DN_HE={'ראשון':0,'שני':1,'שלישי':2,'רביעי':3,'חמישי':4,'שישי':5,'שבת':6},DN_AB={'א':0,'ב':1,'ג':2,'ד':3,'ה':4,'ו':5};
+  const namedDays=t=>{const set=new Set();let m;const r1=/(?:יום|ביום|ב)\s*(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)(?![א-ת])/g;while((m=r1.exec(t)))set.add(DN_HE[m[1]]);
+    const r2=/(?:יום|ביום)\s*([א-ו])[׳']/g;while((m=r2.exec(t)))set.add(DN_AB[m[1]]);return [...set].sort((p,q)=>p-q);};
+  // 1) a single fixed event whose weekday the user named: the named day wins over the model's day arithmetic (critical in the gate)
+  if(ans&&o.fixed.length===1){const D=namedDays(ans),f=o.fixed[0];
+    if(D.length&&Array.isArray(f.days)&&f.days.length===D.length&&f.days.some(d=>D.indexOf(d)<0)&&!/עד\s*(?:סוף\s*)?(?:יום\s*)?(?:ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)/.test(ans))f.days=D.slice();}
+  // 2) boundaries stated in plain words but only echoed into successCriteria
+  if(ans){
+    const hasB=(kind,dow)=>o.boundaries.some(b=>b.kind===kind&&(dow==null||b.dow===dow));
+    let m=ans.match(/אחרי\s*(\d{1,2})(?::([0-5]\d))?\s*(?:בערב|בלילה)?[^.,;]{0,12}?לא\s*עובד/);
+    if(m&&+m[1]>=12&&+m[1]<=23&&!hasB('no_work_after'))o.boundaries.push({rule:m[0].trim().slice(0,100),kind:'no_work_after',defined:true,time:+m[1]*60+(m[2]?+m[2]:0)});
+    const rc=/ב(?:יום\s*)?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)\s*(?:אני\s*)?לא\s*עובד(?:\s*בכלל)?([^.,;]{0,25})/g;
+    while((m=rc.exec(ans))){const dw=DN_HE[m[1]];if(/אחה.?צ|אחר הצהריים|בוקר|צהריים|בערב|אחרי|עד\s*\d/.test(String(m[2]||'').split(/\s+ו/)[0]))continue;if(!hasB('closed_day',dw))o.boundaries.push({rule:m[0].trim().slice(0,100),kind:'closed_day',defined:true,dow:dw});}
+  }
+  // 4) a single fixed appointment stated with a weekday and times in one sentence, dropped by the model (kept only as a success criterion)
+  if(ans&&topic==='q2'&&!o.fixed.length){
+    const sentences=ans.split(/[.\n]/);
+    for(const sen of sentences){
+      const m=sen.match(/^\s*([א-ת][א-ת\s]{1,40}?)\s+ב(?:יום\s*)?(ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת)(?![א-ת])(.*)$/);
+      if(!m||/משרד|עבוד/.test(m[1]))continue;
+      const rest=m[3],em=rest.match(/עד\s*(\d{1,2})(?::([0-5]\d))?/),sm=rest.match(/(?:מתחיל|מתחילה|בשעה|ב-?)\s*(בערך\s*)?(?:ב-?)?(\d{1,2})(?::([0-5]\d))?/);
+      if(!em||!sm)continue;
+      const eh=+em[1]*60+(em[2]?+em[2]:0),sh=+sm[2]*60+(sm[3]?+sm[3]:0);
+      if(!(sh<eh)||sh<300||eh>1439)continue;
+      o.fixed.push({key:m[1].trim().slice(0,40),title:m[1].trim().slice(0,80),days:[DN_HE[m[2]]],start:{min:sh,precision:sm[1]?'approx':'exact'},end:{min:eh,precision:'exact'}});
+      break;
+    }
+  }
+  // 5) a weekly time budget stated as "<thing> N hours per week" and not captured as a goal or routine
+  if(ans){
+    const NUMW={'שעה':1,'שעתיים':2,'שלוש':3,'ארבע':4,'חמש':5,'שש':6,'שבע':7,'שמונה':8,'תשע':9,'עשר':10};
+    const gm=ans.match(/(?:^|[\s,:;])(ה?[א-ת]{2,15})\s+(שעה|שעתיים|שלוש|ארבע|חמש|שש|שבע|שמונה|תשע|עשר|\d{1,2})\s+(?:שעות\s+)?בשבוע/);
+    if(gm){const hrs=NUMW[gm[2]]!=null?NUMW[gm[2]]:+gm[2],title=gm[1].replace(/^ה/,'');
+      const known=o.goals.some(g=>String(g.title).includes(title))||o.routines.some(r=>String(r.title).includes(title)||String(r.key).includes(title));
+      if(!known&&hrs>=1&&hrs<=40&&title.length>=3&&!/^(שעות|פעמים|ימים|לפחות|בערך|כמעט|רק|עוד|עד|בסך|הכל|כ|וגם|ו?אחרי|בין|סביב|מקסימום|מינימום)$/.test(title))
+        o.goals.push({key:title,title,kind:'work',requiredPerWeekMinutes:hrs*60});}
+  }
+  // 3) minimum viable week: "if the week is heavy — at least …" / "the two most important: …" → clause is kept verbatim and mapped to the routines it names
+  if(ans&&topic==='q1'){
+    const m1=ans.match(/אם\s+(?:השבוע|זה|הוא)\s+(?:עמוס|לחוץ|קשה|מטורף|צפוף)[^—\-:,]{0,15}[—\-:,]\s*([^.]*לפחות[^.]*)/)||ans.match(/(?:שני|שלושת|שלוש)\s+הדברים\s+הכי\s+(?:חשובים|חשוב)[^:]{0,10}:\s*([^.]*)/);
+    if(m1){const clause=m1[1].trim().slice(0,100);
+      if(!o.minimumViableWeek.length&&clause)o.minimumViableWeek.push(clause);
+      const KP={fitness:/ריצ|ספורט|אימון|כושר|הליכה/,family:/ילד|משפח|ערב/,deep_work:/עמוק|ריכוז/};
+      const STOP=new Set(['בשבוע','שלוש','ארבע','שתי','שני','עם','ביום','ערב']);
+      o.routines.forEach(r=>{
+        const stems=String(r.title||'').split(/\s+/).map(w=>w.replace(/^ה/,'')).filter(w=>w.length>=4&&!STOP.has(w)).map(w=>w.slice(0,Math.max(3,w.length-1)));
+        const hit=stems.some(st=>clause.includes(st))||(KP[r.kind]&&KP[r.kind].test(clause));
+        if(hit){r.inMvw=true;r.protected=true;}});
+    }
+  }
   return o;
 }
 function onbEmptyFacts(){return{successCriteria:[],minimumViableWeek:[],routines:[],fixed:[],goals:[],goalsNone:false,chaosTriggers:[],boundaries:[],officeHours:null,lateRiser:null,dontKnow:[]};}
