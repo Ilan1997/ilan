@@ -118,3 +118,7 @@ node tests/onboarding-eval/e2e.js dani --function --jwt $env:JWT
   `node tests/onboarding-eval/e2e.js noam --function --jwt $env:JWT --delay 4000 --trace t-noam.json` (וכנ"ל `dani`, `yuval`).
 
 **חוב ידוע:** בצ'אט החופשי נוסף "קול מחובר לחזון" (§65) — השפעתו על תשובות Gemini אמיתיות לא נמדדה. ענף `chatgpt/onboarding-multi-gcal` (PR #1) כבר מוזג ל־main.
+
+
+## כיוון המוצר
+החזון ושלבי הפיתוח (שלב 0–7, ועיקרון הארכיטקטורה: מאיה היא שכבת ההבנה/זיכרון/המלצה, המנוע הדטרמיניסטי הוא שכבת השיבוץ, ומאיה לא עוקפת אותו) נמצאים ב-`PRODUCT_VISION.md`. כל החלטה בפיתוח נבדקת מולו. אנחנו כרגע בשלב 1 (אונבורדינג); הצעד הקריטי הבא שמיישר קו עם העיקרון: להחליף את השיבוץ הזמני ב-scheduleSet לפני UI.
