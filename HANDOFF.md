@@ -108,4 +108,13 @@ node tests/onboarding-eval/e2e.js dani --function --jwt $env:JWT
 אם `git pull` נופל על schannel: `git -c http.sslBackend=openssl pull`. אם יש שינויים מקומיים בקבצים — `git stash` ואז pull.
 
 **הצעד הבא:** (1) להריץ E2E של `noam` ו־`dani` ואת yuval שוב, לתקן פגמים לפי השער. (2) להחליף את השיבוץ הזמני (`placement:'fallback_greedy'`, ה־TODO ליד `onbBuildTemplate`) ב־`scheduleSet`/`buildContextSnapshot`/`validatePlan` הקיימים. (3) רק אחר כך UI. פתוח לבדיקה: ה־E2E לא שומר את פלט המודל הגולמי — כדאי להוסיף `--trace` ששומר אותו, כדי שאפשר יהיה לשחזר פגמים.
+**עצרנו כאן (2026-11-26, אחרי build .4):** נוסף ל־`tests/onboarding-eval/e2e.js` (כלי בדיקה בלבד, `index.html` לא שונה, build לא עלה):
+- `--trace <file>` — שומר כל צעד (שאלה, תשובה, prompt, טקסט גולמי מהמודל, raw, מודל, latency), נכתב אחרי כל צעד וגם בכישלון.
+- `--replay <file>` — מריץ את הקוד הנוכחי על ה־raw שהוקלט, בלי קריאה למודל (חינם). מסרב ל־trace של משתמש אחר.
+- `--function` עושה ניסיון חוזר על 429/5xx (כמו `run.js`) ומכבד `--delay`.
+- נבדק: stub+trace → replay נותן פלט זהה ל־noam/yuval/dani; `npm test` + 3 אזורי זמן עוברים; `--mock-expected` 40/40.
+- **לא נעשה עדיין:** § חדש ב־`ARCHITECTURE.md` (§72) ועדכון `tests/onboarding-eval/README.md` לדגלים החדשים. לא רץ מול Gemini אמיתי.
+- **הצעד הבא נשאר (1):** להריץ אמיתי עם trace, ולשלוח את קבצי ה־trace:
+  `node tests/onboarding-eval/e2e.js noam --function --jwt $env:JWT --delay 4000 --trace t-noam.json` (וכנ"ל `dani`, `yuval`).
+
 **חוב ידוע:** בצ'אט החופשי נוסף "קול מחובר לחזון" (§65) — השפעתו על תשובות Gemini אמיתיות לא נמדדה. ענף `chatgpt/onboarding-multi-gcal` (PR #1) כבר מוזג ל־main.
