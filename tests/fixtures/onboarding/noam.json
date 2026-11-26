@@ -138,10 +138,7 @@
     "fixed": [
      {
       "key": "therapy",
-      "start": {
-       "hhmm": "15:30",
-       "precision": "approx"
-      }
+      "start": {"hhmm": "15:30", "precision": "approx"}
      }
     ]
    }
@@ -251,17 +248,5 @@
     ]
    }
   }
- ],
- "variantDontKnowTherapyStart": {
-  "replaceIndex": 2,
-  "step": {
-   "expect": "f1",
-   "answer": "לא יודע",
-   "extraction": {
-    "dontKnow": [
-     "fixed.therapy.start"
-    ]
-   }
-  }
- }
+ ]
 }

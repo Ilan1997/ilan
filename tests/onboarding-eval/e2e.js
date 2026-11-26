@@ -53,7 +53,7 @@ setTimeout(async()=>{
       raw=p.ok?J(p.raw):{};Object.assign(rec,{prompt,text:res.text,model:res.model,parsed:!!p.ok,latencyMs:Date.now()-t0});
       console.log('      ['+(res.model||'?')+' · '+rec.latencyMs+'ms'+(rec.repaired?' · repair':'')+(p.ok?'':' · ⚠ JSON לא תקין גם אחרי תיקון')+']');}
     else raw=step.extraction;
-    rec.raw=raw;w.__raw=raw;st=JSON.parse(w.eval('JSON.stringify(onbAdvance(__st,__raw))'));
+    rec.raw=raw;w.__raw=raw;w.__meta={answer:step.answer};st=JSON.parse(w.eval('JSON.stringify(onbAdvance(__st,__raw,__meta))'));
     rec.next=st.current?st.current.id:null;trace.steps.push(rec);saveTrace();i++;console.log('');}
   }catch(e){trace.error=String(e.message||e);saveTrace();console.error('\nנעצר בצעד '+i+': '+trace.error+(tracePath?'\nה־trace עד כאן נשמר ב־'+tracePath:''));process.exit(2);}
   if(!st.done){trace.result={done:false,stoppedAfter:i,next:st.current&&st.current.text};saveTrace();console.log('השיחה לא הסתיימה אחרי '+i+' תשובות. השאלה הבאה: '+(st.current&&st.current.text));process.exit(3);}

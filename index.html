@@ -10527,9 +10527,13 @@ function onbNormalizeExtraction(raw,ctx){
       const day=DAYS_P[dm[1]],tw=words(title);
       const dup=o.fixed.some(f=>words(f.title).some(w=>tw.indexOf(w)>=0)||((f.days||[]).indexOf(day)>=0&&hasT&&f.start&&f.start.min===+tm[1]*60+(tm[2]?+tm[2]:0)))||o.routines.some(r=>words(r.title).some(w=>tw.indexOf(w)>=0)&&!(/^(טיפול|פגישה|ישיבה|שיעור|קורס|הרצאה|תור)/.test(String(r.title||'').trim())&&!(r.days&&r.days.length)&&!r.perDay));
       if(dup)return;
-      // the model recorded a day-bound appointment/course as a weekly routine without the day: it is a fixed event on the day the user named
-      const asR=o.routines.find(r=>words(r.title).some(w=>tw.indexOf(w)>=0));if(asR)o.routines=o.routines.filter(r=>r!==asR);
-      const f={key:title.slice(0,40),title,days:[day]};if(hasT)f.start={min:+tm[1]*60+(tm[2]?+tm[2]:0),precision:'exact'};o.fixed.push(f);
+      // the model recorded a day-bound appointment/course as a routine without the day
+      const asR=o.routines.find(r=>words(r.title).some(w=>tw.indexOf(w)>=0));
+      const rawRec=arr(x.routines).find(z=>z&&(z.key===asR?.key||z.title===asR?.title));
+      const rawPw=rawRec?Math.round(Number(rawRec.perWeek)):NaN;
+      if(asR&&(rawPw>=1||rawRec?.perDay)){asR.days=[day];}  // the model said it recurs weekly: add the day, keep as routine
+      else{if(asR)o.routines=o.routines.filter(r=>r!==asR);
+        const f={key:title.slice(0,40),title,days:[day]};if(hasT)f.start={min:+tm[1]*60+(tm[2]?+tm[2]:0),precision:'exact'};o.fixed.push(f);}
     });
   }
   // 4c) chaos triggers said as "what breaks my week is X or Y"
@@ -10554,7 +10558,7 @@ function onbNormalizeExtraction(raw,ctx){
       o.routines=keep;} }
   // 3) minimum viable week: "if the week is heavy — at least …" / "the two most important: …" → clause is kept verbatim and mapped to the routines it names
   if(ans&&topic==='q1'){
-    const m1=ans.match(/אם\s+(?:השבוע|זה|הוא)\s+(?:עמוס|לחוץ|קשה|מטורף|צפוף)[^—\-:,]{0,15}[—\-:,]\s*([^.]*לפחות[^.]*)/)||ans.match(/(?:שני|שלושת|שלוש)\s+הדברים\s+הכי\s+(?:חשובים|חשוב)[^:]{0,10}:\s*([^.]*)/);
+    const m1=ans.match(/אם\s+(?:השבוע|זה|הוא)\s+(?:עמוס|לחוץ|קשה|מטורף|צפוף)[^—\-:,]{0,15}[—\-:,]\s*([^.]*(?:לפחות|לא\s+לוותר|לא\s+מפסיד)[^.]*)/)||ans.match(/(?:שני|שלושת|שלוש)\s+הדברים\s+הכי\s+(?:חשובים|חשוב)[^:]{0,10}:\s*([^.]*)/);
     if(m1){const clause=m1[1].trim().slice(0,100);
       if(!o.minimumViableWeek.length&&clause)o.minimumViableWeek.push(clause);
       const KP={fitness:/ריצ|ספורט|אימון|כושר|הליכה/,family:/ילד|משפח|ערב/,deep_work:/עמוק|ריכוז/};

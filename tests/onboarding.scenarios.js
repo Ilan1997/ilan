@@ -322,11 +322,18 @@
       const cad=onbRender({type:'state_no_cadence',data:{titles:['ערב עם חברים']}});
       o.nx40_routineWithoutCadenceIsNamedNotSilentlyDropped=/ערב עם חברים/.test(cad)&&lintOk(cad);}
     {const r1=onbNormalizeExtraction({routines:[{key:'c',title:'קורס אונליין',kind:'study',perWeek:1,protected:true},{key:'r',title:'ריצות',kind:'fitness',perWeek:3}]},{topic:'q1',answer:'אני חייב 3 ריצות בשבוע, וקורס אונליין בשבתות שאני לא מוותר עליו.'});
-      o.nx37_courseRoutineWithoutDayBecomesFixedOnNamedDay=r1.fixed.length===1&&r1.fixed[0].days[0]===6&&r1.routines.length===1&&r1.routines[0].key==='r';}
+      o.nx37_weeklyRoutineWithNamedDayStaysRoutineNotFixed=r1.fixed.length===0&&r1.routines.length===2&&r1.routines.find(r=>r.key==='c')&&Array.isArray(r1.routines.find(r=>r.key==='c').days)&&r1.routines.find(r=>r.key==='c').days[0]===6;}
     {const a='אני רץ שלוש פעמים בשבוע ומיילים מצטברים לי בעבודה.';
       const rs=onbNormalizeExtraction({routines:[{key:'run',title:'ריצה',kind:'fitness',domain:'life',perWeek:3,frequencyEvidence:'שלוש פעמים בשבוע'},{key:'mail',title:'מיילים',kind:'email',domain:'work',maintenance:'work',perDay:true,frequencyEvidence:'כל יום'}]},{topic:'q3',answer:a}).routines;
       const run=rs.find(r=>r.key==='run'),mail=rs.find(r=>r.key==='mail');
       o.nx29_frequencyIsGroundedPerItem=run&&run.perWeek===3&&mail&&mail.perDay!==true&&mail.perWeek===undefined&&mail.perTwoWeeks!==true;}
+    {const A=(raw,ctx)=>onbNormalizeExtraction(raw,ctx);
+      // eval run noam (build 2026-11-26): "לא לוותר" is a valid MVW floor phrase, same as "לפחות"
+      const mv=A({routines:[{key:'run',title:'ריצה',kind:'fitness',perWeek:3,protected:true},{key:'fam',title:'ערב משפחה',kind:'family',perWeek:4,protected:true}]},{topic:'q1',answer:'שלוש ריצות, ארבעה ערבי משפחה. אם השבוע עמוס — לא לוותר על שתי ריצות ועל שני ערבי משפחה.'});
+      o.nx41_mvwLoLavatorRecognizedAsMvwFloor=mv.minimumViableWeek.length===1&&mv.routines.filter(r=>r.inMvw).length===2;
+      // eval run noam (build 2026-11-26): weekly routine with named day stays a routine; days array is set
+      const bd=A({routines:[{key:'lesson',title:'שיעור תורה',kind:'lesson',perWeek:1,protected:true}]},{topic:'q1',answer:'שיעור תורה בשישי בבוקר.'});
+      o.nx42_weeklyRoutineWithNamedDayKeepsRoutineAddsDays=bd.routines.length===1&&bd.fixed.length===0&&Array.isArray(bd.routines[0].days)&&bd.routines[0].days[0]===5;}
     // ───────── Determinism / purity ─────────
     o.p1_templateDeterministic=JSON.stringify(onbBuildTemplate(NP))===JSON.stringify(onbBuildTemplate(NP))&&JSON.stringify(onbFinish(N.st).text)===JSON.stringify(N.fin.text);
     o.p2_weekIsNextSunday=NT.weekStart==='2026-11-22'&&onbNextSunday('2026-11-22')==='2026-11-29'&&onbNextSunday('2026-11-21')==='2026-11-22'&&NT.dates.length===7;
