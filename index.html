@@ -1750,7 +1750,7 @@ function defaultMeta(pw){
 //  APP VERSION — single source of truth
 // ══════════════════════════════════════════════════════
 const APP_VERSION='v9.0.8';
-const APP_BUILD='2026-11-26.3';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
+const APP_BUILD='2026-11-26.4';   // bump on every shipped change — the screen shows it, and a running copy compares itself to the server's
 
 //  STATE
 // ══════════════════════════════════════════════════════
@@ -10498,6 +10498,18 @@ function onbNormalizeExtraction(raw,ctx){
       break;
     }
   }
+  // 4a) a fixed event with a day but no times, whose sentence states a range ("בערך 18 עד 21"): times come from the user's own words
+  if(ans&&(topic==='q2'||topic==='q1')){
+    const cw=t=>String(t||'').split(/[\s,.()"׳']+/).map(w=>w.replace(/^[והבלמש]+/,'')).filter(w=>w.length>=3).map(w=>w.slice(0,4));
+    o.fixed.forEach(f=>{
+      if(f.start||f.end||!f.title)return;const tw=cw(f.title);
+      const sen=ans.split(/[.\n]/).find(z=>cw(z).some(w=>tw.indexOf(w)>=0)&&/(\d{1,2})(?::[0-5]\d)?\s*(?:עד|[-–])\s*(\d{1,2})/.test(z)&&!/משרד/.test(z));
+      if(!sen)return;
+      const m=sen.match(/(בערך\s*)?(\d{1,2})(?::([0-5]\d))?\s*(?:עד|[-–])\s*(\d{1,2})(?::([0-5]\d))?/);
+      const a=+m[2]*60+(m[3]?+m[3]:0),b=+m[4]*60+(m[5]?+m[5]:0);
+      if(a>=300&&b<=1439&&a<b){f.start={min:a,precision:m[1]?'approx':'exact'};f.end={min:b,precision:m[1]?'approx':'exact'};delete f.window;}
+    });
+  }
   // 4b) brain dump: "<day phrase> … at HH:MM" / "<thing> on <day>s" clauses the model skipped (appointments, courses, pickups) — only with an explicit day and a commitment marker or a time
   if(ans&&(topic==='q1'||topic==='q2')){
     const DAYS_P={'ראשון':0,'שני':1,'שלישי':2,'רביעי':3,'חמישי':4,'שישי':5,'שבת':6,'שבתות':6};
@@ -10819,6 +10831,7 @@ function onbBuildTemplate(profile,o){
   const dayDefault=[0,1,2,3,4];
   profile.routines.forEach(r=>{
     if(!r.targetFrequency)return;                                    // a protected habit with no frequency: kept as protected, nothing to place
+    if(profile.workloadGoals.some(g=>(g.requiredPerWeekMinutes!=null||g.requiredTotalMinutes!=null)&&(g.key===r.key||String(g.title).replace(/^ה/,'')===String(r.title).replace(/^ה/,''))))return;   // the user's stated weekly total for the same thing replaces the routine's default budget (never stacked)
     const f=r.targetFrequency,mins=r.targetDuration.minutes;
     const base={title:r.title,kind:r.kind,domain:r.domain,minutes:mins,routineId:r.id,status:stat(false),prio:r.inMinimumViableWeek?0:r.protected?1:r.maintenanceClass?3:2,window:r.window||null,allowed:r.days||null,assumption:r.targetDuration.assumption||null};
     if(f.perDay)R(Object.assign({},base,{each:true,allowed:r.days||(office?office.rule.days:dayDefault)}));
@@ -10940,6 +10953,8 @@ function onbMessages(profile,tpl){
   (tpl.settings||[]).forEach(x=>M.push({type:'propose_setting',data:{kind:'day_start',min:x.preference.min}}));
   const unpl=profile.routines.filter(r=>!r.targetFrequency&&r.protected).map(r=>r.title);
   if(unpl.length)M.push({type:'state_protected_unscheduled',data:{titles:unpl}});
+  const nocad=profile.routines.filter(r=>!r.targetFrequency&&!r.protected&&!r.needId&&!profile.workloadGoals.some(g=>g.key===r.key)).map(r=>r.title);
+  if(nocad.length)M.push({type:'state_no_cadence',data:{titles:nocad}});
   if(tpl.guards.length)M.push({type:'state_guard',data:{min:tpl.guards[0].min,reason:tpl.guards[0].reason}});
   if(tpl.unplaced.length)M.push({type:'state_unplaced',data:{titles:tpl.unplaced.map(u=>u.title)}});
   const asm=profile.assumptions.filter(a=>a.field==='duration'&&a.ref&&a.source==='system_trial_default').map(a=>{const it=profile.routines.find(r=>r.key===a.ref)||profile.proposals.find(p=>p.id===a.ref||p.ref===a.ref);return it?{title:it.title,minutes:a.value}:null;}).filter(Boolean);
@@ -10970,6 +10985,7 @@ function onbRender(m,ctx){
     case 'propose_trial_items':return'לניסוי, אפשר לשנות או להוריד:\n'+d.items.map(line).join('\n');
     case 'state_holds':return'מחזיקה פנוי, בלי לבקש אישור:\n'+d.items.map(i=>'• '+dl(i.date)+' '+_fmtMin(i.startMin)+'–'+_fmtMin(i.endMin)+' — '+i.holdReason+', עד שתדע את השעה').join('\n');
     case 'state_partial_day':return'ב'+dl(d.date)+' לא הוספתי כלום: '+d.reasons.join(', ')+'.';
+    case 'state_no_cadence':return'לא אמרת כמה פעמים בשבוע, ולכן לא שיבצתי: '+d.titles.join(', ')+'.';
     case 'state_protected_unscheduled':return'שמרתי כמוגן ולא שיבצתי בזה כלום: '+d.titles.join(', ')+'.';
     case 'propose_setting':return'הצעה שלי, לא כלל: לא לשבץ כלום לפני '+_fmtMin(d.min)+', כי אמרת שאתה קם מאוחר. אם תאשר, זו תהיה העדפה.';
     case 'state_partially_placed':return'אין לי עדיין שעות עבודה, אז אני מציעה את השגרות והיקפי הזמן אבל לא נועלת אותם לשעות עד שנדע איפה העבודה יושבת:\n'+d.items.map(u=>'• '+u.title+' — '+_mayaDur(u.minutesPerWeek)+' בשבוע'+(u.trial?' (לניסוי)':'')).join('\n');

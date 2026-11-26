@@ -769,3 +769,6 @@ Run 9: 35 pass, 0 critical, 5 major (T01 invented "busy-week" duplicate routines
 
 ## §70 — Eval run 10 (build 2026-11-26.3)
 Run 10: 39 pass, 0 critical, 1 major (B01: online course returned as a weekly routine without its day). Fix: a day-bound appointment/course routine with no day, matched by a clause naming a day, becomes a fixed event on that day. Test nx37. Replay: B01 passes; mock-expected 40/40.
+
+## §71 — E2E yuval (real model) findings (build 2026-11-26.4)
+E2E yuval ran end to end with the real model; approval/materialization/state correct. Defects fixed: (1) a goal with a stated weekly total replaces a same-named routine default budget (thesis was listed twice: 1.5h + 6h); (2) routines with no cadence and no need/goal are named in the confirmation (state_no_cadence) instead of silently dropped ("ערב עם חברים"); (3) a fixed event with a day but no times takes the range stated in its own sentence ("בערך 18 עד 21") — the course was reported as time-unknown. Tests nx38–nx40. Cause of (1) not reproduced from raw model output (e2e does not record it) — the rule is defensive.
