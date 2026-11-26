@@ -80,3 +80,32 @@ First real eval ran (see ARCHITECTURE §64). Re-run the full eval after pulling 
 - באונבורדינג תוקן cadence grounding לכל פריט בנפרד וה-spec יושר מול materialization של סגירת שבוע.
 - לפני merge: CI ירוק + בדיקת browser חיה עם שני חשבונות Google אמיתיים.
 - 2026-11-23.1: vision-anchored voice for free-chat Maya (see ARCHITECTURE §65); friendly 503/429 message.
+
+
+## ▶ התחלה מכאן — מצב נכון ל־2026-11-26 (build 2026-11-26.4)
+**מי אני / הקשר:** אילן. אפליקציית "מאיה, המזכירה האישית" — קובץ HTML יחיד `index.html` (עברית RTL), פונקציית AI ב־`cloud/functions/maya-ai/index.ts` (Supabase, פרוסה כבר עם `GEMINI_MODEL=gemini-3.5-flash-lite`, `GEMINI_FALLBACK_MODELS=gemini-3.1-flash-lite`). חינמי בלבד — לא משלמים על Gemini. Live: https://ilan1997.github.io/ilan/ . שפה: עברית, הוראות קצרות ומדויקות ל־Windows/PowerShell.
+
+**איפה עומדים (אונבורדינג):** הליבה הדטרמיניסטית `onb*` גמורה. Eval אמיתי מול Gemini (40 מקרים): ריצה 10 = 39/40, 0 critical (ב־B01 תוקן אחרי; נבדק רק ב־replay). E2E `yuval` רץ אמיתי מקצה לקצה; נמצאו ותוקנו 3 פגמים (§71) — **לא אומתו עדיין בהרצה חוזרת**. עדיין לא רצו E2E של `noam` ו־`dani`.
+
+**כללי עבודה שהוסכמו:**
+- שער: כל `critical` עוצר ומתקנים; `major` על פעולה/אילוץ/עומס/שבוע־מינימום מתוקן לפני E2E; `minor` אחר כך.
+- עיקרון: המודל מדווח מה נאמר; הקוד עושה חשבון/עיגון. כל השלמה ב־`onbNormalizeExtraction(raw,ctx)` חייבת להיות מעוגנת בטקסט התשובה של המשתמש (לא להמציא).
+- בדיקות: `npm test` ובנוסף `TZ=Asia/Jerusalem|UTC|America/Los_Angeles node tests/run.js` חייבים לעבור. כל תיקון מקבל בדיקת רגרסיה ב־`tests/onboarding.scenarios.js` ומעלה `APP_BUILD`.
+- בדיקת פלט־מודל בלי לשלם: `node tests/onboarding-eval/run.js --mock <raw.json>` (replay), `--mock-expected` (חייב 40/40).
+- כל שינוי: לעדכן `ARCHITECTURE.md` (§ חדש), `HANDOFF.md`, commit + push ל־`main`. Trailers: `Co-Authored-By: Claude <noreply@anthropic.com>`.
+
+**הרצה מול Gemini אמיתי (Windows):**
+```
+cd "$HOME\Documents\ilan"
+git pull
+$env:NODE_OPTIONS="--use-system-ca"      # פותר SELF_SIGNED_CERT_IN_CHAIN (אנטי־וירוס)
+# מפתח זמני (פג אחרי ~שעה): באפליקציה 👤 החשבון שלי → "🔑 העתק מפתח זמני לבדיקות"
+$env:JWT="הדבק"
+node tests/onboarding-eval/run.js --function --jwt $env:JWT --delay 4000 --out r.json --md report.md
+node tests/onboarding-eval/e2e.js noam --function --jwt $env:JWT
+node tests/onboarding-eval/e2e.js dani --function --jwt $env:JWT
+```
+אם `git pull` נופל על schannel: `git -c http.sslBackend=openssl pull`. אם יש שינויים מקומיים בקבצים — `git stash` ואז pull.
+
+**הצעד הבא:** (1) להריץ E2E של `noam` ו־`dani` ואת yuval שוב, לתקן פגמים לפי השער. (2) להחליף את השיבוץ הזמני (`placement:'fallback_greedy'`, ה־TODO ליד `onbBuildTemplate`) ב־`scheduleSet`/`buildContextSnapshot`/`validatePlan` הקיימים. (3) רק אחר כך UI. פתוח לבדיקה: ה־E2E לא שומר את פלט המודל הגולמי — כדאי להוסיף `--trace` ששומר אותו, כדי שאפשר יהיה לשחזר פגמים.
+**חוב ידוע:** בצ'אט החופשי נוסף "קול מחובר לחזון" (§65) — השפעתו על תשובות Gemini אמיתיות לא נמדדה. ענף `chatgpt/onboarding-multi-gcal` (PR #1) כבר מוזג ל־main.
